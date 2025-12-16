@@ -1,0 +1,75 @@
+@keyframes textAppear {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes patternFade {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+
+.visualSection:hover .overlay {
+  opacity: 1;
+}
+
+.visualSection:hover .secondaryOverlay {
+  opacity: 0.3;
+}
+
+.visualSection:hover .imageHover {
+  transform: scale(1.1);
+}
+
+.visualSection:hover .textContainer .textAppear {
+  animation: textAppear 0.8s ease-out forwards;
+}
+
+.visualSection:hover .textContainer .underline {
+  width: 100px;
+}
+
+.overlay {
+  opacity: 0;
+}
+
+.secondaryOverlay {
+  opacity: 0;
+}
+
+.textContainer {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.visualSection:hover .textContainer {
+  opacity: 1;
+}
+
+.textAppear {
+  opacity: 0;
+}
+
+.underline {
+  width: 0;
+}
+
+.pattern {
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.05) 75%, transparent 75%, transparent);
+  background-size: 40px 40px;
+  opacity: 0.3;
+  transition: opacity 0.7s ease-in-out;
+}
+
+.visualSection:hover .pattern {
+  animation: patternFade 0.7s ease-out forwards;
+}

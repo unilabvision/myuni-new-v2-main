@@ -1,0 +1,22 @@
+{
+  "blogPosts": [
+    {
+      "title": "CRISPR-Cas9 Teknolojisi: Genleri Düzenlemede Yeni Dönem",
+      "description": "CRISPR-Cas9 gen düzenleme teknolojisinin biyomedikal araştırmalardaki uygulamaları ve gelecekteki potansiyeli hakkında detaylı bir inceleme.",
+      "link": "https://blog.myunilab.net/crispr-cas9-teknolojisi-gen-duzenleme",
+      "pubDate": "2024-06-15T10:00:00Z",
+      "categories": ["Biyolojik Bilimler", "Biyoinformatik"],
+      "image": "/images/crispr-cas9-technology.webp",
+      "contentEncoded": "CRISPR-Cas9 teknolojisi, modern moleküler biyolojide devrim yaratan bir gen düzenleme sistemidir..."
+    },
+    {
+      "title": "Yapay Zeka ve İlaç Keşfi: Moleküler Tasarımda Yeni Yaklaşımlar",
+      "description": "Makine öğrenmesi algoritmalarının ilaç geliştirme sürecini nasıl hızlandırdığını ve yeni tedavi seçeneklerini keşfetmedeki rolünü inceleyen kapsamlı bir analiz.",
+      "link": "https://blog.myunilab.net/yapay-zeka-ilac-kesfi-molekuler-tasarim",
+      "pubDate": "2024-06-12T14:30:00Z",
+      "categories": ["Biyolojik Bilimler", "Bilgisayar Bilimleri"],
+      "image": "/images/ai-drug-discovery.webp",
+      "contentEncoded": "İlaç geliştirme süreci geleneksel olarak 10-15 yıl süren pahalı bir süreçtir. Ancak yapay zeka teknolojileri..."
+    }
+  ]
+}

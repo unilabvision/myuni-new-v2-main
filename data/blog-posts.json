@@ -1,0 +1,76 @@
+{
+    "blogPosts": [
+      {
+        "title": "İlaç Geliştirme Evreleri Nelerdir?",
+        "link": "https://blog.myunilab.net/ilac-gelistirme-evreleri-nelerdir/",
+        "pubDate": "Wed, 19 Mar 2025 17:59:33 +0000",
+        "categories": ["Biyolojik Bilimler", "ana sayfa"],
+        "description": "İlaç geliştirme sürecinin detaylı açıklaması ve evreleri",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/03/Ilac-Gelistirme-Evreleri-Nelerdir.webp"
+      },
+      {
+        "title": "Epigenetik Nedir? Genlerimizin Ötesindeki Hikaye",
+        "link": "https://blog.myunilab.net/epigenetik-nedir-genlerimizin-otesindeki-hikaye/",
+        "pubDate": "Tue, 04 Mar 2025 20:44:19 +0000",
+        "categories": ["Biyolojik Bilimler", "ana sayfa"],
+        "description": "Epigenetik mekanizmaların açıklanması ve önemi",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/03/Epigenetik-Nedir-Genlerimizin-Otesindeki-Hikaye-.webp"
+      },
+      {
+        "title": "Hangi Programlama Dili ile Başlanmalı? Yeni Başlayanlar İçin Rehber",
+        "link": "https://blog.myunilab.net/hangi-programlama-dili-ile-baslanmali/",
+        "pubDate": "Sun, 02 Mar 2025 21:33:18 +0000",
+        "categories": ["Bilgisayar Bilimleri", "ana sayfa"],
+        "description": "Programlama dilleri karşılaştırması ve başlangıç rehberi",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/03/Hangi-Programlama-Dili-ile-Baslanmali-Yeni-Baslayanlar-Icin-Rehber-1.webp"
+      },
+      {
+        "title": "Gen Terapisi Nedir?",
+        "link": "https://blog.myunilab.net/gen-terapisi-nedir/",
+        "pubDate": "Mon, 17 Feb 2025 17:41:10 +0000",
+        "categories": ["Biyolojik Bilimler", "ana sayfa"],
+        "description": "Gen terapisi yöntemleri ve uygulama alanları",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2024/09/Gen-Terapisi-Hangi-Hastaliklarda-Kullanilir-.webp"
+      },
+      {
+        "title": "Sağlık Hizmetlerinde Yapay Zeka ve Büyük Veri",
+        "link": "https://blog.myunilab.net/saglik-hizmetlerinde-yapay-zeka-ve-buyuk-veri-prof-dr-adil-mardinoglu-ile-webinar/",
+        "pubDate": "Wed, 12 Feb 2025 11:29:10 +0000",
+        "categories": ["Biyolojik Bilimler"],
+        "description": "Yapay zeka ve büyük verinin sağlık alanındaki etkileri",
+        "video": "https://www.youtube.com/embed/YWyuDAqMqSY"
+      },
+      {
+        "title": "Veri Görselleştirme Nedir? Yapay Zeka Alanında Önemi",
+        "link": "https://blog.myunilab.net/veri-gorsellestirme-nedir/",
+        "pubDate": "Fri, 07 Feb 2025 20:51:24 +0000",
+        "categories": ["Bilgisayar Bilimleri"],
+        "description": "Veri görselleştirme teknikleri ve yapay zekadaki rolü",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/02/Veri-Gorsellestirme-Nedir-Yapay-Zeka-Alaninda-Onemi.webp"
+      },
+      {
+        "title": "Proteomik Nedir? Proteomik ve Uygulamaları",
+        "link": "https://blog.myunilab.net/proteomik-nedir-proteomik-ve-uygulamalari/",
+        "pubDate": "Fri, 07 Feb 2025 20:38:38 +0000",
+        "categories": ["Biyolojik Bilimler", "ana sayfa"],
+        "description": "Proteomik bilimi ve biyolojik uygulamaları",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/02/Proteomik-Nedir_-Proteomik-ve-Uygulamalari.webp"
+      },
+      {
+        "title": "İlaç Geliştirme Aşamaları Nelerdir?",
+        "link": "https://blog.myunilab.net/ilac-gelistirme-asamalari-nelerdir/",
+        "pubDate": "Mon, 03 Feb 2025 22:22:49 +0000",
+        "categories": ["Biyolojik Bilimler", "ana sayfa"],
+        "description": "İlaç geliştirme sürecinin detaylı aşamaları",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/02/Ilac-Gelistirme-Asamalari-Nelerdir-.webp"
+      },
+      {
+        "title": "İlaç Geliştirmeye Giriş Eğitimi",
+        "link": "https://blog.myunilab.net/ilac-gelistirmeye-giris-egitimi/",
+        "pubDate": "Sun, 26 Jan 2025 19:49:07 +0000",
+        "categories": ["Biyolojik Bilimler", "eğitim"],
+        "description": "İlaç geliştirme sürecine giriş eğitimi içeriği",
+        "image": "https://i0.wp.com/blog.myunilab.net/wp-content/uploads/2025/01/Ilac-Gelistirmeye-Giris-Egitimi-1-1.webp"
+      }
+    ]
+  }

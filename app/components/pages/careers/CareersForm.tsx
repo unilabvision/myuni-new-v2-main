@@ -1,0 +1,1026 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
+import {
+  Send, Upload, FileText, User, Mail, Phone, Briefcase,
+  FileUp, X, CheckCircle, Calendar, MessageSquare, AlertCircle,
+  ChevronDown, Check
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+interface DynamicFormProps {
+  formName: string;
+  locale?: string;
+}
+
+// Define interfaces locally
+interface FormConfig {
+  id: string;
+  name: string;
+  title: Record<string, string>;
+  subtitle?: Record<string, string>;
+  is_active: boolean;
+  success_message: Record<string, string>;
+  submit_button_text: Record<string, string>;
+  terms_and_conditions?: Record<string, string>;
+  privacy_notice?: Record<string, string>;
+}
+
+interface FormField {
+  id: string;
+  field_key: string;
+  field_type: string;
+  label: Record<string, string>;
+  placeholder?: Record<string, string>;
+  is_required: boolean;
+  grid_columns: number;
+  options?: Record<string, string[]>;
+  order_index: number;
+}
+
+// Upload file function
+async function uploadFile(file: File, fileName: string) {
+  try {
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('form-uploads')
+      .upload(`uploads/${fileName}`, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('form-uploads')
+      .getPublicUrl(data.path);
+
+    return { success: true, url: publicUrl };
+  } catch (error) {
+    console.error('Upload error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Upload failed' 
+    };
+  }
+}
+
+// Get form config function
+async function getFormConfig(formName: string): Promise<FormConfig | null> {
+  try {
+    const { data, error } = await supabase
+      .from('form_configs')
+      .select('*')
+      .eq('name', formName)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      console.error('Form config error:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Get form config error:', error);
+    return null;
+  }
+}
+
+// Get form fields function
+async function getFormFields(configId: string): Promise<FormField[]> {
+  try {
+    const { data, error } = await supabase
+      .from('form_fields')
+      .select('*')
+      .eq('form_config_id', configId)
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('Form fields error:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Get form fields error:', error);
+    return [];
+  }
+}
+
+// Define proper types for form data values
+type FormDataValue = string | number | boolean | string[] | File | null | undefined;
+
+// Define the submit result interface
+interface SubmitResult {
+  success: boolean;
+  error?: string;
+  submissionId?: string;
+  formTitle?: string;
+  emailSent?: boolean;
+  emailError?: string;
+  emailErrors?: string[];
+  message?: string;
+}
+
+// Define FileUpload interface to match Supabase expectations
+interface FileUpload {
+  name: string;
+  size: number;
+  type: string;
+  data: string | Buffer;
+  lastModified?: number;
+}
+
+// Helper function to convert File to FileUpload
+const fileToFileUpload = async (file: File): Promise<FileUpload> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        data: reader.result as string,
+        lastModified: file.lastModified,
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// Multi-Select Component
+interface MultiSelectProps {
+  options: string[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+  hasError: boolean;
+}
+
+const MultiSelect: React.FC<MultiSelectProps> = ({
+  options,
+  selectedValues,
+  onChange,
+  placeholder,
+  hasError
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOption = (option: string) => {
+    const newValues = selectedValues.includes(option)
+      ? selectedValues.filter(v => v !== option)
+      : [...selectedValues, option];
+    onChange(newValues);
+  };
+
+  const removeOption = (option: string) => {
+    const newValues = selectedValues.filter(v => v !== option);
+    onChange(newValues);
+  };
+
+  const displayText = selectedValues.length > 0 
+    ? `${selectedValues.length} seçenek seçildi`
+    : placeholder;
+
+  if (options.length === 0) {
+    return (
+      <div className="p-3 text-neutral-500 bg-neutral-100 dark:bg-neutral-800 rounded-md">
+        Seçenek bulunamadı
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Selected items display */}
+      {selectedValues.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {selectedValues.map((value, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-[#990000] text-white text-sm rounded-full"
+            >
+              {value}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeOption(value);
+                }}
+                className="hover:bg-[#800000] rounded-full p-1 transition-colors"
+                title="Kaldır"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Dropdown trigger */}
+      <div className="relative" ref={dropdownRef}>
+        <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400 z-10" />
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(!isOpen);
+          }}
+          className={`w-full pl-10 pr-10 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-left focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+            hasError ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+          }`}
+        >
+          <span className={selectedValues.length > 0 ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500'}>
+            {displayText}
+          </span>
+        </button>
+        <ChevronDown 
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : ''
+          }`} 
+        />
+
+        {/* Dropdown menu - moved inside relative container */}
+        {isOpen && (
+          <div 
+            className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-md shadow-xl max-h-60 overflow-y-auto z-[9999]"
+            style={{ zIndex: 9999 }}
+          >
+            {options.map((option, index) => {
+              const isSelected = selectedValues.includes(option);
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleOption(option);
+                  }}
+                  className={`w-full px-4 py-3 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-150 flex items-center justify-between border-b border-neutral-100 dark:border-neutral-700 last:border-b-0 ${
+                    isSelected ? 'bg-[#990000]/10 text-[#990000] dark:bg-[#990000]/20' : 'text-neutral-900 dark:text-neutral-100'
+                  }`}
+                >
+                  <span>{option}</span>
+                  {isSelected && <Check className="w-4 h-4 text-[#990000]" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProps) {
+  const [config, setConfig] = useState<FormConfig | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<HCaptcha>(null);
+  const [fields, setFields] = useState<FormField[]>([]);
+  const [formData, setFormData] = useState<Record<string, FormDataValue>>({});
+  const [files, setFiles] = useState<Record<string, File>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  
+  // Ref'ler her field için - Fixed ref callback
+  const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const loadFormData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const formConfig = await getFormConfig(formName);
+      if (!formConfig) {
+        console.error(`No form config found for formName: ${formName}`);
+        setConfig(null);
+        setFields([]);
+        return;
+      }
+      setConfig(formConfig);
+      const formFields = await getFormFields(formConfig.id);
+      setFields(formFields);
+
+      // Initialize form data with default values
+      const initialData: Record<string, FormDataValue> = {};
+      formFields.forEach(field => {
+        if (field.field_type === 'checkbox') {
+          initialData[field.field_key] = false;
+        } else if (field.field_type === 'multiselect') {
+          initialData[field.field_key] = [];
+        } else {
+          initialData[field.field_key] = '';
+        }
+      });
+      setFormData(initialData);
+    } catch (error) {
+      console.error('Error loading form data:', error);
+      setConfig(null);
+      setFields([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [formName]);
+
+  useEffect(() => {
+    if (!formName) {
+      console.error('DynamicForm: formName tanımsız veya boş!');
+      setIsLoading(false);
+      setConfig(null);
+      setFields([]);
+      return;
+    }
+    loadFormData();
+  }, [formName, loadFormData]);
+
+  const handleInputChange = (fieldKey: string, value: FormDataValue) => {
+    setFormData(prev => ({ ...prev, [fieldKey]: value }));
+    if (errors[fieldKey]) {
+      setErrors(prev => ({ ...prev, [fieldKey]: '' }));
+    }
+  };
+
+  const handleFileUpload = async (fieldKey: string, file: File) => {
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setErrors(prev => ({ ...prev, [fieldKey]: 'Dosya boyutu 5MB\'dan küçük olmalıdır' }));
+      return;
+    }
+
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, [fieldKey]: 'Sadece PDF, DOC ve DOCX dosyaları kabul edilir' }));
+      return;
+    }
+
+    setUploadingFiles(prev => ({ ...prev, [fieldKey]: true }));
+
+    const fileName = `${Date.now()}_${file.name}`;
+    const uploadResult = await uploadFile(file, fileName);
+
+    setUploadingFiles(prev => ({ ...prev, [fieldKey]: false }));
+
+    if (uploadResult.success) {
+      setFiles(prev => ({ ...prev, [fieldKey]: file }));
+      setFormData(prev => ({ ...prev, [fieldKey]: uploadResult.url }));
+      setErrors(prev => ({ ...prev, [fieldKey]: '' }));
+    } else {
+      setErrors(prev => ({ ...prev, [fieldKey]: uploadResult.error || 'Dosya yükleme hatası' }));
+    }
+  };
+
+  const scrollToFirstError = (newErrors: Record<string, string>) => {
+    const firstErrorField = Object.keys(newErrors)[0];
+    if (firstErrorField && fieldRefs.current[firstErrorField]) {
+      const element = fieldRefs.current[firstErrorField];
+      const yOffset = -100; // Header için boşluk
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      
+      window.scrollTo({
+        top: y,
+        behavior: 'smooth'
+      });
+      
+      // Alanı vurgula (opsiyonel)
+      element.style.transform = 'scale(1.02)';
+      element.style.transition = 'transform 0.3s ease';
+      setTimeout(() => {
+        element.style.transform = 'scale(1)';
+      }, 500);
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    fields.forEach(field => {
+      if (field.is_required) {
+        const value = formData[field.field_key];
+
+        if (field.field_type === 'checkbox') {
+          if (!value) {
+            newErrors[field.field_key] = 'Bu alan zorunludur';
+          }
+        } else if (field.field_type === 'multiselect') {
+          if (!Array.isArray(value) || value.length === 0) {
+            newErrors[field.field_key] = 'En az bir seçenek seçmelisiniz';
+          }
+        } else if (!value || (typeof value === 'string' && !value.trim())) {
+          newErrors[field.field_key] = 'Bu alan zorunludur';
+        }
+      }
+
+      // Email validation
+      if (field.field_type === 'email' && formData[field.field_key]) {
+        const emailValue = formData[field.field_key];
+        if (typeof emailValue === 'string') {
+          const email = emailValue.trim();
+          const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+          
+          if (!emailRegex.test(email)) {
+            newErrors[field.field_key] = 'Geçerli bir e-posta adresi girin (örn: kullanici@example.com)';
+          } else if (email.length > 254) {
+            newErrors[field.field_key] = 'E-posta adresi çok uzun';
+          } else if (email.includes('..') || email.startsWith('.') || email.endsWith('.')) {
+            newErrors[field.field_key] = 'E-posta adresi geçersiz format içeriyor';
+          }
+        }
+      }
+
+      // Phone validation
+      if (field.field_type === 'tel' && formData[field.field_key]) {
+        const phoneValue = formData[field.field_key];
+        if (typeof phoneValue === 'string') {
+          const phone = phoneValue.replace(/\s/g, '');
+          
+          // Türkiye telefon formatları için regex
+          const phoneRegex = /^(\+90|0)?(5\d{2})\s?(\d{3})\s?(\d{2})\s?(\d{2})$/;
+          const internationalRegex = /^\+[1-9]\d{1,14}$/;
+          
+          if (!phoneRegex.test(phone) && !internationalRegex.test(phone)) {
+            newErrors[field.field_key] = 'Geçerli bir telefon numarası girin (örn: 0555 123 45 67 veya +90 555 123 45 67)';
+          } else if (phone.length < 10) {
+            newErrors[field.field_key] = 'Telefon numarası çok kısa';
+          } else if (phone.length > 15) {
+            newErrors[field.field_key] = 'Telefon numarası çok uzun';
+          }
+        }
+      }
+    });
+
+    setErrors(newErrors);
+     // HCAPTCHA validation
+    if (!captchaToken) {
+      newErrors['captcha'] = 'Lütfen robot olmadığınızı doğrulayın';
+    }
+    
+    // Eğer hata varsa ilk hatalı alana kaydır
+    if (Object.keys(newErrors).length > 0) {
+      setTimeout(() => scrollToFirstError(newErrors), 100);
+    }
+    
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm() || !config) return;
+
+    setIsSubmitting(true);
+
+    try {
+
+
+      // Convert files to FileUpload format if there are any
+      let fileUploads: Record<string, FileUpload> | undefined = undefined;
+      if (Object.keys(files).length > 0) {
+        fileUploads = {};
+        for (const [key, file] of Object.entries(files)) {
+          fileUploads[key] = await fileToFileUpload(file);
+        }
+      }
+
+      const submission = {
+        form_config_id: config.id,
+        form_data: formData,
+        files: fileUploads,
+        user_agent: navigator.userAgent,
+      };
+
+      // API route'u çağır (email gönderme dahil)
+      const response = await fetch('/api/forms/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submission),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      setSubmitResult(result as SubmitResult);
+
+      if (result.success) {
+        // Reset captcha after successful submission
+        if (captchaRef.current) {
+          captchaRef.current.resetCaptcha();
+        }
+        setCaptchaToken(null);
+        setIsSubmitted(true);
+        
+        // Email durumunu daha detaylı logla
+        if (result.emailSent) {
+        } else {
+          console.warn('⚠️ Email gönderilemedi:', {
+            emailError: result.emailError,
+            emailErrors: result.emailErrors,
+            message: result.message
+          });
+        }
+      } else {
+        console.error('❌ Form submission error:', result.error);
+        setErrors(prev => ({ 
+          ...prev, 
+          form: result.error || 'Başvuru gönderilirken hata oluştu' 
+        }));
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorName = error instanceof Error ? error.name : 'Unknown';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
+      console.error('💥 Form submission error:', {
+        message: errorMessage,
+        stack: errorStack,
+        name: errorName
+      });
+      setErrors(prev => ({ 
+        ...prev, 
+        form: `Başvuru gönderilirken beklenmeyen bir hata oluştu: ${errorMessage}` 
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getFieldIcon = (fieldType: string) => {
+    switch (fieldType) {
+      case 'email': return Mail;
+      case 'tel': return Phone;
+      case 'date': return Calendar;
+      case 'textarea': return MessageSquare;
+      default: return User;
+    }
+  };
+
+  // Fixed ref callback function
+  const setFieldRef = (fieldKey: string) => (el: HTMLDivElement | null) => {
+    fieldRefs.current[fieldKey] = el;
+  };
+
+  const renderField = (field: FormField) => {
+    const Icon = getFieldIcon(field.field_type);
+    const label = field.label[locale] || field.label['tr'] || field.field_key;
+    const placeholder = field.placeholder?.[locale] || field.placeholder?.['tr'] || '';
+    const hasError = !!errors[field.field_key];
+    const value = formData[field.field_key] || '';
+
+    const inputClassName = `w-full px-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+      hasError ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+    }`;
+
+    const iconInputClassName = `w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+      hasError ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+    }`;
+
+    const containerClassName = `${field.grid_columns === 2 ? 'md:col-span-1' : 'md:col-span-2'} ${
+      hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''
+    }`;
+
+    switch (field.field_type) {
+      case 'select':
+        return (
+          <div 
+            key={field.id} 
+            className={containerClassName}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <select
+                value={typeof value === 'string' ? value : ''}
+                onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+                className={iconInputClassName}
+              >
+                <option value="">{placeholder}</option>
+                {field.options?.[locale]?.map((option, index) => (
+                  <option key={index} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+
+      case 'multiselect':
+        return (
+          <div 
+            key={field.id} 
+            className={containerClassName}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <MultiSelect
+              options={field.options?.[locale] || field.options?.['tr'] || []}
+              selectedValues={Array.isArray(value) ? value : []}
+              onChange={(values) => handleInputChange(field.field_key, values)}
+              placeholder={placeholder || 'Seçenekleri seçin...'}
+              hasError={hasError}
+            />
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+
+      case 'textarea':
+        return (
+          <div 
+            key={field.id} 
+            className={`md:col-span-2 ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <textarea
+              value={typeof value === 'string' ? value : ''}
+              onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+              placeholder={placeholder}
+              rows={4}
+              className={`${inputClassName} resize-none`}
+            />
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+
+      case 'file':
+        return (
+          <div 
+            key={field.id} 
+            className={`md:col-span-2 ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <div className={`border-2 border-dashed rounded-lg p-6 transition-all duration-200 ${
+              hasError 
+                ? 'border-red-500 bg-red-100 dark:bg-red-900/20' 
+                : 'border-neutral-300 dark:border-neutral-600 hover:border-[#990000] dark:hover:border-[#990000]'
+            }`}>
+              {files[field.field_key] ? (
+                <div className="flex items-center gap-3">
+                  <FileText className="w-8 h-8 text-[#990000]" />
+                  <div>
+                    <p className="font-medium text-neutral-900 dark:text-neutral-100">{files[field.field_key].name}</p>
+                    <p className="text-sm text-neutral-500">Dosya yüklendi</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiles(prev => {
+                        const newFiles = { ...prev };
+                        delete newFiles[field.field_key];
+                        return newFiles;
+                      });
+                      setFormData(prev => ({ ...prev, [field.field_key]: '' }));
+                    }}
+                    className="text-neutral-400 hover:text-red-500 transition-colors duration-200 ml-auto"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-4">
+                    {uploadingFiles[field.field_key] ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 border-2 border-[#990000] border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-neutral-600 dark:text-neutral-400">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <FileUp className="w-12 h-12 text-neutral-400 mb-3" />
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(field.field_key, file);
+                          }}
+                          className="hidden"
+                          id={`file-${field.field_key}`}
+                        />
+                        <label
+                          htmlFor={`file-${field.field_key}`}
+                          className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-[#990000] text-white rounded-md hover:bg-[#800000] transition-all duration-200 text-sm font-medium"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>Dosya Yükle</span>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs text-neutral-500 mb-1">Maksimum dosya boyutu: 5MB</p>
+                    <p className="text-xs text-neutral-500">Kabul edilen formatlar: PDF, DOC, DOCX</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+
+      case 'checkbox':
+        return (
+          <div 
+            key={field.id} 
+            className={`md:col-span-2 ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
+            ref={setFieldRef(field.field_key)}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  id={`checkbox-${field.field_key}`}
+                  checked={Boolean(value)}
+                  onChange={(e) => handleInputChange(field.field_key, e.target.checked)}
+                  className={`w-4 h-4 text-[#990000] bg-gray-100 rounded focus:ring-[#990000] focus:ring-2 ${
+                    hasError ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+              </div>
+              <div className="text-sm">
+                <label 
+                  htmlFor={`checkbox-${field.field_key}`}
+                  className="font-medium text-neutral-700 dark:text-neutral-300 cursor-pointer hover:text-[#990000] transition-colors duration-200"
+                >
+                  {label} {field.is_required && <span className="text-red-500">*</span>}
+                </label>
+              </div>
+            </div>
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+
+      default:
+        return (
+          <div 
+            key={field.id} 
+            className={containerClassName}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <input
+                type={field.field_type}
+                value={typeof value === 'string' ? value : ''}
+                onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+                placeholder={placeholder}
+                className={iconInputClassName}
+              />
+            </div>
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <section className="py-20 bg-white dark:bg-neutral-900">
+        <div className="max-w-3xl mx-auto px-6 lg:px-8">
+          <div className="flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-[#990000] border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-3 text-neutral-600 dark:text-neutral-400">Form yükleniyor...</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!config) {
+    return (
+      <section className="py-20 bg-white dark:bg-neutral-900">
+        <div className="max-w-3xl mx-auto px-6 lg:px-8">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
+              Form bulunamadı
+            </h3>
+            <p className="text-neutral-600 dark:text-neutral-400">
+              Aradığınız form mevcut değil veya devre dışı bırakılmış.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (isSubmitted) {
+    const successMessage = config.success_message[locale] || config.success_message['tr'] || 'Başvurunuz başarıyla gönderildi!';
+
+    return (
+      <section className="py-20 bg-white dark:bg-neutral-900">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-8">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-xl font-medium text-green-900 dark:text-green-100 mb-2">
+              {successMessage}
+            </h3>
+            
+            {submitResult?.submissionId && (
+              <p className="text-sm text-green-700 dark:text-green-300 mb-4">
+                <strong>Başvuru No:</strong> {submitResult.submissionId}
+              </p>
+            )}
+            
+            <button
+              onClick={() => {
+                setIsSubmitted(false);
+                setSubmitResult(null);
+                const initialData: Record<string, FormDataValue> = {};
+                fields.forEach(field => {
+                  if (field.field_type === 'checkbox') {
+                    initialData[field.field_key] = false;
+                  } else if (field.field_type === 'multiselect') {
+                    initialData[field.field_key] = [];
+                  } else {
+                    initialData[field.field_key] = '';
+                  }
+                });
+                setFormData(initialData);
+                setFiles({});
+                setErrors({});
+              }}
+              className="mt-6 text-sm text-green-600 dark:text-green-400 hover:underline flex items-center gap-1"
+            >
+              {locale === 'en' ? 'Submit a new application' : 'Yeni bir başvuru gönderin'}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const title = config.title[locale] || config.title['tr'] || 'Başvuru Formu';
+  const subtitle = config.subtitle?.[locale] || config.subtitle?.['tr'] || '';
+  const submitButtonText = config.submit_button_text[locale] || config.submit_button_text['tr'] || 'Gönder';
+
+  return (
+    <section className="py-20 bg-white dark:bg-neutral-900">
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-12">
+          <h2 className="text-3xl md:text-4xl font-light text-neutral-900 dark:text-neutral-100 mb-4">
+            {title}
+          </h2>
+          <div className="w-16 h-px bg-[#990000] mb-6"></div>
+          <p className="text-lg text-neutral-600 dark:text-neutral-400">
+            {subtitle}
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {fields.map(renderField)}
+          </div>
+
+          {/* Form genel hatası göster */}
+          {errors.form && (
+            <div className="mb-6 p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20">
+              <p className="text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {errors.form}
+              </p>
+            </div>
+          )}
+
+          {config.terms_and_conditions && (
+            <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg">
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-3">
+                Kullanım Şartları ve Koşulları
+              </h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                {config.terms_and_conditions[locale] || config.terms_and_conditions['tr'] || 'Kullanım şartları ve koşulları burada yer alacak.'}
+              </p>
+            </div>
+          )}
+
+          {/* Privacy Notice (KVKK) */}
+          {config.privacy_notice && (
+            <div className="mt-8 p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <h3 className="text-lg font-medium text-green-900 dark:text-green-100 mb-3">
+                Kişisel Verilerin Korunması Hakkında Bilgilendirme
+              </h3>
+              <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
+                {config.privacy_notice[locale] || config.privacy_notice['tr']}
+              </p>
+            </div>
+          )}
+
+          {/* HCAPTCHA */}
+          <div className="pt-6">
+            <HCaptcha
+              ref={captchaRef}
+              sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
+              onVerify={(token) => {
+                setCaptchaToken(token);
+                if (errors['captcha']) {
+                  setErrors(prev => ({ ...prev, captcha: '' }));
+                }
+              }}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+              theme="light"
+              size="normal"
+            />
+            {errors['captcha'] && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors['captcha']}
+              </p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="pt-8">
+            <button
+              type="submit"
+              disabled={isSubmitting || !captchaToken}
+              className="py-4 px-8 bg-[#990000] text-white rounded-md hover:bg-[#800000] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center gap-2 text-sm font-medium"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Gönderiliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>{submitButtonText}</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
