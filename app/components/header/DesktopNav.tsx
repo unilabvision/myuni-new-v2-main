@@ -30,6 +30,7 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
           children: [
             { href: `/${locale}/hakkimizda/`, label: "Biz Kimiz" },
             { href: `/${locale}/kulup`, label: "MyUNI Kulüp Ağı" },
+            { href: `/${locale}/kariyer`, label: "Stajyer Programı" },
             { href: `/${locale}/egitmen-ol`, label: "Eğitmen Ol!" },
             { href: `/${locale}/bultenimiz`, label: "Bültenimiz" },
             { href: `/${locale}/sartlar-ve-kosullar`, label: "Şartlar ve Koşullar" },
@@ -50,7 +51,7 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
           children: [
             { href: `/${locale}/about`, label: "Who We Are" },
             { href: `/${locale}/kulup`, label: "MyUNI Club" },
-            { href: `/${locale}/careers`, label: "Career" },
+            { href: `/${locale}/careers`, label: "Internship Program" },
             { href: `/${locale}/newsletter`, label: "Newsletter" },
             { href: `/${locale}/terms`, label: "Terms and Conditions" },
             { href: `/${locale}/privacy`, label: "Privacy Policy" },

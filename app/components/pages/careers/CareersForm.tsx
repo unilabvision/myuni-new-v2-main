@@ -14,10 +14,18 @@ interface DynamicFormProps {
   locale?: string;
 }
 
+interface FieldValidationRules {
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  maxFileSizeBytes?: number;
+  allowedMimeTypes?: string[];
+}
+
 // Define interfaces locally
 interface FormConfig {
   id: string;
-  name: string;
+  form_name: string;
   title: Record<string, string>;
   subtitle?: Record<string, string>;
   is_active: boolean;
@@ -35,8 +43,9 @@ interface FormField {
   placeholder?: Record<string, string>;
   is_required: boolean;
   grid_columns: number;
-  options?: Record<string, string[]>;
-  order_index: number;
+  options?: Record<string, string[] | string> | null;
+  sort_order: number;
+  validation_rules?: FieldValidationRules | null;
 }
 
 // Upload file function
@@ -74,9 +83,9 @@ async function uploadFile(file: File, fileName: string) {
 async function getFormConfig(formName: string): Promise<FormConfig | null> {
   try {
     const { data, error } = await supabase
-      .from('form_configs')
+      .from('unilab_vision_form_configs')
       .select('*')
-      .eq('name', formName)
+      .eq('form_name', formName)
       .eq('is_active', true)
       .single();
 
@@ -96,10 +105,11 @@ async function getFormConfig(formName: string): Promise<FormConfig | null> {
 async function getFormFields(configId: string): Promise<FormField[]> {
   try {
     const { data, error } = await supabase
-      .from('form_fields')
+      .from('unilab_vision_form_fields')
       .select('*')
       .eq('form_config_id', configId)
-      .order('order_index', { ascending: true });
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
 
     if (error) {
       console.error('Form fields error:', error);
@@ -153,6 +163,83 @@ const fileToFileUpload = async (file: File): Promise<FileUpload> => {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+};
+
+const DEFAULT_ALLOWED_FILE_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+
+const DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+
+const MIME_LABELS: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'application/msword': 'DOC',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX'
+};
+
+const formatFileSize = (bytes: number): string => {
+  if (!bytes || Number.isNaN(bytes)) return '0 B';
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+  return `${bytes} B`;
+};
+
+const extractAllowedMimeTypes = (field?: FormField): string[] => {
+  const allowed = field?.validation_rules?.allowedMimeTypes;
+  return Array.isArray(allowed) && allowed.length > 0
+    ? allowed.filter((type): type is string => typeof type === 'string')
+    : DEFAULT_ALLOWED_FILE_TYPES;
+};
+
+const getMaxFileSize = (field?: FormField): number => {
+  const value = field?.validation_rules?.maxFileSizeBytes;
+  return typeof value === 'number' && value > 0 ? value : DEFAULT_MAX_FILE_SIZE;
+};
+
+const describeAllowedTypes = (types: string[]): string => {
+  if (!types.length) return 'PDF, DOC, DOCX';
+  return types
+    .map(type => MIME_LABELS[type] || type.split('/').pop()?.toUpperCase() || type)
+    .join(', ');
+};
+
+const buildAcceptValue = (types: string[]): string => {
+  if (!types.length) return '.pdf,.doc,.docx';
+  return types.join(',');
+};
+
+const legacyBrandPatterns: [RegExp, string][] = [
+  [/un[\u0131iIİ]lab[\s-]*v[\u0131iIİ]s[\u0131iIİ]on/giu, 'MyUNI'],
+  [/v[\u0131iIİ]s[\u0131iIİ]on[\s-]*un[\u0131iIİ]lab/giu, 'MyUNI'],
+  [/un[\u0131iIİ]lab/giu, 'MyUNI'],
+  [/MyUni/g, 'MyUNI'],
+];
+
+const replaceLegacyBranding = (text?: string | null): string => {
+  if (!text) return '';
+  return legacyBrandPatterns.reduce(
+    (updatedText, [pattern, replacement]) => updatedText.replace(pattern, replacement),
+    text
+  );
+};
+
+const getLocalizedCopy = (
+  value: Record<string, string> | undefined | null,
+  locale: string,
+  fallback = ''
+): string => {
+  if (!value) return fallback;
+  const localized = value[locale] ?? value['tr'] ?? Object.values(value).find(Boolean) ?? fallback;
+  return replaceLegacyBranding(localized);
 };
 
 // Multi-Select Component
@@ -362,14 +449,23 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
   };
 
   const handleFileUpload = async (fieldKey: string, file: File) => {
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      setErrors(prev => ({ ...prev, [fieldKey]: 'Dosya boyutu 5MB\'dan küçük olmalıdır' }));
+    const field = fields.find(f => f.field_key === fieldKey);
+    const maxSize = getMaxFileSize(field);
+    const allowedTypes = extractAllowedMimeTypes(field);
+
+    if (file.size > maxSize) {
+      setErrors(prev => ({
+        ...prev,
+        [fieldKey]: `Dosya boyutu ${formatFileSize(maxSize)} sınırını aşamaz`
+      }));
       return;
     }
 
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (!allowedTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, [fieldKey]: 'Sadece PDF, DOC ve DOCX dosyaları kabul edilir' }));
+      setErrors(prev => ({
+        ...prev,
+        [fieldKey]: `Sadece ${describeAllowedTypes(allowedTypes)} formatları kabul edilir`
+      }));
       return;
     }
 
@@ -385,7 +481,10 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
       setFormData(prev => ({ ...prev, [fieldKey]: uploadResult.url }));
       setErrors(prev => ({ ...prev, [fieldKey]: '' }));
     } else {
-      setErrors(prev => ({ ...prev, [fieldKey]: uploadResult.error || 'Dosya yükleme hatası' }));
+      setErrors(prev => ({
+        ...prev,
+        [fieldKey]: uploadResult.error || 'Dosya yükleme hatası'
+      }));
     }
   };
 
@@ -463,6 +562,22 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
             newErrors[field.field_key] = 'Telefon numarası çok kısa';
           } else if (phone.length > 15) {
             newErrors[field.field_key] = 'Telefon numarası çok uzun';
+          }
+        }
+      }
+
+      // Textarea minLength/maxLength validation
+      if (field.field_type === 'textarea' && formData[field.field_key]) {
+        const textValue = formData[field.field_key];
+        if (typeof textValue === 'string') {
+          const textLength = textValue.trim().length;
+          const minLength = field.validation_rules?.minLength;
+          const maxLength = field.validation_rules?.maxLength;
+          
+          if (minLength && textLength < minLength) {
+            newErrors[field.field_key] = `Bu alan en az ${minLength} karakter olmalıdır (şu an: ${textLength})`;
+          } else if (maxLength && textLength > maxLength) {
+            newErrors[field.field_key] = `Bu alan en fazla ${maxLength} karakter olabilir`;
           }
         }
       }
@@ -585,10 +700,17 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
 
   const renderField = (field: FormField) => {
     const Icon = getFieldIcon(field.field_type);
-    const label = field.label[locale] || field.label['tr'] || field.field_key;
-    const placeholder = field.placeholder?.[locale] || field.placeholder?.['tr'] || '';
+    const label = replaceLegacyBranding(field.label[locale] || field.label['tr'] || field.field_key);
+    const placeholder = replaceLegacyBranding(field.placeholder?.[locale] || field.placeholder?.['tr'] || '');
     const hasError = !!errors[field.field_key];
     const value = formData[field.field_key] || '';
+    const localizedOptions = field.options?.[locale] ?? field.options?.['tr'];
+    const optionList = Array.isArray(localizedOptions)
+      ? localizedOptions
+          .filter((option): option is string => typeof option === 'string')
+          .map(option => replaceLegacyBranding(option))
+      : [];
+    const columnSpanClass = field.grid_columns && field.grid_columns > 1 ? 'md:col-span-2' : 'md:col-span-1';
 
     const inputClassName = `w-full px-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
       hasError ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
@@ -598,7 +720,7 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
       hasError ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
     }`;
 
-    const containerClassName = `${field.grid_columns === 2 ? 'md:col-span-1' : 'md:col-span-2'} ${
+    const containerClassName = `${columnSpanClass} ${
       hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''
     }`;
 
@@ -621,7 +743,7 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                 className={iconInputClassName}
               >
                 <option value="">{placeholder}</option>
-                {field.options?.[locale]?.map((option, index) => (
+                {optionList.map((option, index) => (
                   <option key={index} value={option}>{option}</option>
                 ))}
               </select>
@@ -646,7 +768,7 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
               {label} {field.is_required && <span className="text-red-500">*</span>}
             </label>
             <MultiSelect
-              options={field.options?.[locale] || field.options?.['tr'] || []}
+              options={optionList}
               selectedValues={Array.isArray(value) ? value : []}
               onChange={(values) => handleInputChange(field.field_key, values)}
               placeholder={placeholder || 'Seçenekleri seçin...'}
@@ -661,104 +783,39 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
           </div>
         );
 
-      case 'textarea':
+      case 'textarea': {
+        const minLength = field.validation_rules?.minLength;
+        const maxLength = field.validation_rules?.maxLength;
+        const currentLength = typeof value === 'string' ? value.length : 0;
         return (
           <div 
             key={field.id} 
-            className={`md:col-span-2 ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
+            className={`${columnSpanClass} ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
             ref={setFieldRef(field.field_key)}
           >
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               {label} {field.is_required && <span className="text-red-500">*</span>}
             </label>
-            <textarea
-              value={typeof value === 'string' ? value : ''}
-              onChange={(e) => handleInputChange(field.field_key, e.target.value)}
-              placeholder={placeholder}
-              rows={4}
-              className={`${inputClassName} resize-none`}
-            />
-            {hasError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {errors[field.field_key]}
-              </p>
-            )}
-          </div>
-        );
-
-      case 'file':
-        return (
-          <div 
-            key={field.id} 
-            className={`md:col-span-2 ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
-            ref={setFieldRef(field.field_key)}
-          >
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-              {label} {field.is_required && <span className="text-red-500">*</span>}
-            </label>
-            <div className={`border-2 border-dashed rounded-lg p-6 transition-all duration-200 ${
-              hasError 
-                ? 'border-red-500 bg-red-100 dark:bg-red-900/20' 
-                : 'border-neutral-300 dark:border-neutral-600 hover:border-[#990000] dark:hover:border-[#990000]'
-            }`}>
-              {files[field.field_key] ? (
-                <div className="flex items-center gap-3">
-                  <FileText className="w-8 h-8 text-[#990000]" />
-                  <div>
-                    <p className="font-medium text-neutral-900 dark:text-neutral-100">{files[field.field_key].name}</p>
-                    <p className="text-sm text-neutral-500">Dosya yüklendi</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFiles(prev => {
-                        const newFiles = { ...prev };
-                        delete newFiles[field.field_key];
-                        return newFiles;
-                      });
-                      setFormData(prev => ({ ...prev, [field.field_key]: '' }));
-                    }}
-                    className="text-neutral-400 hover:text-red-500 transition-colors duration-200 ml-auto"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <div className="mb-4">
-                    {uploadingFiles[field.field_key] ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 border-2 border-[#990000] border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-neutral-600 dark:text-neutral-400">Yükleniyor...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <FileUp className="w-12 h-12 text-neutral-400 mb-3" />
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleFileUpload(field.field_key, file);
-                          }}
-                          className="hidden"
-                          id={`file-${field.field_key}`}
-                        />
-                        <label
-                          htmlFor={`file-${field.field_key}`}
-                          className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-[#990000] text-white rounded-md hover:bg-[#800000] transition-all duration-200 text-sm font-medium"
-                        >
-                          <Upload className="w-4 h-4" />
-                          <span>Dosya Yükle</span>
-                        </label>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs text-neutral-500 mb-1">Maksimum dosya boyutu: 5MB</p>
-                    <p className="text-xs text-neutral-500">Kabul edilen formatlar: PDF, DOC, DOCX</p>
-                  </div>
+            <div className="relative">
+              <textarea
+                value={typeof value === 'string' ? value : ''}
+                onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+                placeholder={placeholder}
+                rows={5}
+                maxLength={maxLength}
+                className={`${inputClassName} resize-none min-h-[120px] sm:min-h-[140px]`}
+              />
+              {(minLength || maxLength) && (
+                <div className="absolute bottom-2 right-2 text-xs text-neutral-400 bg-white dark:bg-neutral-800 px-2 py-1 rounded">
+                  <span className={currentLength < (minLength || 0) ? 'text-amber-500' : 'text-neutral-400'}>
+                    {currentLength}
+                  </span>
+                  {maxLength && <span>/{maxLength}</span>}
+                  {minLength && currentLength < minLength && (
+                    <span className="ml-1 text-amber-500">
+                      ({locale === 'en' ? `min ${minLength}` : `min ${minLength}`})
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -770,6 +827,113 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
             )}
           </div>
         );
+      }
+
+      case 'file': {
+        const allowedMimeTypes = extractAllowedMimeTypes(field);
+        const acceptValue = buildAcceptValue(allowedMimeTypes);
+        const maxFileSize = getMaxFileSize(field);
+        const allowedTypesDescription = describeAllowedTypes(allowedMimeTypes);
+        return (
+          <div 
+            key={field.id} 
+            className={`${columnSpanClass} ${hasError ? 'bg-red-50 dark:bg-red-900/10 p-4 rounded-lg border border-red-200 dark:border-red-800' : ''}`}
+            ref={setFieldRef(field.field_key)}
+          >
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {label} {field.is_required && <span className="text-red-500">*</span>}
+            </label>
+            <div className={`border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 transition-all duration-200 ${
+              hasError 
+                ? 'border-red-500 bg-red-100 dark:bg-red-900/20' 
+                : 'border-neutral-300 dark:border-neutral-600 hover:border-[#990000] dark:hover:border-[#990000] bg-neutral-50 dark:bg-neutral-800/50'
+            }`}>
+              {files[field.field_key] ? (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0 w-12 h-12 bg-[#990000]/10 dark:bg-[#990000]/20 rounded-lg flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-[#990000]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate">{files[field.field_key].name}</p>
+                      <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        {locale === 'en' ? 'File uploaded successfully' : 'Dosya başarıyla yüklendi'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiles(prev => {
+                        const newFiles = { ...prev };
+                        delete newFiles[field.field_key];
+                        return newFiles;
+                      });
+                      setFormData(prev => ({ ...prev, [field.field_key]: '' }));
+                    }}
+                    className="flex-shrink-0 p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200"
+                    title={locale === 'en' ? 'Remove file' : 'Dosyayı kaldır'}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  {uploadingFiles[field.field_key] ? (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <div className="w-10 h-10 border-3 border-[#990000] border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-neutral-600 dark:text-neutral-400 font-medium">
+                        {locale === 'en' ? 'Uploading...' : 'Yükleniyor...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 mx-auto mb-4 bg-neutral-100 dark:bg-neutral-700 rounded-full flex items-center justify-center">
+                        <FileUp className="w-8 h-8 text-neutral-400" />
+                      </div>
+                      <p className="text-neutral-600 dark:text-neutral-400 mb-4 text-sm sm:text-base">
+                        {placeholder || (locale === 'en' ? 'Drag and drop your file here or click to browse' : 'Dosyanızı sürükleyip bırakın veya tıklayarak seçin')}
+                      </p>
+                      <input
+                        type="file"
+                        accept={acceptValue}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(field.field_key, file);
+                        }}
+                        className="hidden"
+                        id={`file-${field.field_key}`}
+                      />
+                      <label
+                        htmlFor={`file-${field.field_key}`}
+                        className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-[#990000] text-white rounded-lg hover:bg-[#800000] transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>{locale === 'en' ? 'Choose File' : 'Dosya Seç'}</span>
+                      </label>
+                      <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                        <p className="text-xs text-neutral-500 mb-1">
+                          {locale === 'en' ? 'Maximum file size:' : 'Maksimum dosya boyutu:'} {formatFileSize(maxFileSize)}
+                        </p>
+                        <p className="text-xs text-neutral-500">
+                          {locale === 'en' ? 'Accepted formats:' : 'Kabul edilen formatlar:'} {allowedTypesDescription}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            {hasError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {errors[field.field_key]}
+              </p>
+            )}
+          </div>
+        );
+      }
 
       case 'checkbox':
         return (
@@ -871,7 +1035,7 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
   }
 
   if (isSubmitted) {
-    const successMessage = config.success_message[locale] || config.success_message['tr'] || 'Başvurunuz başarıyla gönderildi!';
+    const successMessage = getLocalizedCopy(config.success_message, locale, 'Başvurunuz başarıyla gönderildi!');
 
     return (
       <section className="py-20 bg-white dark:bg-neutral-900">
@@ -918,9 +1082,9 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
     );
   }
 
-  const title = config.title[locale] || config.title['tr'] || 'Başvuru Formu';
-  const subtitle = config.subtitle?.[locale] || config.subtitle?.['tr'] || '';
-  const submitButtonText = config.submit_button_text[locale] || config.submit_button_text['tr'] || 'Gönder';
+  const title = getLocalizedCopy(config.title, locale, 'Başvuru Formu');
+  const subtitle = getLocalizedCopy(config.subtitle, locale, '');
+  const submitButtonText = getLocalizedCopy(config.submit_button_text, locale, 'Gönder');
 
   return (
     <section className="py-20 bg-white dark:bg-neutral-900">
@@ -958,7 +1122,11 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                 Kullanım Şartları ve Koşulları
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                {config.terms_and_conditions[locale] || config.terms_and_conditions['tr'] || 'Kullanım şartları ve koşulları burada yer alacak.'}
+                {getLocalizedCopy(
+                  config.terms_and_conditions,
+                  locale,
+                  'Kullanım şartları ve koşulları burada yer alacak.'
+                )}
               </p>
             </div>
           )}
@@ -970,7 +1138,7 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                 Kişisel Verilerin Korunması Hakkında Bilgilendirme
               </h3>
               <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
-                {config.privacy_notice[locale] || config.privacy_notice['tr']}
+                {getLocalizedCopy(config.privacy_notice, locale, '')}
               </p>
             </div>
           )}

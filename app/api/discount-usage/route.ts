@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabase';
+import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,11 +61,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Kodu sadece kullanıldı olarak işaretle (bakiye azaltma ödeme başarılı olduğunda yapılacak)
+    // Not: Bakiye düşümü ödeme başarılı olduğunda yapılacak.
+    // has_balance_limit=true olan çek/voucher kodlarında "is_used=true" yapmak yanıltıcı olabilir (parçalı kullanım).
+    // Bu yüzden burada sadece "son kullanan" bilgisi gibi kayıt atıyoruz; "is_used" flag'ini ödeme sonrası mantık belirleyecek.
     const { error: updateError } = await supabase
       .from('discount_codes')
       .update({
-        is_used: true,
         used_by: userId,
         used_at: new Date().toISOString()
       })

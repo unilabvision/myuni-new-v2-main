@@ -1,7 +1,7 @@
 // app/api/shopier-callback/route.ts
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import supabase from '../../_services/supabaseClient';
+import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 
 // Type definitions
 interface CallbackParams {

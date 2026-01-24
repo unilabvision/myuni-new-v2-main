@@ -39,11 +39,6 @@ interface CareerContent {
   contactButtonText: string;
 }
 
-interface Statistic {
-  number: string;
-  label: string;
-  labelEn: string;
-}
 
 // Icon mapping for benefits and positions - updated for dark theme
 const iconMap: { [key: string]: React.ReactNode } = {
@@ -58,23 +53,23 @@ const iconMap: { [key: string]: React.ReactNode } = {
 // Career page data
 const careerData: { [key: string]: CareerContent } = {
   tr: {
-    heroTitle: "UNILAB Vision'da Kariyer",
-    heroSubtitle: "UNILAB Vision olarak, bilimsel keşiflerin ve teknolojik yeniliklerin sınırlarını zorlayan projeler yürütüyoruz. Ekibimize katılacak yaratıcı, meraklı ve çözüm odaklı bireylerle beraber, geleceğin dünyasını inşa ediyoruz.",
-    heroDescription: "Eğer bilim ve teknolojiye tutkuluysanız, yenilikçi bir çalışma ortamında kendinizi geliştirmek istiyorsanız, doğru yerdesiniz!",
-    whyUsTitle: "Neden UNILAB Vision?",
+    heroTitle: "MyUNI'de Kariyer",
+    heroSubtitle: "MyUNI, geleceğin eğitim teknolojilerini bugünden inşa eden öncü bir girişimdir. Üniversite–sektör geçişini yeniden tanımlayan dijital altyapımızla; yetenek yönetimi, kariyer eşleştirme ve gelişim odaklı fırsatları tek bir platformda entegre ediyoruz.",
+    heroDescription: "",
+    whyUsTitle: "Neden MyUNI?",
     whyUsSubtitle: "BİR SEBEBİ VAR!",
     benefits: [
       {
-        id: "innovation",
-        title: "Bilimsel ve Teknolojik İnovasyon",
-        description: "Bilim, teknoloji ve yapay zeka alanındaki projelerimizle, dünyayı daha yaşanabilir bir yer haline getirmeyi hedefliyoruz. Siz de bu yenilikçi çalışmalarda yer alabilirsiniz.",
-        icon: "innovation"
-      },
-      {
         id: "career",
         title: "Kariyer Gelişimi",
-        description: "Ekibimizin her üyesinin kişisel ve profesyonel gelişimini önemsiyoruz. UNILAB Vision'da uzmanlık alanınızı genişletebilir, yetkinliklerinizi daha da ileriye taşıyabilirsiniz.",
+        description: "Burada edineceğiniz deneyim; teknoloji girişimleri, danışmanlık, ürün yönetimi ve stratejik iş geliştirme alanlarında doğrudan karşılığı olan nitelikli bir referans oluşturur.",
         icon: "career"
+      },
+      {
+        id: "innovation",
+        title: "Bilimsel ve Teknolojik İnovasyon",
+        description: "Geleceğin eğitim teknolojilerinin bugünden geliştirildiği MyUNI Eğitim Platformu'nda ürün geliştirme, iş zekâsı, kullanıcı deneyimi, operasyonel süreçler ve dijital altyapı alanlarında somut çıktılar üreten projelerde sorumluluk alırsınız.",
+        icon: "innovation"
       },
       {
         id: "environment",
@@ -116,23 +111,23 @@ const careerData: { [key: string]: CareerContent } = {
     contactButtonText: "İletişime Geç"
   },
   en: {
-    heroTitle: "Career at UNILAB Vision",
-    heroSubtitle: "As UNILAB Vision, we carry out projects that push the boundaries of scientific discoveries and technological innovations. Together with creative, curious and solution-oriented individuals who will join our team, we are building the world of the future.",
-    heroDescription: "If you are passionate about science and technology and want to develop yourself in an innovative work environment, you are in the right place!",
-    whyUsTitle: "Why UNILAB Vision?",
+    heroTitle: "Career at MyUNI",
+    heroSubtitle: "MyUNI is a pioneering venture building the future of educational technologies today. With our digital infrastructure redefining the university-to-industry transition, we integrate talent management, career matching, and growth-oriented opportunities on a single platform.",
+    heroDescription: "",
+    whyUsTitle: "Why MyUNI?",
     whyUsSubtitle: "THERE'S A REASON!",
     benefits: [
       {
-        id: "innovation",
-        title: "Scientific and Technological Innovation",
-        description: "With our projects in science, technology and artificial intelligence, we aim to make the world a more livable place. You can also take part in these innovative studies.",
-        icon: "innovation"
-      },
-      {
         id: "career",
         title: "Career Development",
-        description: "We care about the personal and professional development of each member of our team. At UNILAB Vision, you can expand your field of expertise and take your competencies even further.",
+        description: "The experience you gain here serves as a qualified reference with direct relevance in technology startups, consulting, product management, and strategic business development.",
         icon: "career"
+      },
+      {
+        id: "innovation",
+        title: "Scientific and Technological Innovation",
+        description: "At the MyUNI Education Platform, where the future of educational technologies is being developed today, you will take responsibility in projects that produce tangible outcomes in product development, business intelligence, user experience, operational processes, and digital infrastructure.",
+        icon: "innovation"
       },
       {
         id: "environment",
@@ -175,13 +170,6 @@ const careerData: { [key: string]: CareerContent } = {
   }
 };
 
-// Statistics for visual appeal
-const stats: Statistic[] = [
-  { number: "50K+", label: "Takipçi Kitlesi", labelEn: "Follower Audience" },
-  { number: "10+", label: "Proje", labelEn: "Projects" },
-  { number: "5+", label: "Yıllık Deneyim", labelEn: "Years Experience" },
-  { number: "50+", label: "Ekip Üyesi", labelEn: "Team Members" }
-];
 
 // Hero Section Component
 interface HeroSectionProps {
@@ -209,9 +197,11 @@ function HeroSection({ content, locale, onApplyClick }: HeroSectionProps) {
           </p>
           
           {/* Description */}
-          <p className="text-base text-neutral-500 dark:text-neutral-500 mb-12 leading-relaxed">
-            {content.heroDescription}
-          </p>
+          {content.heroDescription && (
+            <p className="text-base text-neutral-500 dark:text-neutral-500 mb-12 leading-relaxed">
+              {content.heroDescription}
+            </p>
+          )}
           
           {/* CTA Buttons - updated for dark theme */}
           <div className="flex flex-col sm:flex-row gap-4">
@@ -230,20 +220,6 @@ function HeroSection({ content, locale, onApplyClick }: HeroSectionProps) {
               <span>{content.contactButtonText}</span>
             </a>
           </div>
-        </div>
-        
-        {/* Stats */}
-        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-2xl">
-          {stats.map((stat, index) => (
-            <div key={index}>
-              <div className="text-2xl md:text-3xl font-light text-neutral-900 dark:text-neutral-100 mb-1">
-                {stat.number}
-              </div>
-              <div className="text-xs text-neutral-500 dark:text-neutral-500 uppercase tracking-wide">
-                {locale === 'en' ? stat.labelEn : stat.label}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -340,7 +316,7 @@ export default function CareerPage({ locale = 'tr' }: CareerPageProps) {
       <HeroSection content={content} locale={locale} onApplyClick={scrollToCareersForm} />
       <BenefitsSection content={content} />
       <div ref={careersFormRef}>
-        <CareersForm formName="unilab_vision_apply" locale={locale} />
+        <CareersForm formName="myuni_apply" locale={locale} />
       </div>
     </div>
   );

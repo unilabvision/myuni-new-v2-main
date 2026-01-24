@@ -33,7 +33,7 @@ interface CourseData {
 interface DiscountCode {
   code: string;
   discountAmount: number;
-  type: 'percentage' | 'fixed';
+  type: 'percentage' | 'fixed' | 'balance';
   validUntil: string;
   applicableCourses: string[];
   max_usage: number;
@@ -47,8 +47,9 @@ interface DiscountCode {
 interface AppliedDiscount {
   code: string;
   value: number;
-  type: 'percentage' | 'fixed';
+  type: 'percentage' | 'fixed' | 'balance';
   amount: number;
+  remainingAfter?: number | null;
 }
 
 interface FormData {
@@ -352,8 +353,9 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         max_usage: code.max_usage,
         usage_count: code.usage_count,
         is_referral: code.is_referral,
-        has_balance_limit: code.has_balance_limit || false,
-        remaining_balance: code.remaining_balance || null,
+        has_balance_limit: !!code.has_balance_limit,
+        // IMPORTANT: don't use `|| null` or you'll lose 0 balances.
+        remaining_balance: code.remaining_balance ?? null,
         owner_id: code.owner_id || null
       }));
       
@@ -641,13 +643,19 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
 
     console.log('Adding discount to applied discounts');
+    const remainingAfter =
+      foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined
+        ? Math.max(0, Number(foundCode.remaining_balance) - discountValue)
+        : null;
+
     setAppliedDiscounts(prev => [
       ...prev, 
       { 
         code: foundCode.code, 
         value: discountValue,
         type: foundCode.type,
-        amount: foundCode.discountAmount
+        amount: foundCode.discountAmount,
+        remainingAfter
       }
     ]);
     
@@ -1233,9 +1241,13 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                       <div>
                         <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">{discount.code}</span>
                         <span className="text-xs text-neutral-600 dark:text-neutral-400 ml-2">
-                          {discount.type === 'percentage' 
-                            ? `%${discount.amount}` 
-                            : `${discount.amount.toFixed(2)}${t.currency}`}
+                          {discount.type === 'balance'
+                            ? (discount.remainingAfter !== null && discount.remainingAfter !== undefined
+                                ? `Kalan: ${discount.remainingAfter.toFixed(2)}${t.currency}`
+                                : 'Çek / Bakiye')
+                            : discount.type === 'percentage'
+                              ? `%${discount.amount}`
+                              : `${discount.amount.toFixed(2)}${t.currency}`}
                         </span>
                       </div>
                       <div className="flex items-center">

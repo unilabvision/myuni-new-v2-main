@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lightbulb, Target, Award, Globe, Brain, Settings, TrendingUp, Users, Zap } from 'lucide-react';
+import { Lightbulb, Target, Award, Globe, Brain, Settings, TrendingUp, Users, Zap, CalendarDays, Rocket, Handshake, ArrowRight } from 'lucide-react';
 
 interface ServicesSectionProps {
   locale: string;
@@ -30,6 +30,23 @@ interface ServicesData {
   values: Value[];
 }
 
+interface InternshipHighlight {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+}
+
+interface InternshipContent {
+  badge: string;
+  title: string;
+  description: string;
+  helper: string;
+  ctaLabel: string;
+  ctaHint: string;
+  highlights: InternshipHighlight[];
+}
+
 // Icon mapping for services and values
 const iconMap: { [key: string]: React.ReactNode } = {
   // Core platform features
@@ -42,7 +59,12 @@ const iconMap: { [key: string]: React.ReactNode } = {
   innovation: <Lightbulb className="w-6 h-6 text-[#990000] dark:text-white" strokeWidth={1.5} />,
   excellence: <Award className="w-6 h-6 text-[#990000] dark:text-white" strokeWidth={1.5} />,
   accessibility: <Globe className="w-6 h-6 text-[#990000] dark:text-white" strokeWidth={1.5} />,
-  transformation: <Zap className="w-6 h-6 text-[#990000] dark:text-white" strokeWidth={1.5} />
+  transformation: <Zap className="w-6 h-6 text-[#990000] dark:text-white" strokeWidth={1.5} />,
+  mentorship: <Handshake className="w-6 h-6 text-white" strokeWidth={1.5} />,
+  handshake: <Handshake className="w-6 h-6 text-white" strokeWidth={1.5} />,
+  real_projects: <Rocket className="w-6 h-6 text-white" strokeWidth={1.5} />,
+  flexibility: <CalendarDays className="w-6 h-6 text-white" strokeWidth={1.5} />,
+  vibrant_community: <Users className="w-6 h-6 text-white" strokeWidth={1.5} />
 };
 
 // Services data for MyUNI platform
@@ -167,6 +189,79 @@ const servicesData: { [key: string]: ServicesData } = {
   }
 };
 
+const internshipContent: { [key: string]: InternshipContent } = {
+  tr: {
+    badge: 'Staj Programı',
+    title: 'MyUNI ekibine stajyer olarak katıl',
+    description:
+      'Bilim, teknoloji, medya ve etkinlik ekiplerimiz her dönem sınırlı kontenjanla stajyer kabul ediyor. Mentorluk desteği, gerçek projelerde sorumluluk ve esnek çalışma modeliyle MyUNI içerisinde kariyer yolculuğunu hızlandır.',
+    helper: 'Başvurular CV, motivasyon soruları ve opsiyonel portfolyo ile değerlendirilir.',
+    ctaLabel: 'Staj Başvurusunu Görüntüle',
+    ctaHint: 'Formu doldurmak 5 dakikadan kısa sürer.',
+    highlights: [
+      {
+        id: 'motivation',
+        title: 'Motivasyon & Beklentiler',
+        description: '“MyUni ekibine katılma motivasyonunuzu ve bu stajdan beklentilerinizi kısaca açıklar mısınız?”',
+        icon: 'mentorship'
+      },
+      {
+        id: 'communication',
+        title: 'Ekip İletişimi',
+        description: '“Bir ekip içinde verimli iletişimi sağlamak için bireysel olarak nelere dikkat edersiniz?”',
+        icon: 'handshake'
+      },
+      {
+        id: 'teamwork',
+        title: 'Ekip Deneyimi',
+        description: '“Daha önce bir ekip çalışmasında sorumluluk aldınız mı? Aldıysanız kısaca rolünüzü ve bu deneyimden çıkardığınız en önemli dersi paylaşır mısınız?”',
+        icon: 'real_projects'
+      },
+      {
+        id: 'cv_upload',
+        title: 'CV Yükleme',
+        description: '“Güncel CV’nizi yükleyiniz.”',
+        icon: 'flexibility'
+      }
+    ]
+  },
+  en: {
+    badge: 'Internship Program',
+    title: 'Join MyUNI as an intern',
+    description:
+      'Our science, technology, media and events teams open limited internship seats every term. Accelerate your career inside MyUNI with mentorship, real project ownership and a flexible hybrid schedule.',
+    helper: 'Applications include your CV, motivation prompts and an optional portfolio.',
+    ctaLabel: 'See Internship Application',
+    ctaHint: 'It takes less than 5 minutes to apply.',
+    highlights: [
+      {
+        id: 'motivation',
+        title: 'Motivation & Expectations',
+        description: '“Briefly explain your motivation for joining MyUNI and what you expect from this internship.”',
+        icon: 'mentorship'
+      },
+      {
+        id: 'communication',
+        title: 'Team Communication',
+        description: '“What do you personally pay attention to for effective communication within a team?”',
+        icon: 'handshake'
+      },
+      {
+        id: 'teamwork',
+        title: 'Team Experience',
+        description: '“Have you taken responsibility in a team before? Share your role and the key lesson you learned.”',
+        icon: 'real_projects'
+      },
+      {
+        id: 'cv_upload',
+        title: 'Upload Your CV',
+        description: '“Upload your current CV.” — Accepted formats: PDF/DOC/DOCX up to 100MB.',
+        icon: 'flexibility'
+      }
+    ]
+  }
+};
+
 export default function ServicesSection({ locale }: ServicesSectionProps) {
   const router = useRouter();
 
@@ -175,9 +270,18 @@ export default function ServicesSection({ locale }: ServicesSectionProps) {
     return servicesData[locale as keyof typeof servicesData] || servicesData.tr;
   }, [locale]);
 
+  const internship = useMemo(() => {
+    return internshipContent[locale as keyof typeof internshipContent] || internshipContent.tr;
+  }, [locale]);
+
   // Handle button click for navigation
   const handleExploreClick = () => {
     const route = locale === 'tr' ? '/tr/kurs' : '/en/course';
+    router.push(route);
+  };
+
+  const handleInternshipClick = () => {
+    const route = locale === 'tr' ? '/tr/kariyer' : '/en/career';
     router.push(route);
   };
 
@@ -257,6 +361,60 @@ export default function ServicesSection({ locale }: ServicesSectionProps) {
                 <div className="absolute inset-0 bg-gradient-to-t from-[#990000]/0 via-[#990000]/0 to-[#990000]/0 opacity-0 group-hover:opacity-5 rounded-xl transition-opacity duration-300 pointer-events-none"></div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Internship CTA Section */}
+      <section className="py-20 bg-neutral-900 text-white">
+        <div className="max-w-7xl mx-auto px-6 lg:px-6">
+          <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-start">
+            <div>
+              <span className="inline-flex items-center gap-2 px-4 py-1 text-xs tracking-[0.3em] uppercase text-white/70 bg-white/5 rounded-full">
+                {internship.badge}
+              </span>
+              <h2 className="mt-6 text-3xl md:text-4xl font-light leading-tight">
+                {internship.title}
+              </h2>
+              <p className="mt-6 text-lg text-white/80 leading-relaxed">
+                {internship.description}
+              </p>
+              <p className="mt-4 text-sm text-white/60">
+                {internship.helper}
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                <button
+                  type="button"
+                  onClick={handleInternshipClick}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-neutral-900 px-6 py-3 text-sm font-semibold tracking-wide hover:bg-neutral-200 transition-colors duration-200"
+                >
+                  <span>{internship.ctaLabel}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <div className="text-sm text-white/60 flex items-center">
+                  {internship.ctaHint}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {internship.highlights.map((highlight) => (
+                <div
+                  key={highlight.id}
+                  className="flex flex-col h-full rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
+                >
+                  <div className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 mb-5">
+                    {iconMap[highlight.icon] || iconMap.innovation}
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-3">
+                    {highlight.title}
+                  </h3>
+                  <p className="text-sm text-white/70 leading-relaxed">
+                    {highlight.description}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

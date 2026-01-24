@@ -57,6 +57,13 @@ interface EmailResult {
   errors?: string[];
 }
 
+type FormConfigSource = 'legacy' | 'unilab';
+
+interface FormConfigRecord {
+  title: Record<string, string> | string;
+  is_active: boolean;
+}
+
 // Submit form function implementation
 async function submitForm(data: {
   form_config_id: string;
@@ -65,14 +72,36 @@ async function submitForm(data: {
   user_agent?: string;
 }): Promise<SubmissionResult> {
   try {
-    // Get form config to validate the submission
-    const { data: formConfig, error: configError } = await supabase
+    let configSource: FormConfigSource | null = null;
+    let formConfig: FormConfigRecord | null = null;
+
+    const { data: legacyConfig, error: legacyError } = await supabase
       .from('form_configs')
       .select('title, is_active')
       .eq('id', data.form_config_id)
       .single();
 
-    if (configError || !formConfig) {
+    if (!legacyError && legacyConfig) {
+      formConfig = legacyConfig;
+      configSource = 'legacy';
+    } else {
+      const { data: newConfig, error: newConfigError } = await supabase
+        .from('unilab_vision_form_configs')
+        .select('title, is_active')
+        .eq('id', data.form_config_id)
+        .single();
+
+      if (!newConfigError && newConfig) {
+        formConfig = newConfig;
+        configSource = 'unilab';
+      } else if (legacyError && legacyError.code && legacyError.code !== 'PGRST116') {
+        console.error('Legacy form config lookup error:', legacyError);
+      } else if (newConfigError && newConfigError.code && newConfigError.code !== 'PGRST116') {
+        console.error('Unilab form config lookup error:', newConfigError);
+      }
+    }
+
+    if (!formConfig || !configSource) {
       return {
         success: false,
         error: 'Form configuration not found'
@@ -86,18 +115,31 @@ async function submitForm(data: {
       };
     }
 
-    // Insert form submission
+    const basePayload = {
+      form_config_id: data.form_config_id,
+      form_data: data.form_data,
+      files: data.files ?? null,
+      user_agent: data.user_agent ?? null,
+      ip_address: null
+    };
+
+    const nowIso = new Date().toISOString();
+    const tableName = configSource === 'legacy' ? 'form_submissions' : 'unilab_vision_apply';
+    const insertPayload =
+      configSource === 'legacy'
+        ? {
+            ...basePayload,
+            submitted_at: nowIso,
+            status: 'submitted'
+          }
+        : {
+            ...basePayload,
+            status: 'pending'
+          };
+
     const { data: submission, error: submissionError } = await supabase
-      .from('form_submissions')
-      .insert({
-        form_config_id: data.form_config_id,
-        form_data: data.form_data,
-        files: data.files,
-        user_agent: data.user_agent,
-        submitted_at: new Date().toISOString(),
-        ip_address: null, // You might want to get this from headers
-        status: 'submitted'
-      })
+      .from(tableName)
+      .insert(insertPayload)
       .select('id')
       .single();
 
@@ -111,7 +153,7 @@ async function submitForm(data: {
 
     return {
       success: true,
-      formTitle: formConfig.title,
+      formTitle: resolveFormTitle(formConfig.title),
       submissionId: submission.id
     };
   } catch (error) {
@@ -121,6 +163,31 @@ async function submitForm(data: {
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
+}
+
+function resolveFormTitle(title: unknown): string {
+  if (typeof title === 'string') {
+    return title;
+  }
+
+  if (title && typeof title === 'object') {
+    const titleRecord = title as Record<string, unknown>;
+    const preferredKeys = ['tr', 'en'];
+
+    for (const key of preferredKeys) {
+      const value = titleRecord[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value;
+      }
+    }
+
+    const fallbackValue = Object.values(titleRecord).find((val) => typeof val === 'string');
+    if (typeof fallbackValue === 'string') {
+      return fallbackValue;
+    }
+  }
+
+  return 'Başvuru Formu';
 }
 
 // Helper function to convert form data to email-compatible format
