@@ -1,6 +1,92 @@
 export type Database = {
     public: {
       Tables: {
+        internship_applications: {
+          Row: {
+            id: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            phone: string | null;
+            school: string;
+            grade: string;
+            // Başvuru soruları
+            motivation: string | null;
+            communication: string | null;
+            team_experience: string | null;
+            // CV dosyası
+            cv_storage_path: string | null;
+            cv_file_name: string | null;
+            cv_file_size: number | null;
+            cv_mime_type: string | null;
+            // Durum
+            status: 'pending' | 'under_review' | 'interview' | 'accepted' | 'rejected';
+            position: string | null;
+            admin_notes: string | null;
+            reviewed_by: string | null;
+            reviewed_at: string | null;
+            user_agent: string | null;
+            ip_address: string | null;
+            source: string | null;
+            legacy_apply_id: string | null;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            phone?: string | null;
+            school: string;
+            grade: string;
+            motivation?: string | null;
+            communication?: string | null;
+            team_experience?: string | null;
+            cv_storage_path?: string | null;
+            cv_file_name?: string | null;
+            cv_file_size?: number | null;
+            cv_mime_type?: string | null;
+            status?: 'pending' | 'under_review' | 'interview' | 'accepted' | 'rejected';
+            position?: string | null;
+            admin_notes?: string | null;
+            reviewed_by?: string | null;
+            reviewed_at?: string | null;
+            user_agent?: string | null;
+            ip_address?: string | null;
+            source?: string | null;
+            legacy_apply_id?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            first_name?: string;
+            last_name?: string;
+            email?: string;
+            phone?: string | null;
+            school?: string;
+            grade?: string;
+            motivation?: string | null;
+            communication?: string | null;
+            team_experience?: string | null;
+            cv_storage_path?: string | null;
+            cv_file_name?: string | null;
+            cv_file_size?: number | null;
+            cv_mime_type?: string | null;
+            status?: 'pending' | 'under_review' | 'interview' | 'accepted' | 'rejected';
+            position?: string | null;
+            admin_notes?: string | null;
+            reviewed_by?: string | null;
+            reviewed_at?: string | null;
+            user_agent?: string | null;
+            ip_address?: string | null;
+            source?: string | null;
+            legacy_apply_id?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
         user_profiles: {
           Row: {
             id: string;
@@ -294,6 +380,234 @@ export type Database = {
             updated_at?: string;
           };
         };
+        // ============================================
+        // STAJYER PROGRAMI TABLOLARI
+        // ============================================
+        internship_form_configs: {
+          Row: {
+            id: string;
+            form_name: string;
+            title: Record<string, string>;
+            subtitle: Record<string, string> | null;
+            submit_button_text: Record<string, string>;
+            success_message: Record<string, string>;
+            privacy_notice: Record<string, string> | null;
+            terms_and_conditions: Record<string, string> | null;
+            is_active: boolean;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            form_name: string;
+            title: Record<string, string>;
+            subtitle?: Record<string, string> | null;
+            submit_button_text: Record<string, string>;
+            success_message: Record<string, string>;
+            privacy_notice?: Record<string, string> | null;
+            terms_and_conditions?: Record<string, string> | null;
+            is_active?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            form_name?: string;
+            title?: Record<string, string>;
+            subtitle?: Record<string, string> | null;
+            submit_button_text?: Record<string, string>;
+            success_message?: Record<string, string>;
+            privacy_notice?: Record<string, string> | null;
+            terms_and_conditions?: Record<string, string> | null;
+            is_active?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
+        internship_form_fields: {
+          Row: {
+            id: string;
+            form_config_id: string;
+            field_key: string;
+            field_type: string;
+            label: Record<string, string>;
+            placeholder: Record<string, string> | null;
+            is_required: boolean;
+            validation_rules: {
+              minLength?: number;
+              maxLength?: number;
+              pattern?: string;
+              maxFileSizeBytes?: number;
+              allowedMimeTypes?: string[];
+            } | null;
+            options: Record<string, string[]> | null;
+            sort_order: number;
+            grid_columns: number;
+            is_active: boolean;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            form_config_id: string;
+            field_key: string;
+            field_type: string;
+            label: Record<string, string>;
+            placeholder?: Record<string, string> | null;
+            is_required?: boolean;
+            validation_rules?: object | null;
+            options?: Record<string, string[]> | null;
+            sort_order?: number;
+            grid_columns?: number;
+            is_active?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            form_config_id?: string;
+            field_key?: string;
+            field_type?: string;
+            label?: Record<string, string>;
+            placeholder?: Record<string, string> | null;
+            is_required?: boolean;
+            validation_rules?: object | null;
+            options?: Record<string, string[]> | null;
+            sort_order?: number;
+            grid_columns?: number;
+            is_active?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
+        internship_votes: {
+          Row: {
+            id: string;
+            application_id: string;
+            voter_id: string;
+            voter_email: string;
+            voter_name: string;
+            vote_type: 'approve' | 'reject' | 'neutral' | 'shortlist';
+            score: number | null;
+            comment: string | null;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            application_id: string;
+            voter_id: string;
+            voter_email: string;
+            voter_name: string;
+            vote_type: 'approve' | 'reject' | 'neutral' | 'shortlist';
+            score?: number | null;
+            comment?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            application_id?: string;
+            voter_id?: string;
+            voter_email?: string;
+            voter_name?: string;
+            vote_type?: 'approve' | 'reject' | 'neutral' | 'shortlist';
+            score?: number | null;
+            comment?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
+        internship_reviewers: {
+          Row: {
+            id: string;
+            clerk_id: string | null;
+            email: string;
+            name: string;
+            role: 'admin' | 'reviewer' | 'viewer';
+            is_active: boolean;
+            can_vote: boolean;
+            can_change_status: boolean;
+            can_add_notes: boolean;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            clerk_id?: string | null;
+            email: string;
+            name: string;
+            role?: 'admin' | 'reviewer' | 'viewer';
+            is_active?: boolean;
+            can_vote?: boolean;
+            can_change_status?: boolean;
+            can_add_notes?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            clerk_id?: string | null;
+            email?: string;
+            name?: string;
+            role?: 'admin' | 'reviewer' | 'viewer';
+            is_active?: boolean;
+            can_vote?: boolean;
+            can_change_status?: boolean;
+            can_add_notes?: boolean;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
+        internship_status_history: {
+          Row: {
+            id: string;
+            application_id: string;
+            old_status: string | null;
+            new_status: string;
+            changed_by: string;
+            changed_by_email: string | null;
+            reason: string | null;
+            created_at: string;
+          };
+          Insert: {
+            id?: string;
+            application_id: string;
+            old_status?: string | null;
+            new_status: string;
+            changed_by: string;
+            changed_by_email?: string | null;
+            reason?: string | null;
+            created_at?: string;
+          };
+          Update: {
+            id?: string;
+            application_id?: string;
+            old_status?: string | null;
+            new_status?: string;
+            changed_by?: string;
+            changed_by_email?: string | null;
+            reason?: string | null;
+            created_at?: string;
+          };
+        };
       };
     };
   };
+
+// ============================================
+// STAJYER PROGRAMI TİPLERİ (Export)
+// ============================================
+export type InternshipApplication = Database['public']['Tables']['internship_applications']['Row'];
+export type InternshipApplicationInsert = Database['public']['Tables']['internship_applications']['Insert'];
+export type InternshipApplicationUpdate = Database['public']['Tables']['internship_applications']['Update'];
+
+export type InternshipFormConfig = Database['public']['Tables']['internship_form_configs']['Row'];
+export type InternshipFormField = Database['public']['Tables']['internship_form_fields']['Row'];
+export type InternshipVote = Database['public']['Tables']['internship_votes']['Row'];
+export type InternshipReviewer = Database['public']['Tables']['internship_reviewers']['Row'];
+export type InternshipStatusHistory = Database['public']['Tables']['internship_status_history']['Row'];
+
+export type ApplicationStatus = 'pending' | 'under_review' | 'interview' | 'accepted' | 'rejected';
+export type VoteType = 'approve' | 'reject' | 'neutral' | 'shortlist';
+export type ReviewerRole = 'admin' | 'reviewer' | 'viewer';

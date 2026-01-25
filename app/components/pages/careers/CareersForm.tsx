@@ -682,49 +682,62 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
     setIsSubmitting(true);
 
     try {
+      // CV dosyası için storage path al
+      let cvStoragePath: string | undefined;
+      let cvFileName: string | undefined;
+      let cvFileSize: number | undefined;
+      let cvMimeType: string | undefined;
 
-
-      // Convert files to FileUpload format if there are any
-      let fileUploads: Record<string, FileUpload> | undefined = undefined;
-      if (Object.keys(files).length > 0) {
-        fileUploads = {};
-        for (const [key, file] of Object.entries(files)) {
-          fileUploads[key] = await fileToFileUpload(file);
-        }
+      // Eğer CV dosyası yüklendiyse
+      const cvFile = files['cv_file'];
+      if (cvFile) {
+        cvFileName = cvFile.name;
+        cvFileSize = cvFile.size;
+        cvMimeType = cvFile.type;
+        // formData'dan storage URL'i al (handleFileUpload'da set edildi)
+        cvStoragePath = formData['cv_file'] as string;
       }
 
-      const submission = {
-        form_config_id: config.id,
-        form_data: {
-          // User info fields at the beginning
-          user_first_name: userInfo.firstName.trim(),
-          user_last_name: userInfo.lastName.trim(),
-          user_email: userInfo.email.trim(),
-          user_school: userInfo.school.trim(),
-          user_grade: userInfo.grade,
-          // Dynamic form fields
-          ...formData
-        },
-        files: fileUploads,
+      // Başvuru verilerini hazırla
+      const applicationData = {
+        first_name: userInfo.firstName.trim(),
+        last_name: userInfo.lastName.trim(),
+        email: userInfo.email.trim(),
+        school: userInfo.school.trim(),
+        grade: userInfo.grade,
+        // Başvuru soruları (ayrı alanlar)
+        motivation: formData['motivation'] as string || '',
+        communication: formData['communication'] as string || '',
+        team_experience: formData['team_experience'] as string || '',
+        // CV dosyası
+        cv_storage_path: cvStoragePath,
+        cv_file_name: cvFileName,
+        cv_file_size: cvFileSize,
+        cv_mime_type: cvMimeType,
         user_agent: navigator.userAgent,
       };
 
-      // API route'u çağır (email gönderme dahil)
-      const response = await fetch('/api/forms/submit', {
+      // Yeni internship_applications tablosuna kaydet
+      const response = await fetch('/api/internship-application', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(submission),
+        body: JSON.stringify(applicationData),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
 
-      setSubmitResult(result as SubmitResult);
+      setSubmitResult({
+        success: true,
+        submissionId: result.applicationId,
+        message: result.message
+      } as SubmitResult);
 
       if (result.success) {
         // Reset captcha after successful submission
