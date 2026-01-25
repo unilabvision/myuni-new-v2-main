@@ -1,6 +1,47 @@
 export type Database = {
     public: {
       Tables: {
+        user_profiles: {
+          Row: {
+            id: string;
+            clerk_id: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            school: string | null;
+            grade: string | null;
+            bio: string | null;
+            phone_number: string | null;
+            created_at: string;
+            updated_at: string;
+          };
+          Insert: {
+            id?: string;
+            clerk_id: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            school?: string | null;
+            grade?: string | null;
+            bio?: string | null;
+            phone_number?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+          Update: {
+            id?: string;
+            clerk_id?: string;
+            first_name?: string;
+            last_name?: string;
+            email?: string;
+            school?: string | null;
+            grade?: string | null;
+            bio?: string | null;
+            phone_number?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          };
+        };
         discount_codes: {
           Row: {
             id: string;

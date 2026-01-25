@@ -378,6 +378,50 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   );
 };
 
+// User info fields translations
+const userInfoTranslations = {
+  tr: {
+    firstName: 'Ad',
+    firstNamePlaceholder: 'Adınızı girin',
+    lastName: 'Soyad',
+    lastNamePlaceholder: 'Soyadınızı girin',
+    email: 'E-posta',
+    emailPlaceholder: 'E-posta adresinizi girin',
+    school: 'Okul / Üniversite',
+    schoolPlaceholder: 'Örn: İstanbul Üniversitesi',
+    grade: 'Sınıf',
+    gradePlaceholder: 'Sınıfınızı seçin',
+    gradeOptions: {
+      university_1: 'Üniversite 1. Sınıf',
+      university_2: 'Üniversite 2. Sınıf',
+      university_3: 'Üniversite 3. Sınıf',
+      university_4: 'Üniversite 4. Sınıf',
+      graduate: 'Mezun',
+      other: 'Diğer'
+    }
+  },
+  en: {
+    firstName: 'First Name',
+    firstNamePlaceholder: 'Enter your first name',
+    lastName: 'Last Name',
+    lastNamePlaceholder: 'Enter your last name',
+    email: 'Email',
+    emailPlaceholder: 'Enter your email address',
+    school: 'School / University',
+    schoolPlaceholder: 'e.g. Harvard University',
+    grade: 'Grade / Year',
+    gradePlaceholder: 'Select your grade',
+    gradeOptions: {
+      university_1: 'University - Freshman',
+      university_2: 'University - Sophomore',
+      university_3: 'University - Junior',
+      university_4: 'University - Senior',
+      graduate: 'Graduate',
+      other: 'Other'
+    }
+  }
+};
+
 export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProps) {
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -391,6 +435,17 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  
+  // User info state
+  const [userInfo, setUserInfo] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    school: '',
+    grade: ''
+  });
+  
+  const userInfoT = userInfoTranslations[locale as keyof typeof userInfoTranslations] || userInfoTranslations.tr;
   
   // Ref'ler her field için - Fixed ref callback
   const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -512,6 +567,28 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    // Validate user info fields
+    if (!userInfo.firstName.trim()) {
+      newErrors['user_firstName'] = locale === 'tr' ? 'Ad alanı zorunludur' : 'First name is required';
+    }
+    if (!userInfo.lastName.trim()) {
+      newErrors['user_lastName'] = locale === 'tr' ? 'Soyad alanı zorunludur' : 'Last name is required';
+    }
+    if (!userInfo.email.trim()) {
+      newErrors['user_email'] = locale === 'tr' ? 'E-posta alanı zorunludur' : 'Email is required';
+    } else {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(userInfo.email.trim())) {
+        newErrors['user_email'] = locale === 'tr' ? 'Geçerli bir e-posta adresi girin' : 'Enter a valid email address';
+      }
+    }
+    if (!userInfo.school.trim()) {
+      newErrors['user_school'] = locale === 'tr' ? 'Okul/Üniversite alanı zorunludur' : 'School/University is required';
+    }
+    if (!userInfo.grade) {
+      newErrors['user_grade'] = locale === 'tr' ? 'Sınıf seçimi zorunludur' : 'Grade selection is required';
+    }
+
     fields.forEach(field => {
       if (field.is_required) {
         const value = formData[field.field_key];
@@ -618,7 +695,16 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
 
       const submission = {
         form_config_id: config.id,
-        form_data: formData,
+        form_data: {
+          // User info fields at the beginning
+          user_first_name: userInfo.firstName.trim(),
+          user_last_name: userInfo.lastName.trim(),
+          user_email: userInfo.email.trim(),
+          user_school: userInfo.school.trim(),
+          user_grade: userInfo.grade,
+          // Dynamic form fields
+          ...formData
+        },
         files: fileUploads,
         user_agent: navigator.userAgent,
       };
@@ -1071,6 +1157,14 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                 setFormData(initialData);
                 setFiles({});
                 setErrors({});
+                // Reset user info
+                setUserInfo({
+                  firstName: '',
+                  lastName: '',
+                  email: '',
+                  school: '',
+                  grade: ''
+                });
               }}
               className="mt-6 text-sm text-green-600 dark:text-green-400 hover:underline flex items-center gap-1"
             >
@@ -1102,6 +1196,171 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          {/* User Info Fields */}
+          <div className="mb-8 p-6 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700">
+            <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-6">
+              {locale === 'tr' ? 'Kişisel Bilgiler' : 'Personal Information'}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* First Name */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {userInfoT.firstName} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={userInfo.firstName}
+                    onChange={(e) => {
+                      setUserInfo(prev => ({ ...prev, firstName: e.target.value }));
+                      if (errors['user_firstName']) {
+                        setErrors(prev => ({ ...prev, 'user_firstName': '' }));
+                      }
+                    }}
+                    placeholder={userInfoT.firstNamePlaceholder}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+                      errors['user_firstName'] ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  />
+                </div>
+                {errors['user_firstName'] && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors['user_firstName']}
+                  </p>
+                )}
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {userInfoT.lastName} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={userInfo.lastName}
+                    onChange={(e) => {
+                      setUserInfo(prev => ({ ...prev, lastName: e.target.value }));
+                      if (errors['user_lastName']) {
+                        setErrors(prev => ({ ...prev, 'user_lastName': '' }));
+                      }
+                    }}
+                    placeholder={userInfoT.lastNamePlaceholder}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+                      errors['user_lastName'] ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  />
+                </div>
+                {errors['user_lastName'] && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors['user_lastName']}
+                  </p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {userInfoT.email} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <input
+                    type="email"
+                    value={userInfo.email}
+                    onChange={(e) => {
+                      setUserInfo(prev => ({ ...prev, email: e.target.value }));
+                      if (errors['user_email']) {
+                        setErrors(prev => ({ ...prev, 'user_email': '' }));
+                      }
+                    }}
+                    placeholder={userInfoT.emailPlaceholder}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+                      errors['user_email'] ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  />
+                </div>
+                {errors['user_email'] && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors['user_email']}
+                  </p>
+                )}
+              </div>
+
+              {/* School */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {userInfoT.school} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={userInfo.school}
+                    onChange={(e) => {
+                      setUserInfo(prev => ({ ...prev, school: e.target.value }));
+                      if (errors['user_school']) {
+                        setErrors(prev => ({ ...prev, 'user_school': '' }));
+                      }
+                    }}
+                    placeholder={userInfoT.schoolPlaceholder}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+                      errors['user_school'] ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  />
+                </div>
+                {errors['user_school'] && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors['user_school']}
+                  </p>
+                )}
+              </div>
+
+              {/* Grade */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {userInfoT.grade} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <select
+                    value={userInfo.grade}
+                    onChange={(e) => {
+                      setUserInfo(prev => ({ ...prev, grade: e.target.value }));
+                      if (errors['user_grade']) {
+                        setErrors(prev => ({ ...prev, 'user_grade': '' }));
+                      }
+                    }}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent transition-all duration-200 ${
+                      errors['user_grade'] ? 'border-red-500 ring-2 ring-red-200' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  >
+                    <option value="">{userInfoT.gradePlaceholder}</option>
+                    <option value="university_1">{userInfoT.gradeOptions.university_1}</option>
+                    <option value="university_2">{userInfoT.gradeOptions.university_2}</option>
+                    <option value="university_3">{userInfoT.gradeOptions.university_3}</option>
+                    <option value="university_4">{userInfoT.gradeOptions.university_4}</option>
+                    <option value="graduate">{userInfoT.gradeOptions.graduate}</option>
+                    <option value="other">{userInfoT.gradeOptions.other}</option>
+                  </select>
+                </div>
+                {errors['user_grade'] && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors['user_grade']}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Form Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {fields.map(renderField)}
           </div>

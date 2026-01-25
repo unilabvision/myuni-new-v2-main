@@ -114,6 +114,21 @@ export interface UserProgress {
   updated_at: string
 }
 
+// User Profile interface
+export interface UserProfile {
+  id: string
+  clerk_id: string
+  first_name: string
+  last_name: string
+  email: string
+  school?: string
+  grade?: string
+  bio?: string
+  phone_number?: string
+  created_at: string
+  updated_at: string
+}
+
 // Event interface based on myuni_events table
 export interface Event {
   id: string

@@ -15,6 +15,20 @@ interface TranslationStrings {
   firstNamePlaceholder: string;
   lastName: string;
   lastNamePlaceholder: string;
+  email: string;
+  emailPlaceholder: string;
+  school: string;
+  schoolPlaceholder: string;
+  grade: string;
+  gradePlaceholder: string;
+  gradeOptions: {
+    university_1: string;
+    university_2: string;
+    university_3: string;
+    university_4: string;
+    graduate: string;
+    other: string;
+  };
   bio: string;
   bioPlaceholder: string;
   phoneNumber: string;
@@ -47,6 +61,20 @@ export default function CompleteProfilePage({ params }: CompleteProfilePageProps
       firstNamePlaceholder: 'Adınızı girin',
       lastName: 'Soyad',
       lastNamePlaceholder: 'Soyadınızı girin',
+      email: 'E-posta',
+      emailPlaceholder: 'E-posta adresiniz',
+      school: 'Okul / Üniversite',
+      schoolPlaceholder: 'Örn: İstanbul Üniversitesi',
+      grade: 'Sınıf',
+      gradePlaceholder: 'Sınıfınızı seçin',
+      gradeOptions: {
+        university_1: 'Üniversite 1. Sınıf',
+        university_2: 'Üniversite 2. Sınıf',
+        university_3: 'Üniversite 3. Sınıf',
+        university_4: 'Üniversite 4. Sınıf',
+        graduate: 'Mezun',
+        other: 'Diğer'
+      },
       bio: 'Hakkınızda (İsteğe bağlı)',
       bioPlaceholder: 'Kendiniz hakkında kısa bir açıklama yazın...',
       phoneNumber: 'Telefon Numarası (İsteğe bağlı)',
@@ -67,6 +95,20 @@ export default function CompleteProfilePage({ params }: CompleteProfilePageProps
       firstNamePlaceholder: 'Enter your first name',
       lastName: 'Last Name',
       lastNamePlaceholder: 'Enter your last name',
+      email: 'Email',
+      emailPlaceholder: 'Your email address',
+      school: 'School / University',
+      schoolPlaceholder: 'e.g. Harvard University',
+      grade: 'Grade / Year',
+      gradePlaceholder: 'Select your grade',
+      gradeOptions: {
+        university_1: 'University - Freshman',
+        university_2: 'University - Sophomore',
+        university_3: 'University - Junior',
+        university_4: 'University - Senior',
+        graduate: 'Graduate',
+        other: 'Other'
+      },
       bio: 'Bio (Optional)',
       bioPlaceholder: 'Write a short description about yourself...',
       phoneNumber: 'Phone Number (Optional)',
@@ -244,6 +286,9 @@ function CompleteProfileForm({ locale, t, normalizedLocale }: CompleteProfileFor
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    email: '',
+    school: '',
+    grade: '',
     bio: '',
     phoneNumber: ''
   });
@@ -291,13 +336,16 @@ function CompleteProfileForm({ locale, t, normalizedLocale }: CompleteProfileFor
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
+        email: user.emailAddresses?.[0]?.emailAddress || '',
+        school: (user.unsafeMetadata?.school as string) || '',
+        grade: (user.unsafeMetadata?.grade as string) || '',
         bio: (user.unsafeMetadata?.bio as string) || '',
         phoneNumber: user.phoneNumbers?.[0]?.phoneNumber || ''
       });
     }
   }, [isLoaded, user]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -339,11 +387,43 @@ function CompleteProfileForm({ locale, t, normalizedLocale }: CompleteProfileFor
       const updateResult2 = await user.update({
         unsafeMetadata: {
           ...user.unsafeMetadata,
+          school: formData.school.trim(),
+          grade: formData.grade,
           bio: formData.bio.trim(),
           profileCompleted: true
         }
       });
       console.log("Metadata update result:", updateResult2);
+
+      // Save profile to Supabase
+      console.log("Saving profile to Supabase...");
+      try {
+        const profileResponse = await fetch('/api/user-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            clerk_id: user.id,
+            first_name: formData.firstName.trim(),
+            last_name: formData.lastName.trim(),
+            email: formData.email,
+            school: formData.school.trim(),
+            grade: formData.grade,
+            bio: formData.bio.trim(),
+            phone_number: formData.phoneNumber || null
+          })
+        });
+        
+        if (!profileResponse.ok) {
+          console.warn("Failed to save profile to Supabase:", await profileResponse.text());
+        } else {
+          console.log("Profile saved to Supabase successfully");
+        }
+      } catch (supabaseError) {
+        console.warn("Supabase profile save error:", supabaseError);
+        // Don't fail the whole process if Supabase save fails
+      }
 
       // Add phone number if provided and user doesn't have one
       if (formData.phoneNumber && user.phoneNumbers.length === 0) {
@@ -480,6 +560,66 @@ function CompleteProfileForm({ locale, t, normalizedLocale }: CompleteProfileFor
                 placeholder={t.lastNamePlaceholder}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Email Field (Read-only) */}
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            {t.email}
+          </label>
+          <div className="mt-1">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              readOnly
+              value={formData.email}
+              className="block w-full rounded-md border border-neutral-300 bg-neutral-100 px-4 py-2 text-neutral-600 cursor-not-allowed dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400 sm:text-sm"
+              placeholder={t.emailPlaceholder}
+            />
+          </div>
+        </div>
+
+        {/* School Field */}
+        <div>
+          <label htmlFor="school" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            {t.school}
+          </label>
+          <div className="mt-1">
+            <input
+              id="school"
+              name="school"
+              type="text"
+              value={formData.school}
+              onChange={handleInputChange}
+              className="block w-full rounded-md border border-neutral-300 bg-white px-4 py-2 text-neutral-900 focus:border-neutral-500 focus:outline-none focus:ring-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:border-neutral-500 sm:text-sm"
+              placeholder={t.schoolPlaceholder}
+            />
+          </div>
+        </div>
+
+        {/* Grade Field */}
+        <div>
+          <label htmlFor="grade" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            {t.grade}
+          </label>
+          <div className="mt-1">
+            <select
+              id="grade"
+              name="grade"
+              value={formData.grade}
+              onChange={handleInputChange}
+              className="block w-full rounded-md border border-neutral-300 bg-white px-4 py-2 text-neutral-900 focus:border-neutral-500 focus:outline-none focus:ring-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:border-neutral-500 sm:text-sm"
+            >
+              <option value="">{t.gradePlaceholder}</option>
+              <option value="university_1">{t.gradeOptions.university_1}</option>
+              <option value="university_2">{t.gradeOptions.university_2}</option>
+              <option value="university_3">{t.gradeOptions.university_3}</option>
+              <option value="university_4">{t.gradeOptions.university_4}</option>
+              <option value="graduate">{t.gradeOptions.graduate}</option>
+              <option value="other">{t.gradeOptions.other}</option>
+            </select>
           </div>
         </div>
 
