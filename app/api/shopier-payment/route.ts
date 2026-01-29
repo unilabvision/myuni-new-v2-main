@@ -1,11 +1,46 @@
-// app/api/shopier-payment/route.js
+// app/api/shopier-payment/route.ts
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
-import supabase from '../../_services/supabaseClient.js';
+import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 
-async function sendFreeEnrollmentEmail(courseData, userInfo, orderId, locale, courseType = 'online') {
+interface PaymentRequestBody {
+  courseId: string;
+  courseName: string;
+  amount: number;
+  email: string;
+  phone?: string;
+  name: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  zipCode?: string;
+  discountCodes?: string;
+  totalDiscount?: number;
+  referralCode?: string;
+  notes?: string;
+  locale?: string;
+  clerkUserId?: string;
+  userId?: string;
+}
+
+interface CourseData {
+  id: string;
+  title: string;
+  description?: string;
+  slug: string;
+  price: number;
+  is_active: boolean;
+  course_type?: string;
+}
+
+// Ücretsiz kayıt email gönderme
+async function sendFreeEnrollmentEmail(
+  courseData: CourseData, 
+  userInfo: { name: string; email: string }, 
+  orderId: string, 
+  locale: string, 
+  courseType: string = 'online'
+) {
   try {
-    // Dynamic import for email service
     const { sendPurchaseConfirmationEmail } = await import('../../_services/emailService');
     
     const userInfoForEmail = {
@@ -50,12 +85,31 @@ async function sendFreeEnrollmentEmail(courseData, userInfo, orderId, locale, co
 
   } catch (error) {
     console.error('Error in sendFreeEnrollmentEmail:', error);
-    return { success: false, error: error.message };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: errorMessage };
   }
 }
 
 // Sipariş kaydetme fonksiyonu
-async function saveOrderToDatabase(orderData) {
+async function saveOrderToDatabase(orderData: {
+  orderId: string;
+  courseId: string;
+  userEmail: string;
+  courseName: string;
+  amount: number;
+  clerkUserId?: string;
+  userId: string;
+  locale: string;
+  discountCodes: string;
+  totalDiscount: number;
+  userPhone: string;
+  userName: string;
+  userAddress: string;
+  userCity: string;
+  userNotes: string;
+  ipAddress: string;
+  userAgent: string;
+}) {
   try {
     console.log('Saving order to database:', orderData);
     
@@ -98,33 +152,36 @@ async function saveOrderToDatabase(orderData) {
     return { success: true, order: savedOrder };
   } catch (error) {
     console.error('Error in saveOrderToDatabase:', error);
-    return { success: false, error: error.message };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: errorMessage };
   }
 }
 
-export async function POST(request) {
+export async function POST(request: Request) {
   try {
-    console.log('=== SHOPIER PAYMENT ÇAĞRILDI ===');
+    console.log('=== SHOPIER PAYMENT (OAuth2) ÇAĞRILDI ===');
     console.log('Timestamp:', new Date().toISOString());
-    const body = await request.json();
+    
+    const body: PaymentRequestBody = await request.json();
 
     // DEBUG: Gelen veriyi logla
-    console.log('=== SHOPIER API DEBUG ===');
+    console.log('=== SHOPIER OAuth2 API DEBUG ===');
     console.log('Received body:', body);
     console.log('body.clerkUserId:', body.clerkUserId);
     console.log('body.userId:', body.userId);
     console.log('body.email:', body.email);
-    console.log('========================');
+    console.log('================================');
 
-    // API bilgileri - Environment variables'dan al
-    const apiKey = process.env.NEXT_PUBLIC_SHOPIER_API_KEY;
-    const apiSecret = process.env.SHOPIER_API_SECRET;
+    // OAuth2 API bilgileri
+    const clientId = process.env.SHOPIER_CLIENT_ID;
+    const clientSecret = process.env.SHOPIER_CLIENT_SECRET;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://myunilab.net";
 
-    if (!apiKey || !apiSecret) {
+    if (!clientId || !clientSecret) {
+      console.error('Missing Shopier OAuth2 credentials');
       return NextResponse.json({ 
         success: false, 
-        message: "Shopier API bilgileri eksik" 
+        message: "Shopier OAuth2 bilgileri eksik" 
       }, { status: 500 });
     }
 
@@ -141,11 +198,11 @@ export async function POST(request) {
     
     // User ID doğrulama
     if (!clerkUserId || clerkUserId.includes('@')) {
-      console.error('=== USER ID ERROR ===');
+      console.error('=== USER ID WARNING ===');
       console.error('Invalid or missing Clerk user ID:', clerkUserId);
       console.error('Expected format: user_xxxxxxxxxx');
       console.error('Falling back to email:', body.email);
-      console.error('=====================');
+      console.error('=======================');
     }
 
     // Kurs bilgilerini Supabase'den al
@@ -166,9 +223,8 @@ export async function POST(request) {
     // Sipariş detayları
     const orderId = `MYU-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     
-    // Tutar kontrolü - minimum 0.01
-    let amount = parseFloat(body.amount || courseData.price);
-    amount = amount <= 0 ? 0.01 : amount;
+    // Tutar kontrolü
+    let amount = parseFloat(String(body.amount || courseData.price));
     
     const buyerName = body.name.split(' ')[0] || body.name;
     const buyerSurname = body.name.split(' ').slice(1).join(' ') || "";
@@ -183,10 +239,9 @@ export async function POST(request) {
     console.log('clerkUserId:', clerkUserId);
     console.log('buyerEmail:', buyerEmail);
     console.log('userIdForEnrollment:', userIdForEnrollment);
-    console.log('Is valid Clerk ID?', userIdForEnrollment.startsWith('user_'));
     console.log('===================================');
 
-    // İstek bilgileri (IP, User Agent vs.)
+    // İstek bilgileri
     const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
                      request.headers.get('x-real-ip') || 
                      request.headers.get('cf-connecting-ip') || 
@@ -224,8 +279,8 @@ export async function POST(request) {
       }, { status: 500 });
     }
     
-    // %100 indirim durumunda doğrudan kayıt ve yönlendirme
-    if (parseFloat(body.amount) <= 0) {
+    // %100 indirim durumunda doğrudan kayıt
+    if (amount <= 0) {
       try {
         // Siparişi completed olarak güncelle
         await supabase
@@ -256,9 +311,7 @@ export async function POST(request) {
           console.log('=== CREATING FREE ENROLLMENT ===');
           console.log('user_id:', userIdForEnrollment);
           console.log('course_id:', body.courseId);
-          console.log('================================');
           
-          // Kursa kayıt yap
           const enrollmentData = {
             user_id: userIdForEnrollment,
             course_id: body.courseId,
@@ -266,8 +319,6 @@ export async function POST(request) {
             progress_percentage: 0,
             is_active: true
           };
-
-          console.log('Enrollment data to insert:', enrollmentData);
 
           const { data: newEnrollment, error: enrollError } = await supabase
             .from('myuni_enrollments')
@@ -277,7 +328,6 @@ export async function POST(request) {
 
           if (enrollError) {
             console.error('Enrollment error:', enrollError);
-            console.error('Enrollment error details:', enrollError.details);
             return NextResponse.json({
               success: false,
               message: "Kursa kaydedilirken bir hata oluştu: " + enrollError.message
@@ -301,60 +351,31 @@ export async function POST(request) {
           })
           .eq('orderid', orderId);
 
-          // USAGE COUNT ARTIRMA - %100 indirim durumu için
-          try {
-            const { incrementUsageCountAfterPayment } = await import('../../../lib/referralService');
-            const usageResult = await incrementUsageCountAfterPayment(userIdForEnrollment);
-            
-            if (usageResult.success) {
-              console.log('Usage count başarıyla artırıldı (free)');
-            } else {
-              console.error('Usage count artırılamadı (free):', usageResult.error);
-            }
-          } catch (usageError) {
-            console.error('Usage count işlemi başarısız (free):', usageError);
-            // Usage count hatası ödeme sürecini durdurmasın
-          }
-
-          // REFERRAL ÖDÜL KODU OLUŞTURMA - %100 indirim durumu için
-          console.log('=== PAYMENT: REFERRAL ÖDÜL KODU OLUŞTURMA BAŞLADI ===');
-          console.log('Payment User ID:', userIdForEnrollment);
-          try {
-            const { createRewardCodeAfterPayment } = await import('../../../lib/referralService');
-            const rewardResult = await createRewardCodeAfterPayment(userIdForEnrollment);
-            
-            if (rewardResult.success && rewardResult.code) {
-              console.log('Referral ödül kodu oluşturuldu (free):', rewardResult.code);
-            } else if (rewardResult.success) {
-              console.log('Referral kodu kullanılmamış, ödül kodu oluşturulmadı (free)');
-            } else {
-              console.error('Referral ödül kodu oluşturulamadı (free):', rewardResult.error);
-            }
-          } catch (referralError) {
-            console.error('Referral ödül kodu işlemi başarısız (free):', referralError);
-            // Referral hatası ödeme sürecini durdurmasın
-          }
+        // Referral işlemleri
+        try {
+          const { incrementUsageCountAfterPayment, createRewardCodeAfterPayment } = await import('../../../lib/referralService');
+          await incrementUsageCountAfterPayment(userIdForEnrollment);
+          await createRewardCodeAfterPayment(userIdForEnrollment);
+        } catch (referralError) {
+          console.error('Referral işlemi başarısız:', referralError);
+        }
         
-        // EMAIL GÖNDERME - Ücretsiz kayıt için
+        // Email gönder
         const userInfo = {
           name: body.name,
           email: buyerEmail
         };
 
-        // Kurs tipini belirle (course_type alanından)
-        const courseType = courseData.course_type || 'online'; // varsayılan: online
+        const courseType = courseData.course_type || 'online';
 
         try {
           await sendFreeEnrollmentEmail(courseData, userInfo, orderId, body.locale || 'tr', courseType);
         } catch (emailError) {
-          console.error('Free enrollment email failed but continuing:', emailError);
-          // Email hatası işlemi durdurmasın
+          console.error('Free enrollment email failed:', emailError);
         }
         
         // Başarılı kayıt ve yönlendirme
         const successUrl = `${baseUrl}/${body.locale || 'tr'}/payment-success?courseId=${encodeURIComponent(body.courseId)}&name=${encodeURIComponent(courseName)}&free=true&orderId=${orderId}`;
-        
-        console.log('Redirecting to success URL:', successUrl);
         
         return NextResponse.json({
           success: true,
@@ -362,95 +383,74 @@ export async function POST(request) {
           redirectUrl: successUrl,
           orderId: orderId,
           enrollmentSuccess: true,
-          userIdUsed: userIdForEnrollment,
-          emailSent: true
+          userIdUsed: userIdForEnrollment
         }, { status: 200 });
         
       } catch (enrollError) {
         console.error("Ücretsiz kurs kayıt hatası:", enrollError);
+        const errorMessage = enrollError instanceof Error ? enrollError.message : "Bilinmeyen hata";
         return NextResponse.json({
           success: false,
-          message: "Kursa kaydedilirken bir hata oluştu: " + (enrollError.message || "Bilinmeyen hata")
+          message: "Kursa kaydedilirken bir hata oluştu: " + errorMessage
         }, { status: 500 });
       }
     }
 
-    // Normal ödeme için Shopier form verileri
-    const randomNumber = Math.floor(Math.random() * 999999);
-    const currency = 0; // TL için 0
-    const productType = 1; // Dijital ürün için 1
-    const currentLanguage = body.locale === 'en' ? 1 : 0; // 0: Türkçe, 1: İngilizce
-    
-    const shopierFormData = {
-      API_key: apiKey,
-      website_index: 1,
-      platform_order_id: orderId,
-      product_name: courseName,
-      product_type: productType,
-      buyer_name: buyerName,
-      buyer_surname: buyerSurname,
-      buyer_email: buyerEmail,
-      buyer_phone: buyerPhone,
-      buyer_account_age: 0,
-      buyer_id_nr: 0,
-      billing_address: body.address || "Dijital Ürün",
-      billing_city: body.city || "İstanbul",
-      billing_country: "TR",
-      billing_postcode: body.zipCode || "34000",
-      shipping_address: body.address || "Dijital Ürün",
-      shipping_city: body.city || "İstanbul",
-      shipping_country: "TR", 
-      shipping_postcode: body.zipCode || "34000",
-      total_order_value: amount.toFixed(2),
-      currency: currency,
-      platform: 0,
-      is_in_frame: 0,
-      current_language: currentLanguage,
-      modul_version: "1.0.0",
-      random_nr: randomNumber,
-      custom_params: JSON.stringify({
-        courseId: body.courseId,
-        userEmail: buyerEmail,
-        clerkUserId: clerkUserId,
-        userId: userIdForEnrollment,
-        courseName: courseName,
-        orderId: orderId,
-        discountCodes: body.discountCodes || '',
-        totalDiscount: body.totalDiscount || 0,
-        locale: body.locale || 'tr'
-      })
+    // OAuth2 için state parametresi oluştur (sipariş bilgilerini içerir)
+    const stateData = {
+      orderId: orderId,
+      courseId: body.courseId,
+      userId: userIdForEnrollment,
+      email: buyerEmail,
+      locale: body.locale || 'tr',
+      amount: amount.toFixed(2),
+      courseName: courseName
     };
     
-    // İmza oluştur
-    const signatureData = `${randomNumber}${orderId}${amount.toFixed(2)}${currency}`;
-    const signature = crypto
-      .createHmac('sha256', apiSecret)
-      .update(signatureData)
-      .digest('base64');
+    // State'i base64 encode et
+    const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
     
-    shopierFormData.signature = signature;
+    // Callback URL
+    const redirectUri = `${baseUrl}/api/shopier-callback`;
     
-    // Callback ve return URL'leri
-    shopierFormData.return_url = `${baseUrl}/api/shopier-return`;
-    shopierFormData.callback_url = `${baseUrl}/api/shopier-callback`;
+    // Shopier OAuth2 Authorization URL oluştur
+    const shopierAuthUrl = new URL('https://www.shopier.com/oauth2/authorize');
+    shopierAuthUrl.searchParams.set('client_id', clientId);
+    shopierAuthUrl.searchParams.set('redirect_uri', redirectUri);
+    shopierAuthUrl.searchParams.set('response_type', 'code');
+    shopierAuthUrl.searchParams.set('state', state);
+    shopierAuthUrl.searchParams.set('scope', 'payment');
     
-    console.log('Shopier Form Data prepared for order:', orderId);
-    console.log('Custom params included:', shopierFormData.custom_params);
+    // Ek parametreler (ödeme bilgileri)
+    shopierAuthUrl.searchParams.set('amount', amount.toFixed(2));
+    shopierAuthUrl.searchParams.set('currency', 'TRY');
+    shopierAuthUrl.searchParams.set('order_id', orderId);
+    shopierAuthUrl.searchParams.set('product_name', courseName);
+    shopierAuthUrl.searchParams.set('buyer_name', `${buyerName} ${buyerSurname}`.trim());
+    shopierAuthUrl.searchParams.set('buyer_email', buyerEmail);
+    shopierAuthUrl.searchParams.set('buyer_phone', buyerPhone);
+    
+    console.log('=== SHOPIER OAuth2 REDIRECT ===');
+    console.log('Order ID:', orderId);
+    console.log('Amount:', amount.toFixed(2));
+    console.log('Redirect URI:', redirectUri);
+    console.log('Authorization URL:', shopierAuthUrl.toString());
+    console.log('===============================');
 
-    // Başarılı yanıt (normal ödeme için)
+    // Yönlendirme URL'ini döndür
     return NextResponse.json({
       success: true,
-      formAction: "https://www.shopier.com/ShowProduct/api_pay4.php",
-      formData: shopierFormData,
+      redirectUrl: shopierAuthUrl.toString(),
       orderId: orderId,
       userIdUsed: userIdForEnrollment
     }, { status: 200 });
 
   } catch (error) {
-    console.error("Shopier ödeme hazırlama hatası:", error);
+    console.error("Shopier OAuth2 ödeme hazırlama hatası:", error);
+    const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
     return NextResponse.json({ 
       success: false, 
-      message: "Ödeme hazırlanırken bir hata oluştu: " + (error.message || "Bilinmeyen hata") 
+      message: "Ödeme hazırlanırken bir hata oluştu: " + errorMessage
     }, { status: 500 });
   }
 }

@@ -851,22 +851,34 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
       
-      // Normal Shopier ödeme formu
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = data.formAction;
-      form.style.display = 'none';
+      // OAuth2 için Shopier sayfasına yönlendir
+      if (data.redirectUrl) {
+        console.log('Redirecting to Shopier OAuth2:', data.redirectUrl);
+        window.location.href = data.redirectUrl;
+        return;
+      }
       
-      Object.entries(data.formData).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value as string;
-        form.appendChild(input);
-      });
+      // Legacy: Eski form-based sistem (fallback)
+      if (data.formAction && data.formData) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = data.formAction;
+        form.style.display = 'none';
+        
+        Object.entries(data.formData).forEach(([key, value]) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = value as string;
+          form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
       
-      document.body.appendChild(form);
-      form.submit();
+      throw new Error('Geçersiz API yanıtı');
       
     } catch (apiError: unknown) {
       console.error('Payment redirect error:', apiError);

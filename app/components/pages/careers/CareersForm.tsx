@@ -699,16 +699,44 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
       }
 
       // Başvuru verilerini hazırla
+      // Form alanlarından textarea tipindeki soruları bul
+      const textareaFields = fields.filter(f => f.field_type === 'textarea');
+      
+      // Debug: Form verilerini logla
+      console.log('📝 Form Data:', formData);
+      console.log('📝 Textarea Fields:', textareaFields.map(f => ({ key: f.field_key, label: f.label })));
+      
+      // Motivation alanını bul (ilk textarea veya 'motivation' içeren key)
+      const motivationField = textareaFields.find(f => 
+        f.field_key.toLowerCase().includes('motivation') || 
+        f.field_key.toLowerCase().includes('motivasyon')
+      ) || textareaFields[0];
+      
+      // Communication alanını bul (ikinci textarea veya 'communication' içeren key)
+      const communicationField = textareaFields.find(f => 
+        f.field_key.toLowerCase().includes('communication') || 
+        f.field_key.toLowerCase().includes('iletisim') ||
+        f.field_key.toLowerCase().includes('iletişim')
+      ) || textareaFields[1];
+      
+      // Team experience alanını bul (üçüncü textarea veya 'team' içeren key)
+      const teamExperienceField = textareaFields.find(f => 
+        f.field_key.toLowerCase().includes('team') || 
+        f.field_key.toLowerCase().includes('takim') ||
+        f.field_key.toLowerCase().includes('takım') ||
+        f.field_key.toLowerCase().includes('experience')
+      ) || textareaFields[2];
+      
       const applicationData = {
         first_name: userInfo.firstName.trim(),
         last_name: userInfo.lastName.trim(),
         email: userInfo.email.trim(),
         school: userInfo.school.trim(),
         grade: userInfo.grade,
-        // Başvuru soruları (ayrı alanlar)
-        motivation: formData['motivation'] as string || '',
-        communication: formData['communication'] as string || '',
-        team_experience: formData['team_experience'] as string || '',
+        // Başvuru soruları (dinamik olarak eşleştir)
+        motivation: motivationField ? (formData[motivationField.field_key] as string || '') : '',
+        communication: communicationField ? (formData[communicationField.field_key] as string || '') : '',
+        team_experience: teamExperienceField ? (formData[teamExperienceField.field_key] as string || '') : '',
         // CV dosyası
         cv_storage_path: cvStoragePath,
         cv_file_name: cvFileName,
@@ -716,6 +744,8 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
         cv_mime_type: cvMimeType,
         user_agent: navigator.userAgent,
       };
+      
+      console.log('📤 Application Data being sent:', applicationData);
 
       // Yeni internship_applications tablosuna kaydet
       const response = await fetch('/api/internship-application', {
@@ -728,6 +758,13 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ API Error Response:', {
+          status: response.status,
+          error: errorData.error,
+          details: errorData.details,
+          code: errorData.code,
+          hint: errorData.hint
+        });
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
