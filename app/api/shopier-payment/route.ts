@@ -224,7 +224,7 @@ export async function POST(request: Request) {
     const orderId = `MYU-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     
     // Tutar kontrolü
-    let amount = parseFloat(String(body.amount || courseData.price));
+    const amount = parseFloat(String(body.amount || courseData.price));
     
     const buyerName = body.name.split(' ')[0] || body.name;
     const buyerSurname = body.name.split(' ').slice(1).join(' ') || "";
