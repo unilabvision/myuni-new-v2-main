@@ -143,7 +143,8 @@ export async function POST(request: NextRequest) {
     const emailErrors: string[] = [];
 
     const applicantName = `${first_name} ${last_name}`;
-    const submissionDate = new Date().toLocaleDateString('tr-TR', {
+    const submissionDate = new Date().toLocaleString('tr-TR', {
+      timeZone: 'Europe/Istanbul',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
