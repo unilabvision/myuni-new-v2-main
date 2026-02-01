@@ -100,18 +100,12 @@ const content = {
     team: [
       {
         id: 1,
-        name: "Yasin Polat",
-        role: "Founder & Co-CEO",
-        bio: "UNILAB Vision'ın kurucusu olarak, bilim ve teknoloji alanında gençlerin potansiyelini ortaya çıkarma vizyonuyla liderlik ediyor."
-      },
-      {
-        id: 2,
         name: "Burcu Özmenteşe",
         role: "Co-CEO",
         bio: "Stratejik planlama ve operasyonel yönetimde uzmanlaşarak UNILAB Vision'ın büyümesine öncülük ediyor."
       },
       {
-        id: 3,
+        id: 2,
         name: "Hatice Eliz Meraklı",
         role: "UNICOM Event Genel Koordinatörü",
         bio: "Etkinlik yönetimi alanındaki deneyimiyle, etkili ve ilham verici etkinlikler organize ediyor."
@@ -192,30 +186,24 @@ const content = {
     team: [
       {
         id: 1,
-        name: "Yasin Polat",
-        role: "Founder & Co-CEO",
-        bio: "As the founder of UNILAB Vision, he leads with a vision to unleash the potential of young people in science and technology."
-      },
-      {
-        id: 2,
         name: "Burcu Özmenteşe",
         role: "Co-CEO",
         bio: "Specializing in strategic planning and operational management, she leads UNILAB Vision's growth."
       },
       {
-        id: 3,
+        id: 2,
         name: "Hatice Eliz Meraklı",
         role: "UNICOM Event General Coordinator",
         bio: "With her experience in event management, she organizes effective and inspiring events."
       },
       {
-        id: 4,
+        id: 3,
         name: "Helin Arıtürk",
         role: "Darkpost Media General Coordinator",
         bio: "Specializing in media and content strategies, she ensures effective communication with the community."
       },
       {
-        id: 5,
+        id: 4,
         name: "Ecem Erbil",
         role: "BYM Turkey President",
         bio: "Leading the bioengineering community, she conducts scientific projects and educational programs."
