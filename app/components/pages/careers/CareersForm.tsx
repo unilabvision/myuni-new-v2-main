@@ -51,17 +51,47 @@ interface FormField {
 // Upload file function
 async function uploadFile(file: File, fileName: string) {
   try {
+    // Sanitize file name for cross-platform compatibility
+    const sanitizedFileName = sanitizeFileName(fileName);
+    const uploadPath = `uploads/${sanitizedFileName}`;
+    
+    console.log('📤 Uploading file:', {
+      originalName: file.name,
+      sanitizedName: sanitizedFileName,
+      size: file.size,
+      type: file.type,
+      uploadPath
+    });
+
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('form-uploads')
-      .upload(`uploads/${fileName}`, file, {
+      .upload(uploadPath, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: true, // Allow overwrite if file with same name exists
+        contentType: file.type || 'application/octet-stream'
       });
 
     if (error) {
-      console.error('Upload error:', error);
-      return { success: false, error: error.message };
+      console.error('❌ Upload error:', {
+        message: error.message,
+        name: error.name,
+        cause: error.cause
+      });
+      
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+      if (error.message.includes('Bucket not found')) {
+        errorMessage = 'Dosya yükleme servisi geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
+      } else if (error.message.includes('Invalid key')) {
+        errorMessage = 'Dosya adı geçersiz karakterler içeriyor. Lütfen farklı bir dosya adı deneyin.';
+      } else if (error.message.includes('Payload too large')) {
+        errorMessage = 'Dosya boyutu çok büyük.';
+      } else if (error.message.includes('permission') || error.message.includes('Policy')) {
+        errorMessage = 'Dosya yükleme izni yok. Lütfen yönetici ile iletişime geçin.';
+      }
+      
+      return { success: false, error: errorMessage };
     }
 
     // Get public URL
@@ -69,13 +99,28 @@ async function uploadFile(file: File, fileName: string) {
       .from('form-uploads')
       .getPublicUrl(data.path);
 
+    console.log('✅ Upload successful:', {
+      path: data.path,
+      publicUrl
+    });
+
     return { success: true, url: publicUrl };
   } catch (error) {
-    console.error('Upload error:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Upload failed' 
-    };
+    console.error('❌ Upload exception:', error);
+    
+    // Handle network and other errors
+    let errorMessage = 'Dosya yüklenirken bir hata oluştu';
+    if (error instanceof Error) {
+      if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'İnternet bağlantınızı kontrol edin ve tekrar deneyin.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Yükleme zaman aşımına uğradı. Lütfen tekrar deneyin.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -168,15 +213,100 @@ const fileToFileUpload = async (file: File): Promise<FileUpload> => {
 const DEFAULT_ALLOWED_FILE_TYPES = [
   'application/pdf',
   'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  // Additional MIME types for cross-platform compatibility
+  'application/x-pdf',
+  'application/acrobat',
+  'applications/vnd.pdf',
+  'text/pdf',
+  'text/x-pdf',
+  // Some browsers/OS may report these
+  'application/octet-stream' // Will be validated by file extension
 ];
+
+// Allowed file extensions (lowercase, without dot)
+const ALLOWED_FILE_EXTENSIONS = ['pdf', 'doc', 'docx'];
 
 const DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 const MIME_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
   'application/msword': 'DOC',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+  'application/x-pdf': 'PDF',
+  'application/acrobat': 'PDF',
+  'applications/vnd.pdf': 'PDF',
+  'text/pdf': 'PDF',
+  'text/x-pdf': 'PDF',
+  'application/octet-stream': 'Binary'
+};
+
+// Sanitize file name for cross-platform compatibility
+const sanitizeFileName = (fileName: string): string => {
+  // Get file extension
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const extension = lastDotIndex > -1 ? fileName.slice(lastDotIndex) : '';
+  const baseName = lastDotIndex > -1 ? fileName.slice(0, lastDotIndex) : fileName;
+  
+  // Turkish character mapping
+  const turkishMap: Record<string, string> = {
+    'ç': 'c', 'Ç': 'C',
+    'ğ': 'g', 'Ğ': 'G',
+    'ı': 'i', 'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ş': 's', 'Ş': 'S',
+    'ü': 'u', 'Ü': 'U',
+    'â': 'a', 'Â': 'A',
+    'î': 'i', 'Î': 'I',
+    'û': 'u', 'Û': 'U'
+  };
+  
+  // Replace Turkish characters
+  let sanitized = baseName.split('').map(char => turkishMap[char] || char).join('');
+  
+  // Replace spaces with underscores
+  sanitized = sanitized.replace(/\s+/g, '_');
+  
+  // Remove any character that's not alphanumeric, underscore, or hyphen
+  sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, '');
+  
+  // Ensure it's not empty
+  if (!sanitized) {
+    sanitized = 'file';
+  }
+  
+  // Limit length (Supabase has limits on path length)
+  if (sanitized.length > 100) {
+    sanitized = sanitized.substring(0, 100);
+  }
+  
+  return sanitized + extension.toLowerCase();
+};
+
+// Get file extension from file name
+const getFileExtension = (fileName: string): string => {
+  const lastDotIndex = fileName.lastIndexOf('.');
+  if (lastDotIndex === -1 || lastDotIndex === fileName.length - 1) return '';
+  return fileName.slice(lastDotIndex + 1).toLowerCase();
+};
+
+// Validate file by both MIME type and extension
+const isValidFileType = (file: File, allowedMimeTypes: string[]): boolean => {
+  const extension = getFileExtension(file.name);
+  
+  // First check if extension is allowed
+  if (!ALLOWED_FILE_EXTENSIONS.includes(extension)) {
+    return false;
+  }
+  
+  // If MIME type is application/octet-stream (common on some systems),
+  // trust the extension validation
+  if (file.type === 'application/octet-stream' || file.type === '') {
+    return ALLOWED_FILE_EXTENSIONS.includes(extension);
+  }
+  
+  // Otherwise check MIME type
+  return allowedMimeTypes.includes(file.type);
 };
 
 const formatFileSize = (bytes: number): string => {
@@ -213,8 +343,9 @@ const describeAllowedTypes = (types: string[]): string => {
 };
 
 const buildAcceptValue = (types: string[]): string => {
-  if (!types.length) return '.pdf,.doc,.docx';
-  return types.join(',');
+  // Always use file extensions for better cross-platform compatibility
+  // MIME types can be unreliable across different OS/browsers
+  return '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 };
 
 const legacyBrandPatterns: [RegExp, string][] = [
@@ -508,37 +639,78 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
     const maxSize = getMaxFileSize(field);
     const allowedTypes = extractAllowedMimeTypes(field);
 
+    console.log('📁 File upload started:', {
+      fieldKey,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      lastModified: file.lastModified,
+      extension: getFileExtension(file.name)
+    });
+
+    // Size validation
     if (file.size > maxSize) {
+      console.warn('❌ File size exceeded:', file.size, '>', maxSize);
       setErrors(prev => ({
         ...prev,
-        [fieldKey]: `Dosya boyutu ${formatFileSize(maxSize)} sınırını aşamaz`
+        [fieldKey]: `Dosya boyutu ${formatFileSize(maxSize)} sınırını aşamaz (Şu anki: ${formatFileSize(file.size)})`
       }));
       return;
     }
 
-    if (!allowedTypes.includes(file.type)) {
+    // Validate file size minimum (empty files)
+    if (file.size === 0) {
+      console.warn('❌ Empty file detected');
       setErrors(prev => ({
         ...prev,
-        [fieldKey]: `Sadece ${describeAllowedTypes(allowedTypes)} formatları kabul edilir`
+        [fieldKey]: 'Dosya boş görünüyor. Lütfen geçerli bir CV dosyası seçin.'
+      }));
+      return;
+    }
+
+    // Type validation using both MIME type and extension
+    if (!isValidFileType(file, allowedTypes)) {
+      const extension = getFileExtension(file.name);
+      console.warn('❌ Invalid file type:', {
+        mimeType: file.type,
+        extension,
+        allowedTypes
+      });
+      setErrors(prev => ({
+        ...prev,
+        [fieldKey]: `Sadece PDF, DOC ve DOCX formatları kabul edilir. Yüklemeye çalıştığınız dosya: ${extension.toUpperCase() || 'bilinmeyen format'}`
       }));
       return;
     }
 
     setUploadingFiles(prev => ({ ...prev, [fieldKey]: true }));
+    setErrors(prev => ({ ...prev, [fieldKey]: '' })); // Clear previous errors
 
-    const fileName = `${Date.now()}_${file.name}`;
+    // Generate unique file name with timestamp and random string
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const sanitizedOriginalName = sanitizeFileName(file.name);
+    const fileName = `${timestamp}_${randomStr}_${sanitizedOriginalName}`;
+    
+    console.log('📤 Starting upload with sanitized name:', fileName);
+
     const uploadResult = await uploadFile(file, fileName);
 
     setUploadingFiles(prev => ({ ...prev, [fieldKey]: false }));
 
     if (uploadResult.success) {
+      console.log('✅ File upload completed:', {
+        fieldKey,
+        url: uploadResult.url
+      });
       setFiles(prev => ({ ...prev, [fieldKey]: file }));
       setFormData(prev => ({ ...prev, [fieldKey]: uploadResult.url }));
       setErrors(prev => ({ ...prev, [fieldKey]: '' }));
     } else {
+      console.error('❌ File upload failed:', uploadResult.error);
       setErrors(prev => ({
         ...prev,
-        [fieldKey]: uploadResult.error || 'Dosya yükleme hatası'
+        [fieldKey]: uploadResult.error || 'Dosya yüklenirken bir hata oluştu. Lütfen tekrar deneyin.'
       }));
     }
   };
@@ -969,7 +1141,38 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
         const allowedMimeTypes = extractAllowedMimeTypes(field);
         const acceptValue = buildAcceptValue(allowedMimeTypes);
         const maxFileSize = getMaxFileSize(field);
-        const allowedTypesDescription = describeAllowedTypes(allowedMimeTypes);
+        const allowedTypesDescription = 'PDF, DOC, DOCX';
+        
+        // Drag and drop handlers
+        const handleDragOver = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+        };
+        
+        const handleDragEnter = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.classList.add('border-[#990000]', 'bg-[#990000]/5');
+        };
+        
+        const handleDragLeave = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.classList.remove('border-[#990000]', 'bg-[#990000]/5');
+        };
+        
+        const handleDrop = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.classList.remove('border-[#990000]', 'bg-[#990000]/5');
+          
+          const droppedFiles = e.dataTransfer.files;
+          if (droppedFiles && droppedFiles.length > 0) {
+            const file = droppedFiles[0];
+            handleFileUpload(field.field_key, file);
+          }
+        };
+        
         return (
           <div 
             key={field.id} 
@@ -979,11 +1182,17 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               {label} {field.is_required && <span className="text-red-500">*</span>}
             </label>
-            <div className={`border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 transition-all duration-200 ${
-              hasError 
-                ? 'border-red-500 bg-red-100 dark:bg-red-900/20' 
-                : 'border-neutral-300 dark:border-neutral-600 hover:border-[#990000] dark:hover:border-[#990000] bg-neutral-50 dark:bg-neutral-800/50'
-            }`}>
+            <div 
+              className={`border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 transition-all duration-200 ${
+                hasError 
+                  ? 'border-red-500 bg-red-100 dark:bg-red-900/20' 
+                  : 'border-neutral-300 dark:border-neutral-600 hover:border-[#990000] dark:hover:border-[#990000] bg-neutral-50 dark:bg-neutral-800/50'
+              }`}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {files[field.field_key] ? (
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -992,7 +1201,8 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate">{files[field.field_key].name}</p>
-                      <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <p className="text-xs text-neutral-500">{formatFileSize(files[field.field_key].size)}</p>
+                      <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
                         <CheckCircle className="w-3 h-3" />
                         {locale === 'en' ? 'File uploaded successfully' : 'Dosya başarıyla yüklendi'}
                       </p>
@@ -1022,21 +1232,31 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                       <span className="text-neutral-600 dark:text-neutral-400 font-medium">
                         {locale === 'en' ? 'Uploading...' : 'Yükleniyor...'}
                       </span>
+                      <span className="text-xs text-neutral-400">
+                        {locale === 'en' ? 'Please wait, this may take a moment...' : 'Lütfen bekleyin, bu biraz zaman alabilir...'}
+                      </span>
                     </div>
                   ) : (
                     <>
                       <div className="w-16 h-16 mx-auto mb-4 bg-neutral-100 dark:bg-neutral-700 rounded-full flex items-center justify-center">
                         <FileUp className="w-8 h-8 text-neutral-400" />
                       </div>
-                      <p className="text-neutral-600 dark:text-neutral-400 mb-4 text-sm sm:text-base">
-                        {placeholder || (locale === 'en' ? 'Drag and drop your file here or click to browse' : 'Dosyanızı sürükleyip bırakın veya tıklayarak seçin')}
+                      <p className="text-neutral-600 dark:text-neutral-400 mb-2 text-sm sm:text-base font-medium">
+                        {locale === 'en' ? 'Drag and drop your CV here' : 'CV dosyanızı buraya sürükleyip bırakın'}
+                      </p>
+                      <p className="text-neutral-500 dark:text-neutral-500 mb-4 text-xs">
+                        {locale === 'en' ? 'or click the button below to browse' : 'veya aşağıdaki butona tıklayarak dosya seçin'}
                       </p>
                       <input
                         type="file"
                         accept={acceptValue}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) handleFileUpload(field.field_key, file);
+                          if (file) {
+                            handleFileUpload(field.field_key, file);
+                          }
+                          // Reset input value so same file can be selected again if needed
+                          e.target.value = '';
                         }}
                         className="hidden"
                         id={`file-${field.field_key}`}
@@ -1050,10 +1270,10 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
                       </label>
                       <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
                         <p className="text-xs text-neutral-500 mb-1">
-                          {locale === 'en' ? 'Maximum file size:' : 'Maksimum dosya boyutu:'} {formatFileSize(maxFileSize)}
+                          <span className="font-medium">{locale === 'en' ? 'Maximum file size:' : 'Maksimum dosya boyutu:'}</span> {formatFileSize(maxFileSize)}
                         </p>
                         <p className="text-xs text-neutral-500">
-                          {locale === 'en' ? 'Accepted formats:' : 'Kabul edilen formatlar:'} {allowedTypesDescription}
+                          <span className="font-medium">{locale === 'en' ? 'Accepted formats:' : 'Kabul edilen formatlar:'}</span> {allowedTypesDescription}
                         </p>
                       </div>
                     </>
@@ -1063,8 +1283,8 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
             </div>
             {hasError && (
               <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {errors[field.field_key]}
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{errors[field.field_key]}</span>
               </p>
             )}
           </div>

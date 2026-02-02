@@ -70,18 +70,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // CV mime type validation
+    // CV mime type validation - expanded for cross-platform compatibility
     const allowedMimeTypes = [
       'application/pdf',
       'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      // Additional MIME types for cross-platform compatibility
+      'application/x-pdf',
+      'application/acrobat',
+      'applications/vnd.pdf',
+      'text/pdf',
+      'text/x-pdf',
+      'application/octet-stream' // Some browsers/OS report this, will be validated by extension
     ];
     
-    if (cv_mime_type && !allowedMimeTypes.includes(cv_mime_type)) {
-      return NextResponse.json(
-        { error: 'CV dosyası sadece PDF, DOC veya DOCX formatında olmalıdır' },
-        { status: 400 }
-      );
+    // Also validate by file extension if MIME type is generic
+    const allowedExtensions = ['pdf', 'doc', 'docx'];
+    const fileExtension = cv_file_name ? cv_file_name.split('.').pop()?.toLowerCase() : null;
+    
+    if (cv_mime_type) {
+      const isMimeTypeValid = allowedMimeTypes.includes(cv_mime_type);
+      const isExtensionValid = fileExtension && allowedExtensions.includes(fileExtension);
+      
+      // If MIME type is octet-stream or empty, trust the extension
+      if (cv_mime_type === 'application/octet-stream' || cv_mime_type === '') {
+        if (!isExtensionValid) {
+          return NextResponse.json(
+            { error: 'CV dosyası sadece PDF, DOC veya DOCX formatında olmalıdır' },
+            { status: 400 }
+          );
+        }
+      } else if (!isMimeTypeValid && !isExtensionValid) {
+        console.warn('Invalid file type detected:', { cv_mime_type, fileExtension, cv_file_name });
+        return NextResponse.json(
+          { error: 'CV dosyası sadece PDF, DOC veya DOCX formatında olmalıdır' },
+          { status: 400 }
+        );
+      }
     }
 
     // Insert into database
