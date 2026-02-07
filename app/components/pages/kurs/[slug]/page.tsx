@@ -57,6 +57,10 @@ interface Course {
   learning_outcomes?: string[];
   banner_url?: string;
   thumbnail_url?: string;
+  /** Shopier link ile satış: ürün ID (webhook eşleşmesi) */
+  shopier_product_id?: string | null;
+  /** Shopier satın alma sayfası URL (Shopier'da satın al butonu) */
+  shopier_product_url?: string | null;
   [key: string]: unknown;
 }
 
@@ -134,6 +138,8 @@ interface APICourseResponse {
   learning_outcomes?: unknown[];
   banner_url?: unknown;
   thumbnail_url?: unknown;
+  shopier_product_id?: unknown;
+  shopier_product_url?: unknown;
   [key: string]: unknown;
 }
 
@@ -313,6 +319,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           : undefined,
         banner_url: courseData.banner_url ? String(courseData.banner_url) : undefined,
         thumbnail_url: courseData.thumbnail_url ? String(courseData.thumbnail_url) : undefined,
+        shopier_product_id: courseData.shopier_product_id ? String(courseData.shopier_product_id) : undefined,
+        shopier_product_url: courseData.shopier_product_url ? String(courseData.shopier_product_url) : undefined,
         // Transform sections with proper defaults for required fields
         sections: courseData.sections?.map((section: APISection, index: number) => ({
           id: String(section.id || ''),

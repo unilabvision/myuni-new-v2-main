@@ -34,6 +34,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Geçerlilik tarihi: valid_until = o günün sonu (23:59:59) kabul edilir
+    const validUntilStr = discountCode.valid_until;
+    if (validUntilStr) {
+      const validUntilEnd = new Date(validUntilStr);
+      validUntilEnd.setHours(23, 59, 59, 999);
+      if (validUntilEnd < new Date()) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Bu indirim kodunun süresi dolmuş' 
+        });
+      }
+    }
+
     // Kodun kullanım limitini kontrol et
     if (discountCode.usage_count >= discountCode.max_usage) {
       return NextResponse.json({ 

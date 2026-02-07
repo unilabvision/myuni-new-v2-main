@@ -150,6 +150,9 @@ export type Database = {
             campaign_name: string | null;
             campaign_description: string | null;
             campaign_cover_image: string | null;
+            campaign_slug: string | null;
+            campaign_name_en: string | null;
+            campaign_description_en: string | null;
             has_balance_limit: boolean;
             remaining_balance: number | null;
             owner_id: string | null;
@@ -176,6 +179,9 @@ export type Database = {
             campaign_name?: string | null;
             campaign_description?: string | null;
             campaign_cover_image?: string | null;
+            campaign_slug?: string | null;
+            campaign_name_en?: string | null;
+            campaign_description_en?: string | null;
             has_balance_limit?: boolean;
             remaining_balance?: number | null;
             owner_id?: string | null;
@@ -202,6 +208,9 @@ export type Database = {
             campaign_name?: string | null;
             campaign_description?: string | null;
             campaign_cover_image?: string | null;
+            campaign_slug?: string | null;
+            campaign_name_en?: string | null;
+            campaign_description_en?: string | null;
             has_balance_limit?: boolean;
             remaining_balance?: number | null;
             owner_id?: string | null;

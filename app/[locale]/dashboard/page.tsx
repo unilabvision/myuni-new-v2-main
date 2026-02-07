@@ -324,6 +324,13 @@ function DashboardContent({ locale }: { locale: string }) {
         setLoading(false);
         return;
       }
+
+      // Shopier link: Sitede üye olmadan Shopier'dan alan kullanıcı, aynı e-posta ile giriş yaptıysa bekleyen siparişleri kursa yaz
+      try {
+        await fetch('/api/sync-pending-shopier-orders', { method: 'POST' });
+      } catch (_) {
+        // Sync hatası dashboard'ı bloklamasın
+      }
       
       // Paralel olarak hem enrollments hem certificates'ları çek
       const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult] = await Promise.all([
@@ -2228,6 +2235,15 @@ function DashboardContent({ locale }: { locale: string }) {
           </>
         )}
         
+        {/* Admin: İndirim kodu yönetimi linki */}
+        <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700">
+          <Link
+            href={`/${locale}/dashboard/admin/discount-codes`}
+            className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-[#990000] dark:hover:text-[#990000]"
+          >
+            {locale === 'tr' ? 'İndirim kodu yönetimi (yönetici)' : 'Discount code management (admin)'}
+          </Link>
+        </div>
       </div>
     </div>
   );

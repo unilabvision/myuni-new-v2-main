@@ -74,22 +74,56 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isLoaded } = useUser();
-  const [courseSlug, setCourseSlug] = useState<string | null>(null);
-  const [courseTitle, setCourseTitle] = useState<string | null>(null);
-  const [loadingCourse, setLoadingCourse] = useState(true);
-  
-  const resolvedParams = use(params);
-  const { locale } = resolvedParams;
-  const t = texts[locale as keyof typeof texts] || texts.tr;
-  
-  // URL parametrelerini al ve decode et
+  const orderIdParam = searchParams.get('order_id');
   const courseId = searchParams.get('courseId');
   const rawCourseName = searchParams.get('name');
   const courseName = rawCourseName ? decodeUrlString(rawCourseName) : null;
   const isFreePurchase = searchParams.get('free') === 'true';
   const orderId = searchParams.get('orderId');
   const paymentId = searchParams.get('paymentId');
+
+  const [courseSlug, setCourseSlug] = useState<string | null>(null);
+  const [courseTitle, setCourseTitle] = useState<string | null>(null);
+  const [loadingCourse, setLoadingCourse] = useState(true);
+  const [resolvingOrder, setResolvingOrder] = useState(!!orderIdParam && !courseId);
   
+  const resolvedParams = use(params);
+  const { locale } = resolvedParams;
+  const t = texts[locale as keyof typeof texts] || texts.tr;
+  
+  // Shopier link: order_id ile geldiyse önce siparişten courseId al, sonra aynı sayfaya courseId ile yönlendir
+  useEffect(() => {
+    if (!orderIdParam || courseId) {
+      if (orderIdParam && courseId) setResolvingOrder(false);
+      return;
+    }
+
+    setResolvingOrder(true);
+    const resolveOrderAndRedirect = async () => {
+      try {
+        const res = await fetch(`/api/order-by-id?order_id=${encodeURIComponent(orderIdParam)}`);
+        const data = await res.json();
+        if (data.success && data.courseId) {
+          const params = new URLSearchParams(window.location.search);
+          params.set('courseId', data.courseId);
+          if (data.courseName) params.set('name', encodeURIComponent(data.courseName));
+          params.set('orderId', orderIdParam);
+          params.delete('order_id');
+          window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+          window.location.reload();
+        } else {
+          setResolvingOrder(false);
+        }
+      } catch (e) {
+        console.error('Order resolve error:', e);
+        setResolvingOrder(false);
+        setLoadingCourse(false);
+      }
+    };
+
+    resolveOrderAndRedirect();
+  }, [orderIdParam, courseId]);
+
   // Kurs bilgilerini courseId'den al (slug ve title)
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -143,15 +177,15 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
       router.push(`/${locale}/sign-in`);
     }
     
-    // Kurs ID yoksa kurslar sayfasına yönlendir
-    if (!courseId) {
+    // Kurs ID yoksa (ve order_id ile çözüm beklenmiyorsa) kurslar sayfasına yönlendir
+    if (!courseId && !orderIdParam) {
       console.log('No courseId found, redirecting to courses');
       const courseType = locale === 'tr' ? 'kurs' : 'course';
       router.push(`/${locale}/${courseType}`);
     }
-  }, [isLoaded, user, courseId, router, locale, courseSlug, courseName, courseTitle, isFreePurchase, orderId, paymentId]);
+  }, [isLoaded, user, courseId, orderIdParam, router, locale, courseSlug, courseName, courseTitle, isFreePurchase, orderId, paymentId]);
   
-  if (!isLoaded || !courseId || loadingCourse) {
+  if (!isLoaded || loadingCourse || resolvingOrder || (!courseId && !orderIdParam)) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
         <div className="p-8 max-w-md w-full mx-auto">

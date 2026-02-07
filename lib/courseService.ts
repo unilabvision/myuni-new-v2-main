@@ -368,7 +368,11 @@ export async function getCourseBySlug(slug: string, locale: string = 'tr') {
       // Status fields
       is_active: data.is_active,
       created_at: data.created_at,
-      updated_at: data.updated_at
+      updated_at: data.updated_at,
+
+      // Shopier link entegrasyonu (link ile satış)
+      shopier_product_id: data.shopier_product_id || null,
+      shopier_product_url: data.shopier_product_url || null
     };
   } catch (error) {
     console.error('Error fetching course by slug:', error);

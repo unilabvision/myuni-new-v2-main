@@ -330,14 +330,24 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
   }, [locale, router, t.error]);
 
+  // Bugünün tarihi yerel saatte (YYYY-MM-DD) - indirim kodları geçerlilik karşılaştırması için
+  const getTodayLocalDateString = useCallback(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
   const fetchDiscountCodes = useCallback(async () => {
     try {
       console.log('Fetching discount codes from the database...');
+      const todayLocal = getTodayLocalDateString();
       const { data, error: supabaseError } = await supabase
         .from('discount_codes')
         .select('*')
         .eq('is_referral', false) // Sadece referral olmayan kodları getir
-        .gte('valid_until', new Date().toISOString().split('T')[0]);
+        .gte('valid_until', todayLocal); // Geçerlilik tarihi bugün veya sonrası olan kodlar
       
       if (supabaseError) {
         console.error('Error fetching discount codes:', supabaseError);
@@ -366,7 +376,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       console.error('Failed to fetch discount codes:', fetchError);
       return false;
     }
-  }, []);
+  }, [getTodayLocalDateString]);
 
   useEffect(() => {
     if (isLoaded && !user) {
@@ -556,11 +566,13 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
     
     console.log('Found matching discount code:', foundCode);
-    const validUntil = new Date(foundCode.validUntil);
-    const today = new Date();
+    // valid_until = "geçerli olduğu günün sonu" (o gün 23:59:59'a kadar geçerli)
+    const validUntilEndOfDay = new Date(foundCode.validUntil);
+    validUntilEndOfDay.setHours(23, 59, 59, 999);
+    const now = new Date();
     
-    if (validUntil < today) {
-      console.log('Code expired, showing error');
+    if (validUntilEndOfDay < now) {
+      console.log('Code expired (valid_until end of day passed), showing error');
       setDiscountError(t.discountExpired);
       setDiscountLoading(false);
       return;

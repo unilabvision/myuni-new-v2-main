@@ -22,6 +22,9 @@ interface Course {
   course_type?: 'online' | 'live' | 'hybrid';
   session_count?: number;
   session_duration_minutes?: number;
+  /** Shopier link ile satış - satın alma URL'i varsa "Shopier'da satın al" gösterilir */
+  shopier_product_url?: string | null;
+  shopier_product_id?: string | null;
 }
 
 interface Lesson {
@@ -424,8 +427,11 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
 
     if (course.price === 0) {
       // Free course logic here
+    } else if (course.shopier_product_url) {
+      // Shopier link ile satış: doğrudan Shopier satın alma sayfasına git
+      window.open(course.shopier_product_url, '_blank', 'noopener,noreferrer');
     } else {
-      // Build checkout URL with referral code if present
+      // Site checkout (ödeme API entegrasyonu)
       let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
@@ -560,7 +566,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         onClick={handleEnrollment}
         className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors"
       >
-        {!isSignedIn ? 'Satın Al/Giriş Yap' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : 'Kursa Kayıt Ol')}
+        {!isSignedIn ? 'Satın Al/Giriş Yap' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : course.shopier_product_url ? "Shopier'da Satın Al" : 'Kursa Kayıt Ol')}
       </button>
     );
   };
