@@ -128,10 +128,10 @@ export default function EnrollmentButton({
     setLoading(true);
 
     try {
-      // Kurs detaylarını al
+      // Kurs detaylarını al (shopier_product_url = link ile satış, OAuth2 yok)
       const { data: courseData, error: courseError } = await supabase
         .from('myuni_courses')
-        .select('title, thumbnail_url, price, slug')
+        .select('title, thumbnail_url, price, slug, shopier_product_url')
         .eq('id', courseId)
         .single();
 
@@ -150,7 +150,14 @@ export default function EnrollmentButton({
         return;
       }
 
-      // Ücretli kurs - checkout sayfasına yönlendir
+      // Shopier link ile satış: doğrudan Shopier ödeme sayfasına git (checkout/OAuth2 kullanılmaz)
+      const shopierUrl = (courseData as { shopier_product_url?: string | null }).shopier_product_url;
+      if (shopierUrl) {
+        window.open(shopierUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Ücretli kurs - site checkout sayfasına yönlendir (OAuth2 ile ödeme)
       console.log('Paid course, redirecting to checkout');
       
       // Keep affiliate code and referral code if they exist

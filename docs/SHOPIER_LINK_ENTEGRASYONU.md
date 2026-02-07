@@ -19,7 +19,7 @@ Eğitimler Shopier panelde ürün olarak tanımlanıp **link ile** satılıyor; 
 
 ## Akış
 
-1. **Kurs sayfası** – Kursta `shopier_product_url` varsa buton metni **"Shopier'da Satın Al"** olur; tıklanınca Shopier satın alma sayfası yeni sekmede açılır.
+1. **Kurs sayfası** – Kursta `shopier_product_url` varsa buton metni **"Satın Al"** olur; tıklanınca Shopier satın alma sayfası açılır.
 2. **Ödeme** – Kullanıcı Shopier’da ödemeyi tamamlar.
 3. **Webhook (OSB)** – Shopier, ödeme tamamlanınca `POST /api/shopier-webhook` adresine istek atar. Bu istekte ürün bilgisi ve alıcı e‑postası vardır; sipariş kaydedilir, e‑posta ile eşleşen site kullanıcısı varsa kursa yazılır.
 4. **Dönüş URL’si** – Shopier, kullanıcıyı başarı sayfasına yönlendirebilir. URL’de `order_id` varsa sayfa `/api/order-by-id?order_id=...` ile siparişi alıp `courseId` ile ödeme başarı sayfasını gösterir.
@@ -30,7 +30,7 @@ Eğitimler Shopier panelde ürün olarak tanımlanıp **link ile** satılıyor; 
   - `myuni_courses` tablosuna `shopier_product_id` ve `shopier_product_url` eklenir.
 - Her Shopier ürünü için:
   - **shopier_product_id:** Shopier’daki ürün ID’si (veya SKU); webhook’ta hangi kursa yazılacağını eşleştirmek için kullanılır.
-  - **shopier_product_url:** Satın alma linki; "Shopier'da Satın Al" butonu bu linki açar.
+  - **shopier_product_url:** Satın alma linki; "Satın Al" butonu bu linki açar.
 
 Migration’ı Supabase’de çalıştırın veya SQL ile alanları manuel ekleyin.
 
@@ -40,8 +40,8 @@ Migration’ı Supabase’de çalıştırın veya SQL ile alanları manuel ekley
 2. **Ürün ID / SKU** – Bu değeri ilgili kursun `shopier_product_id` alanına yazın (Supabase’de `myuni_courses` güncellemesi veya admin panel).
 3. **Satın alma linki** – Ürünün/ödeme sayfasının URL’sini ilgili kursun `shopier_product_url` alanına yazın.
 4. **Otomatik Sipariş Bildirimi (OSB)** – Webhook URL’si:  
-   `https://SITE_DOMAIN/api/shopier-webhook`  
-   Ödeme tamamlandığında Shopier’ın gönderdiği alan adları (ör. `order_id`, `product_id`/`product_sku`/`sku`, `buyer_email`, `status`) dokümantasyonla uyumlu olmalı; webhook bu alanları okuyor.
+   **`https://myunilab.net/api/shopier-webhook`**  
+   Ödeme tamamlandığında Shopier bu adrese POST atar. Erişimi test etmek için tarayıcıda **GET** açın: https://myunilab.net/api/shopier-webhook → `{"ok":true,"message":"..."}` dönmeli.
 5. **Başarılı ödeme sonrası yönlendirme** – Müşteriyi şu formatta yönlendirin:  
    `https://SITE_DOMAIN/tr/payment-success?order_id=SHOPIER_SIPARIS_ID`  
    (Shopier’da `order_id` değişkeni varsa kullanın.)

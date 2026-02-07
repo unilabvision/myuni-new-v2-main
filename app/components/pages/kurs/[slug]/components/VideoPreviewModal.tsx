@@ -282,22 +282,35 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
     fetchVideo();
   };
 
-  const handlePurchaseClick = () => {
+  const handlePurchaseClick = async () => {
     if (isSignedIn && isEnrolled && courseSlug) {
-      // Kullanıcı kursa kayıtlıysa, izleme sayfasına yönlendir
       const watchUrl = `/${locale}/watch/course/${courseSlug}`;
-      console.log('User is enrolled, redirecting to watch page:', watchUrl);
       router.push(watchUrl);
-    } else if (isSignedIn && courseId) {
-      // Kullanıcı giriş yapmış ama kursa kayıtlı değilse, checkout sayfasına yönlendir
+      onClose();
+      return;
+    }
+    if (isSignedIn && courseId) {
+      // Shopier link entegrasyonu: Kurs link ile satılıyorsa Shopier sayfasına git (OAuth2/checkout yok)
+      try {
+        const { data } = await supabase
+          .from('myuni_courses')
+          .select('shopier_product_url')
+          .eq('id', courseId)
+          .single();
+        const shopierUrl = (data as { shopier_product_url?: string | null } | null)?.shopier_product_url;
+        if (shopierUrl) {
+          window.open(shopierUrl, '_blank', 'noopener,noreferrer');
+          onClose();
+          return;
+        }
+      } catch (_) {
+        // Hata olursa checkout'a düş
+      }
       const checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(courseId)}`;
-      console.log('User is signed in but not enrolled, redirecting to checkout:', checkoutUrl);
       router.push(checkoutUrl);
     } else {
-      // Kullanıcı giriş yapmamışsa, login sayfasına yönlendir
       const currentPath = window.location.pathname;
       const redirectUrl = `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
-      console.log('User is not signed in, redirecting to login:', redirectUrl);
       router.push(redirectUrl);
     }
     onClose();

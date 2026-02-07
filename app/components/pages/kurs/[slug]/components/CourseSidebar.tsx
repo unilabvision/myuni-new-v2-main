@@ -22,7 +22,7 @@ interface Course {
   course_type?: 'online' | 'live' | 'hybrid';
   session_count?: number;
   session_duration_minutes?: number;
-  /** Shopier link ile satış - satın alma URL'i varsa "Shopier'da satın al" gösterilir */
+  /** Shopier link ile satış - satın alma URL'i varsa buton bu linki açar */
   shopier_product_url?: string | null;
   shopier_product_id?: string | null;
 }
@@ -566,7 +566,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         onClick={handleEnrollment}
         className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors"
       >
-        {!isSignedIn ? 'Satın Al/Giriş Yap' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : course.shopier_product_url ? "Shopier'da Satın Al" : 'Kursa Kayıt Ol')}
+        {!isSignedIn ? 'Satın Al/Giriş Yap' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : course.shopier_product_url ? 'Satın Al' : 'Kursa Kayıt Ol')}
       </button>
     );
   };

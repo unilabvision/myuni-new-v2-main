@@ -25,9 +25,10 @@ interface CourseData {
   thumbnail_url?: string;
   slug: string;
   is_active: boolean;
-  // Early bird pricing fields
   early_bird_price?: number | null;
   early_bird_deadline?: string | null;
+  /** Shopier link ile satış: varsa ödeme bu linkte, OAuth2 kullanılmaz */
+  shopier_product_url?: string | null;
 }
 
 interface DiscountCode {
@@ -322,6 +323,13 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       }
 
       setCourseData(data as CourseData);
+
+      // Shopier link entegrasyonu: Bu kurs link ile satılıyorsa checkout'ta kalmayalım, doğrudan Shopier sayfasına yönlendir (OAuth2 yok)
+      const shopierUrl = (data as { shopier_product_url?: string | null }).shopier_product_url;
+      if (shopierUrl && typeof window !== 'undefined') {
+        window.location.href = shopierUrl;
+        return;
+      }
     } catch (fetchError) {
       console.error('Error fetching course:', fetchError);
       setError(t.error);

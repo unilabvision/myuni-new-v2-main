@@ -1,6 +1,6 @@
 // Shopier link entegrasyonu - Otomatik Sipariş Bildirimi (OSB) webhook
-// Ödeme link ile Shopier'da yapıldığında Shopier bu URL'ye POST atar; sipariş kaydedilir ve kullanıcı kursa yazılır.
-// Link formatı: https://www.shopier.com/MyUNI/43968703 → shopier_product_id = "43968703"
+// URL: https://myunilab.net/api/shopier-webhook (Shopier panelde bu adresi OSB olarak tanımlayın)
+// GET ile test: https://myunilab.net/api/shopier-webhook → 200 dönerse endpoint erişilebilir.
 
 import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
@@ -30,6 +30,47 @@ type ShopierWebhookPayload = {
   durum?: string;
   [key: string]: string | number | undefined;
 };
+
+/** Body'yi tek seferde okuyup objeye çevir (body sadece bir kez okunabilir) */
+async function parseWebhookBody(request: Request): Promise<ShopierWebhookPayload> {
+  const contentType = (request.headers.get('content-type') || '').toLowerCase();
+  const body: ShopierWebhookPayload = {};
+
+  if (contentType.includes('application/json')) {
+    try {
+      const data = (await request.json()) as Record<string, string | number | undefined>;
+      return { ...body, ...data };
+    } catch {
+      return body;
+    }
+  }
+  if (contentType.includes('form') || contentType.includes('urlencoded')) {
+    try {
+      const form = await request.formData();
+      for (const [k, v] of form.entries()) {
+        body[k] = (typeof v === 'string' ? v : (v as File)?.name ?? '') as string;
+      }
+    } catch (_) {
+      // ignore
+    }
+    return body;
+  }
+
+  try {
+    const text = await request.text();
+    if (!text) return body;
+    try {
+      const data = JSON.parse(text) as Record<string, string | number | undefined>;
+      return { ...body, ...data };
+    } catch {
+      const params = new URLSearchParams(text);
+      for (const [k, v] of params.entries()) body[k] = v;
+    }
+  } catch (_) {
+    // ignore
+  }
+  return body;
+}
 
 /** URL'den Shopier ürün ID'sini çıkar (örn. .../MyUNI/43968703 → 43968703) */
 function extractProductIdFromUrl(url: string): string | null {
@@ -80,27 +121,18 @@ async function enrollUserToCourse(userId: string, courseId: string) {
   return { success: true, enrollmentId: newEnrollment.id, newEnrollment: true };
 }
 
+/** GET: Sadece endpoint erişilebilir mi test için (Shopier panelde URL’yi kaydederken kullanın) */
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    message: 'Shopier webhook endpoint. Use POST with order data. OSB URL: https://myunilab.net/api/shopier-webhook',
+  });
+}
+
 export async function POST(request: Request) {
   try {
-    const contentType = request.headers.get('content-type') || '';
-    let body: ShopierWebhookPayload = {};
-
-    if (contentType.includes('application/json')) {
-      body = (await request.json()) as ShopierWebhookPayload;
-    } else if (contentType.includes('form') || contentType.includes('urlencoded')) {
-      const form = await request.formData();
-      for (const [k, v] of form.entries()) {
-        body[k] = typeof v === 'string' ? v : undefined;
-      }
-    } else {
-      const text = await request.text();
-      try {
-        body = JSON.parse(text) as ShopierWebhookPayload;
-      } catch {
-        const params = new URLSearchParams(text);
-        for (const [k, v] of params.entries()) body[k] = v;
-      }
-    }
+    const body = await parseWebhookBody(request);
+    console.log('[shopier-webhook] Received keys:', Object.keys(body).join(', '));
 
     const orderId =
       String(
@@ -143,9 +175,14 @@ export async function POST(request: Request) {
     if (existingOrder) {
       const courseIdForEnroll = existingOrder.courseid;
       const alreadyEnrolled = existingOrder.enrolled === true;
-      const clerk = await clerkClient();
-      const list = await clerk.users.getUserList({ emailAddress: [emailStr], limit: 1 });
-      const clerkUserId = list.data?.[0]?.id ?? null;
+      let clerkUserId: string | null = null;
+      try {
+        const clerk = await clerkClient();
+        const list = await clerk.users.getUserList({ emailAddress: [emailStr], limit: 1 });
+        clerkUserId = list.data?.[0]?.id ?? null;
+      } catch (_) {
+        // Clerk hatası idempotent yanıtı bozmasın
+      }
       if (clerkUserId && !alreadyEnrolled && (status === 'success' || status === 'completed')) {
         const enrollResult = await enrollUserToCourse(clerkUserId, courseIdForEnroll);
         if (enrollResult.success && enrollResult.enrollmentId) {
@@ -185,12 +222,17 @@ export async function POST(request: Request) {
       'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
-    const clerk = await clerkClient();
-    const list = await clerk.users.getUserList({
-      emailAddress: [emailStr],
-      limit: 1,
-    });
-    const clerkUserId = list.data?.[0]?.id ?? null;
+    let clerkUserId: string | null = null;
+    try {
+      const clerk = await clerkClient();
+      const list = await clerk.users.getUserList({
+        emailAddress: [emailStr],
+        limit: 1,
+      });
+      clerkUserId = list.data?.[0]?.id ?? null;
+    } catch (clerkErr) {
+      console.warn('[shopier-webhook] Clerk lookup failed (order will still be saved):', clerkErr);
+    }
 
     const userIdForEnrollment = clerkUserId || emailStr;
 
