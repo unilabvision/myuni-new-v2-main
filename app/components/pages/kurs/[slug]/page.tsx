@@ -207,7 +207,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [totalRatings, setTotalRatings] = useState<number>(0);
   const [ratingLoading, setRatingLoading] = useState(false);
-  
+
   const resolvedParams = use(params);
   const { locale, courseType, slug } = resolvedParams;
 
@@ -221,7 +221,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   if (validCourseTypes[locale as keyof typeof validCourseTypes] !== courseType) {
     notFound();
   }
-  
+
   // Dil metinlerini al
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
@@ -229,23 +229,23 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     if (slug) {
       getCourse(slug, locale);
     }
-    
+
     // Get discount code from URL hash if present
     if (typeof window !== 'undefined') {
       console.log('Checking for affiliate code in URL hash...');
       const hashValue = window.location.hash;
       console.log('Current URL hash:', hashValue);
-      
+
       if (hashValue && hashValue.length > 1) {
         // Remove the # character and store the discount code
         const discountCode = hashValue.substring(1);
         console.log('Extracted discount code:', discountCode);
-        
+
         if (discountCode) {
           // Store the discount code in localStorage for use in checkout
           localStorage.setItem('myuni_affiliate_code', discountCode);
           console.log('Affiliate discount code stored in localStorage:', discountCode);
-          
+
           // Verify the code was stored correctly
           const storedCode = localStorage.getItem('myuni_affiliate_code');
           console.log('Verified code in localStorage:', storedCode);
@@ -260,7 +260,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   useEffect(() => {
     const fetchAverageRating = async () => {
       if (!courseDetail?.id) return;
-      
+
       try {
         setRatingLoading(true);
         const response = await fetch(`/api/course-comments?courseId=${courseDetail.id}&action=rating`);
@@ -283,13 +283,13 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     try {
       setLoading(true);
       setError(null);
-      
+
       const courseData: APICourseResponse | null = await getCourseBySlug(courseSlug, courseLocale);
-      
+
       console.log('🔍 COURSE DETAIL PAGE - Raw API Response:', courseData);
       console.log('🔍 COURSE DETAIL PAGE - Early bird price from API:', courseData?.early_bird_price);
       console.log('🔍 COURSE DETAIL PAGE - Early bird deadline from API:', courseData?.early_bird_deadline);
-      
+
       if (!courseData) {
         setError('Course not found');
         return;
@@ -310,11 +310,11 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         live_start_date: courseData.live_start_date ? String(courseData.live_start_date) : undefined,
         live_end_date: courseData.live_end_date ? String(courseData.live_end_date) : undefined,
         registration_deadline: courseData.registration_deadline ? String(courseData.registration_deadline) : undefined,
-        is_registration_open: Boolean(courseData.is_registration_open),
+        is_registration_open: typeof courseData.is_registration_open === 'string' ? courseData.is_registration_open === 'true' : courseData.is_registration_open !== false,
         session_count: courseData.session_count ? Number(courseData.session_count) : undefined,
         session_duration_minutes: courseData.session_duration_minutes ? Number(courseData.session_duration_minutes) : undefined,
         max_participants: courseData.max_participants ? Number(courseData.max_participants) : undefined,
-        learning_outcomes: Array.isArray(courseData.learning_outcomes) 
+        learning_outcomes: Array.isArray(courseData.learning_outcomes)
           ? courseData.learning_outcomes.map(outcome => String(outcome))
           : undefined,
         banner_url: courseData.banner_url ? String(courseData.banner_url) : undefined,
@@ -373,11 +373,11 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       console.log('Client-side render detected, checking hash again...');
       const hashValue = window.location.hash;
       console.log('Current URL hash on client-side render:', hashValue);
-      
+
       if (hashValue && hashValue.length > 1) {
         const discountCode = hashValue.substring(1);
         console.log('Extracted discount code on client-side render:', discountCode);
-        
+
         if (discountCode) {
           localStorage.setItem('myuni_affiliate_code', discountCode);
           console.log('Affiliate code stored on client-side render:', discountCode);
@@ -388,10 +388,10 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
   const isRegistrationOpen = () => {
     if (courseDetail?.course_type === 'online') return true;
-    if (!courseDetail?.registration_deadline) return courseDetail?.is_registration_open;
-    const deadline = new Date(courseDetail.registration_deadline);
-    const now = new Date();
-    return courseDetail.is_registration_open && now < deadline;
+    if (typeof courseDetail?.is_registration_open === 'string') {
+      return courseDetail.is_registration_open === 'true';
+    }
+    return courseDetail?.is_registration_open !== false;
   };
 
   const getDaysUntilStart = () => {
@@ -408,9 +408,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     const textsObj = t as TextsObject;
     const value = textsObj[key];
     // Convert any value to string, handling nested objects by stringifying them
-    acc[key] = typeof value === 'string' ? value : 
-               typeof value === 'object' ? JSON.stringify(value) : 
-               String(value || '');
+    acc[key] = typeof value === 'string' ? value :
+      typeof value === 'object' ? JSON.stringify(value) :
+        String(value || '');
     return acc;
   }, {} as ComponentTexts);
 
@@ -428,7 +428,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     };
 
     return (
-      <CourseErrorState 
+      <CourseErrorState
         error={error}
         locale={locale}
         courseType={courseType}
@@ -446,7 +446,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       {/* Navigation */}
       <div className="border-b border-neutral-100 dark:border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-3 sm:py-4">
-          <Link 
+          <Link
             href={`/${locale}/${courseType}`}
             className="inline-flex items-center text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors text-sm"
           >
@@ -465,7 +465,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               {/* Course Type ve Registration Status yan yana sola yaslı */}
               <div className="flex items-center gap-3">
                 <CourseTypeIndicator courseType={courseDetail.course_type} size="sm" />
-                
+
                 {/* Registration Status - Kompakt */}
                 {!registrationOpen ? (
                   <div className="flex items-center space-x-1.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 rounded-full text-xs font-medium">
@@ -484,7 +484,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                   </div>
                 )}
               </div>
-              
+
               {/* Live Course Info - Horizontal scroll for mobile */}
               <div className="flex items-center gap-4 overflow-x-auto pb-1">
                 {courseDetail.live_start_date && (
@@ -493,14 +493,14 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                     <span>{formatDate(courseDetail.live_start_date)}</span>
                   </div>
                 )}
-                
+
                 {courseDetail.session_count && (
                   <div className="flex items-center space-x-1.5 text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                     <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>{courseDetail.session_count} oturum</span>
                   </div>
                 )}
-                
+
                 {courseDetail.max_participants && (
                   <div className="flex items-center space-x-1.5 text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                     <Users className="w-3.5 h-3.5 flex-shrink-0" />
@@ -510,14 +510,14 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               </div>
             </div>
 
-           
+
             <div className="hidden lg:flex lg:items-center lg:justify-between lg:gap-6">
               <div className="flex items-center gap-6">
                 {/* Course Type Indicator */}
                 <div className="w-fit">
                   <CourseTypeIndicator courseType={courseDetail.course_type} size="sm" />
                 </div>
-                
+
                 {/* Live Course Info - Desktop horizontal */}
                 <div className="flex items-center gap-6 text-sm text-neutral-600 dark:text-neutral-400">
                   {courseDetail.live_start_date && (
@@ -526,14 +526,14 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                       <span>{formatDate(courseDetail.live_start_date)}</span>
                     </div>
                   )}
-                  
+
                   {courseDetail.session_count && (
                     <div className="flex items-center space-x-1">
                       <MapPin className="w-4 h-4 flex-shrink-0" />
                       <span>{courseDetail.session_count} oturum</span>
                     </div>
                   )}
-                  
+
                   {courseDetail.max_participants && (
                     <div className="flex items-center space-x-1">
                       <Users className="w-4 h-4 flex-shrink-0" />
@@ -543,7 +543,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                 </div>
               </div>
 
-              
+
               <div className="flex items-center">
                 {!registrationOpen ? (
                   <div className="flex items-center space-x-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-3 py-1.5 rounded-full text-sm">
@@ -574,17 +574,17 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           <div>
             {/* Mobile Course Preview - All course types */}
             <div className="mb-4">
-              <CourseHeroSection 
+              <CourseHeroSection
                 courseId={courseDetail?.id}
                 texts={componentTexts}
                 locale={locale}
               />
             </div>
-            
+
             <h1 className="text-xl md:text-2xl font-bold text-neutral-900 dark:text-neutral-100 mb-4 leading-tight">
               {courseDetail.title}
             </h1>
-            
+
             {/* Meta Information - Mobile */}
             <div className="flex items-center gap-3 text-neutral-600 dark:text-neutral-400 mb-4">
               {courseDetail.level && (
@@ -647,7 +647,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             <h3 className="text-lg sm:text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-6">
               {courseDetail.course_type === 'live' ? 'Canlı Eğitim Detayları' : 'Hibrit Eğitim Detayları'}
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {courseDetail.live_start_date && courseDetail.live_end_date && (
                 <div className="bg-white dark:bg-neutral-800 p-3 sm:p-4 rounded-lg border border-neutral-200 dark:border-neutral-700">
@@ -703,7 +703,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         <div className="block lg:hidden space-y-6">
           {/* Course Sidebar - Mobile version without sticky purchase button */}
           <div className="space-y-6">
-            <CourseSidebar 
+            <CourseSidebar
               course={courseDetail}
               slug={slug}
               locale={locale}
@@ -719,7 +719,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             {/* Video Preview - Only for online courses */}
             {courseDetail.course_type === 'online' && (
               <div>
-                <CourseHeroSection 
+                <CourseHeroSection
                   courseId={courseDetail?.id}
                   texts={componentTexts}
                   locale={locale}
@@ -728,7 +728,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             )}
 
             {/* Course Info */}
-            <CourseMainContent 
+            <CourseMainContent
               courseSlug={slug}
               texts={componentTexts}
               course={courseDetail}
@@ -736,7 +736,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
             {/* Course Sections - Only show for online courses */}
             {courseDetail.course_type === 'online' && courseDetail.sections && (
-              <CourseSections 
+              <CourseSections
                 courseSlug={slug}
                 courseId={courseDetail.id}
                 sections={courseDetail.sections}
@@ -749,15 +749,15 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             {/* Live Course Sessions - Show for live/hybrid courses */}
             {courseDetail.course_type !== 'online' && courseDetail.learning_outcomes && (
               <div className="space-y-6">
-                
+
               </div>
             )}
 
             {/* MyUNI Products Features */}
-            <CourseFeatures texts={componentTexts} /> 
+            <CourseFeatures texts={componentTexts} />
 
             {/* Certificate Section */}
-            <CourseCertificate texts={componentTexts} /> 
+            <CourseCertificate texts={componentTexts} />
           </div>
 
           {/* Sidebar - Right side with course info */}
@@ -768,7 +768,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 mb-4 leading-tight">
                 {courseDetail.title}
               </h1>
-              
+
               {/* Meta Information */}
               <div className="space-y-3 mb-6">
                 {courseDetail.level && (
@@ -778,14 +778,14 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                     </span>
                   </div>
                 )}
-                
+
                 {totalLessons > 0 && (
                   <div className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
                     <BookOpen className="w-4 h-4" />
                     <span className="text-sm">{totalLessons} ders</span>
                   </div>
                 )}
-                
+
                 {!ratingLoading && averageRating !== null && (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1">
@@ -823,7 +823,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             </div>
 
             {/* Course Sidebar */}
-            <CourseSidebar 
+            <CourseSidebar
               course={courseDetail}
               slug={slug}
               locale={locale}
@@ -835,7 +835,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         {/* Mobile Main Content - Below sidebar content */}
         <div className="block lg:hidden space-y-8 sm:space-y-12 mt-8 pb-24">
           {/* Course Info */}
-          <CourseMainContent 
+          <CourseMainContent
             courseSlug={slug}
             texts={componentTexts}
             course={courseDetail}
@@ -843,7 +843,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
           {/* Course Sections - Only show for online courses */}
           {courseDetail.course_type === 'online' && courseDetail.sections && (
-            <CourseSections 
+            <CourseSections
               courseSlug={slug}
               courseId={courseDetail.id}
               sections={courseDetail.sections}
@@ -856,25 +856,25 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           {/* Live Course Sessions - Show for live/hybrid courses */}
           {courseDetail.course_type !== 'online' && courseDetail.learning_outcomes && (
             <div className="space-y-6">
-              
+
             </div>
           )}
 
           {/* MyUNI Products Features */}
-          <CourseFeatures texts={componentTexts} /> 
+          <CourseFeatures texts={componentTexts} />
 
           {/* Certificate Section */}
-          <CourseCertificate texts={componentTexts} /> 
+          <CourseCertificate texts={componentTexts} />
         </div>
 
         {/* FAQ Section */}
         <div className="mt-12 sm:mt-16">
-          <CourseFAQ texts={componentTexts} /> 
+          <CourseFAQ texts={componentTexts} />
         </div>
 
         {/* Testimonials */}
         <div className="mt-12 sm:mt-16">
-          <CourseTestimonials texts={componentTexts} locale={locale} /> 
+          <CourseTestimonials texts={componentTexts} locale={locale} />
         </div>
       </div>
     </div>
