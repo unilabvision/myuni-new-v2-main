@@ -10,6 +10,7 @@ import PersonalizedEducationRecommendation from './PersonalizedEducationRecommen
 
 interface HeroSectionProps {
   locale: string;
+  activeCourseCount?: number;
 }
 
 interface CourseRecommendation {
@@ -28,17 +29,17 @@ interface CourseRecommendation {
 function getHeroContent(locale: string) {
   return {
     badge: locale === 'tr' ? "🚀 Geleceğinizi şekillendirin!" : "🚀 Shape your future!",
-    headlines: locale === 'tr' 
+    headlines: locale === 'tr'
       ? [
-          "Kariyerine yön ver, gerçek potansiyelini keşfet!",
-          "Geleceğine yatırım yap, hayallerini gerçekleştir!",
-          "Yeni beceriler kazan, güçlü kariyerinde ilerle!"
-        ]
+        "Kariyerine yön ver, gerçek potansiyelini keşfet!",
+        "Geleceğine yatırım yap, hayallerini gerçekleştir!",
+        "Yeni beceriler kazan, güçlü kariyerinde ilerle!"
+      ]
       : [
-          "Shape your career, discover your true potential!",
-          "Invest in your future, make your dreams come true!",
-          "Gain new skills, advance in your strong career!"
-        ],
+        "Shape your career, discover your true potential!",
+        "Invest in your future, make your dreams come true!",
+        "Gain new skills, advance in your strong career!"
+      ],
     description: locale === 'tr'
       ? "Kendi öğrenme tarzınıza uygun bir şekilde ilerleyin ve gelişiminizi adım adım keşfedin. Yapay zeka desteği ile size en uygun öğrenme yolunu sunuyor, deneyimli eğitmenler tarafından hazırlanan kurslarımızla destekliyoruz!"
       : "Progress in a way that suits your learning style and discover your development step by step. We offer you the most suitable learning path with artificial intelligence support, supported by courses prepared by experienced instructors.",
@@ -46,30 +47,30 @@ function getHeroContent(locale: string) {
     ctaLink: locale === 'tr' ? '/tr/kurs' : '/en/course',
     servicesLink: locale === 'tr' ? '/tr/kurs' : '/en/course',
     secondaryCta: locale === 'tr' ? 'Eğitimlerimiz' : 'Courses',
-    hoverText: locale === 'tr' 
+    hoverText: locale === 'tr'
       ? 'Bilim ve Teknolojiyle Geleceği Şekillendiriyoruz'
       : 'Shaping the Future with Science and Technology',
-    stats: locale === 'tr' 
+    stats: locale === 'tr'
       ? [
-          { value: "1000+", label: "Kursiyer" },
-          { value: "5", label: "Aktif İçerik" },
-          { value: "%92", label: "Memnuniyet" }
-        ]
+        { value: "1000+", label: "Kursiyer" },
+        { value: "5", label: "Aktif İçerik" },
+        { value: "%92", label: "Memnuniyet" }
+      ]
       : [
-          { value: "1000+", label: "Trainee" },
-          { value: "4", label: "Active Content" },
-          { value: "92%", label: "Satisfaction" }
-        ],
-    discountCode: locale === 'tr' 
+        { value: "1000+", label: "Trainee" },
+        { value: "4", label: "Active Content" },
+        { value: "92%", label: "Satisfaction" }
+      ],
+    discountCode: locale === 'tr'
       ? { text: "İlk kayıtta %15 indirim:", code: "HOŞGELDİN15" }
       : { text: "15% discount on first registration:", code: "HOŞGELDİN15" },
-    imageOverlays: locale === 'tr' 
+    imageOverlays: locale === 'tr'
       ? ["Eğitimde Kalite ve Yenilik", "Hedefinize Adım Adım Ulaşın"]
       : ["Quality and Innovation in Education", "Reach Your Goal Step by Step"]
   };
 }
 
-export default function HeroSection({ locale }: HeroSectionProps) {
+export default function HeroSection({ locale, activeCourseCount }: HeroSectionProps) {
   const [content] = useState(() => getHeroContent(locale));
   const [isLoaded, setIsLoaded] = useState(false);
   const [showRecommendation, setShowRecommendation] = useState(false);
@@ -151,9 +152,8 @@ export default function HeroSection({ locale }: HeroSectionProps) {
         {[1, 2, 3, 4, 5].map((imgNum) => (
           <div
             key={imgNum}
-            className={`transition-opacity duration-1000 absolute inset-0 ${
-              currentImage === imgNum ? "opacity-100" : "opacity-0"
-            }`}
+            className={`transition-opacity duration-1000 absolute inset-0 ${currentImage === imgNum ? "opacity-100" : "opacity-0"
+              }`}
           >
             <Image
               src={`/tr/images/myuni-egitim-platformu-${imgNum}.webp`}
@@ -165,7 +165,7 @@ export default function HeroSection({ locale }: HeroSectionProps) {
             />
           </div>
         ))}
-        
+
         {/* Image Overlays - Hidden on mobile for better performance */}
         <div className="hidden sm:block absolute top-4 right-4 bg-white text-neutral-800 p-3 rounded-lg shadow-lg transition-transform transform hover:scale-110 duration-300 ease-in-out z-10 text-sm">
           {content.imageOverlays[0]}
@@ -177,10 +177,10 @@ export default function HeroSection({ locale }: HeroSectionProps) {
 
         {/* Primary Overlay */}
         <div className={`absolute inset-0 bg-gradient-to-t from-[#990000]/70 to-transparent opacity-0 transition-opacity duration-700 ease-in-out ${styles.overlay}`} />
-        
+
         {/* Secondary Overlay for Depth */}
         <div className={`absolute inset-0 bg-[#990000]/10 opacity-0 transition-opacity duration-900 ease-in-out ${styles.secondaryOverlay}`} />
-        
+
         {/* Hover Text - Hidden on mobile for better performance */}
         <div className={`hidden sm:block absolute bottom-8 left-8 max-w-lg ${styles.textContainer}`}>
           <p className={`text-white text-xl font-medium tracking-wide ${styles.textAppear}`}>
@@ -203,7 +203,7 @@ export default function HeroSection({ locale }: HeroSectionProps) {
 
     return (
       <div className="mb-8 relative">
-        <div 
+        <div
           onClick={handleCopyCode}
           className="inline-flex items-center gap-2 border-b border-dashed border-neutral-300 dark:border-neutral-600 pb-1 cursor-pointer hover:border-neutral-600 dark:hover:border-neutral-400 transition-colors group"
         >
@@ -213,7 +213,7 @@ export default function HeroSection({ locale }: HeroSectionProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         </div>
-        
+
         {/* Copy Notification */}
         {showCopied && (
           <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs px-2 py-1 rounded opacity-100 transition-opacity duration-300 pointer-events-none">
@@ -269,12 +269,18 @@ export default function HeroSection({ locale }: HeroSectionProps) {
 
               {/* Statistics */}
               <div className="flex space-x-8 mb-8 text-neutral-700 dark:text-neutral-300 text-sm md:text-base">
-                {content.stats.map((stat, index) => (
-                  <div key={index} className="flex flex-col items-start transition-all duration-300 hover:font-bold">
-                    <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{stat.value}</span>
-                    <span>{stat.label}</span>
-                  </div>
-                ))}
+                {content.stats.map((stat, index) => {
+                  const isContentStat = stat.label === "Aktif İçerik" || stat.label === "Active Content";
+                  const displayValue = isContentStat && activeCourseCount !== undefined
+                    ? activeCourseCount
+                    : stat.value;
+                  return (
+                    <div key={index} className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                      <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{displayValue}</span>
+                      <span>{stat.label}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Discount Code */}

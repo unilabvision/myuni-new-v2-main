@@ -1,12 +1,18 @@
 // app/[locale]/page.tsx
 import HeroSection from '../components/HeroSection';
 import FeaturedFilter from '../components/FeaturedFilter';
-import StudySection from '../components/StudySection';
+import DynamicTestimonialSection from '../components/DynamicTestimonialSection';
 import BlogSection from '../components/BlogSection';
 import EventListFilter from '../components/EventListFilter';
 
 // Yeni section'ları import edin
 import WhyChooseSection from '../components/WhyChooseSection';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 
 // Type definition for better type safety
@@ -26,22 +32,39 @@ function isValidLocale(locale: string): locale is SupportedLocale {
 export default async function HomePage({ params }: HomePageProps) {
   const resolvedParams = await params;
   const rawLocale = resolvedParams.locale;
-  
+
   // Validate locale and fallback to 'tr' if invalid
   const locale: SupportedLocale = isValidLocale(rawLocale) ? rawLocale : 'tr';
+
+  // Server'dan (canlı) veriyi SSR ile burda hızlı çekelim ve Hero'ya bağlayalım.
+  let activeCourseCount = 5; // Default fallback
+  try {
+    const { count, error } = await supabase
+      .from('myuni_courses')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+
+    if (!error && count !== null) {
+      activeCourseCount = count;
+    }
+  } catch (err) {
+    console.error("Error fetching active courses for SSR:", err);
+  }
 
   return (
     <main className="min-h-screen bg-white dark:bg-neutral-900">
       {/* Hero Section with full width container */}
       <div className="max-w-7xl mx-auto px-6 lg:px-6">
-        <HeroSection locale={locale} />
+        <HeroSection locale={locale} activeCourseCount={activeCourseCount} />
       </div>
 
 
       <div className="max-w-7xl mx-auto px-6 lg:px-6 space-y-0">
         <FeaturedFilter locale={locale} />
-        <StudySection locale={locale} />
       </div>
+
+      {/* Dynamic Testimonials Section */}
+      <DynamicTestimonialSection locale={locale} />
 
 
       {/* Why Choose MyUNI Section */}
@@ -54,7 +77,7 @@ export default async function HomePage({ params }: HomePageProps) {
 
       {/* Blog and Events */}
       <div className="max-w-7xl mx-auto px-6 lg:px-6 space-y-0">
-        <BlogSection locale={locale} /> 
+        <BlogSection locale={locale} />
         <EventListFilter locale={locale} />
       </div>
 
@@ -75,7 +98,7 @@ export async function generateMetadata({ params }: HomePageProps) {
 
   // Build base URL - sonundaki slash'ı temizle
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net').replace(/\/+$/, '');
-  
+
   // Canonical URLs
   const canonicalUrl = `${baseUrl}/${validLocale}`;
   const trUrl = `${baseUrl}/tr`;

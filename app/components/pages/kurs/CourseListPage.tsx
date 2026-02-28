@@ -79,7 +79,7 @@ const texts = {
     filters: {
       all: "Tümü",
       beginner: "Başlangıç",
-      intermediate: "Orta Seviye", 
+      intermediate: "Orta Seviye",
       advanced: "İleri Seviye",
       mixed: "Karma"
     },
@@ -139,7 +139,7 @@ const texts = {
       hybrid: "Hybrid Courses"
     },
     loadMore: "Load More Courses",
-    viewAll: "View All Courses", 
+    viewAll: "View All Courses",
     exploreMore: "Explore Details",
     currency: "₺",
     discount: "off",
@@ -183,9 +183,9 @@ export default function CourseListPage({ params }: CourseListPageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const supabase = createClientComponentClient();
-  
+
   const allCoursesRef = useRef<HTMLElement>(null);
-  
+
   const resolvedParams = use(params);
   const { locale, courseType } = resolvedParams;
 
@@ -220,27 +220,26 @@ export default function CourseListPage({ params }: CourseListPageProps) {
   if (validCourseTypes[locale as keyof typeof validCourseTypes] !== courseType) {
     notFound();
   }
-  
+
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   const getCourses = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // getAllCourses fonksiyonu içinde is_registration_open filtresi eklenmeli
       // courseService.js/ts dosyasında bu filtreyi eklemeniz gerekir
       const coursesData = await getAllCourses(locale);
-      
-      // Client-side filtering for is_registration_open if not handled in getAllCourses
-      const filteredCoursesData = coursesData.filter((course: RawCourse) => 
-        course.is_registration_open !== false // Only exclude if explicitly false
-      );
-      
+
+      // Removed the client-side filter that was excluding courses when is_registration_open === false
+      // so users can see the "Kayıt Kapalı" badge on the course card.
+      const filteredCoursesData = coursesData;
+
       const mappedCourses: Course[] = filteredCoursesData.map((course: RawCourse) => {
         const mappedLevel = mapLevelToLocale(course.level, locale);
         const courseName = course.title || course.name || '';
-        
+
         return {
           ...course,
           title: courseName,
@@ -249,7 +248,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
           course_type: course.course_type || 'online'
         };
       });
-      
+
       setCourses(mappedCourses);
 
       // Fetch ratings for all mapped courses
@@ -332,12 +331,12 @@ export default function CourseListPage({ params }: CourseListPageProps) {
         },
         en: {
           beginner: 'Beginner',
-          intermediate: 'Intermediate', 
+          intermediate: 'Intermediate',
           advanced: 'Advanced',
           mixed: 'Mixed'
         }
       };
-      
+
       const currentMapping = levelMapping[locale as keyof typeof levelMapping] || levelMapping.tr;
       levelMatch = course.level === currentMapping[activeFilter as keyof typeof currentMapping];
     }
@@ -373,10 +372,11 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
   const isRegistrationOpen = (course: Course) => {
     if (course.course_type === 'online') return true;
-    if (!course.registration_deadline) return course.is_registration_open;
-    const deadline = new Date(course.registration_deadline);
-    const now = new Date();
-    return course.is_registration_open && now < deadline;
+    // Veritabanındaki 'is_registration_open' sütunu ile birebir eşzamanlı çalışsın.
+    if (typeof course.is_registration_open === 'string') {
+      return course.is_registration_open === 'true';
+    }
+    return course.is_registration_open !== false; // if undefined or true, it's open.
   };
 
   // Early bird helper functions
@@ -405,10 +405,10 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
   const renderRichText = (htmlContent: string | undefined, isCard: boolean = false) => {
     if (!htmlContent) return null;
-    
+
     const isHtml = htmlContent.includes('<');
     let contentToRender = isHtml ? htmlContent : `<p>${htmlContent}</p>`;
-    
+
     if (isCard) {
       const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
       if (textOnly.length > 120) {
@@ -418,7 +418,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
     }
 
     return (
-      <div 
+      <div
         className={`rich-text-content ${isCard ? 'card-description' : ''}`}
         dangerouslySetInnerHTML={{ __html: contentToRender }}
       />
@@ -434,7 +434,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       return (
         <div className="inline-flex items-center text-sm">
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-yellow-500 fill-yellow-500" aria-hidden="true">
-            <path d="M12 .587l3.668 7.431 8.204 1.193-5.936 5.787 1.402 8.168L12 18.896l-7.338 3.87 1.402-8.168L.128 9.211l8.204-1.193z"/>
+            <path d="M12 .587l3.668 7.431 8.204 1.193-5.936 5.787 1.402 8.168L12 18.896l-7.338 3.87 1.402-8.168L.128 9.211l8.204-1.193z" />
           </svg>
           <span className="ml-1 text-neutral-700 dark:text-neutral-300">{avg.toFixed(1)}</span>
           {typeof count === 'number' && <span className="ml-1 text-neutral-500 dark:text-neutral-400">({count})</span>}
@@ -443,11 +443,10 @@ export default function CourseListPage({ params }: CourseListPageProps) {
     };
 
     return (
-      <Link 
+      <Link
         href={addRefToUrl(`/${locale}/${courseType}/${course.slug}`)}
-        className={`bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group ${
-          featured ? 'col-span-1' : ''
-        }`}
+        className={`bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group ${featured ? 'col-span-1' : ''
+          }`}
       >
         <div className="relative w-full h-48 overflow-hidden">
           <Image
@@ -527,7 +526,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
           <h3 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-[#990000] transition-colors">
             {course.name || course.title}
           </h3>
-          
+
           <div className="mb-4 leading-relaxed">
             {renderRichText(course.description, true)}
           </div>
@@ -711,7 +710,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <button 
+                <button
                   onClick={scrollToAllCourses}
                   className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white border-0 rounded-md py-3 px-8 text-md font-medium flex items-center justify-center transition-colors"
                 >
@@ -735,25 +734,24 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                           {featuredCourses.map((_, index) => (
                             <div
                               key={index}
-                              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                                index === currentSlide
-                                  ? 'bg-[#990000] w-6'
-                                  : 'bg-neutral-300 dark:bg-neutral-600'
-                              }`}
+                              className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentSlide
+                                ? 'bg-[#990000] w-6'
+                                : 'bg-neutral-300 dark:bg-neutral-600'
+                                }`}
                             />
                           ))}
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="flex-1 relative overflow-hidden min-h-0">
-                      <div 
+                      <div
                         className="flex transition-transform duration-500 ease-out h-full"
                         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
                       >
                         {featuredCourses.map((course) => (
                           <div key={course.id} className="w-full flex-shrink-0 h-full">
-                            <Link 
+                            <Link
                               href={addRefToUrl(`/${locale}/${courseType}/${course.slug}`)}
                               className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 block cursor-pointer group"
                             >
@@ -765,22 +763,22 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                                 />
                               </div>
-                              
+
                               <div className="p-4 lg:p-6 flex-1 flex flex-col min-h-0">
                                 <div className="mb-2 lg:mb-3 flex-shrink-0">
                                   <span className="inline-block bg-neutral-100 dark:bg-neutral-600 text-neutral-700 dark:text-neutral-300 px-2 py-1 lg:px-3 lg:py-1 rounded-lg text-xs lg:text-sm font-medium">
                                     {course.level}
                                   </span>
                                 </div>
-                                
+
                                 <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 text-base lg:text-lg mb-2 lg:mb-3 leading-tight group-hover:text-[#990000] transition-colors flex-shrink-0">
                                   {course.name || course.title}
                                 </h4>
-                                
+
                                 <div className="text-xs lg:text-sm mb-3 lg:mb-4 flex-1 leading-relaxed line-clamp-2 lg:line-clamp-3 overflow-hidden">
                                   {renderRichText(course.description, true)}
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between text-xs lg:text-sm text-neutral-500 dark:text-neutral-400 mb-3 lg:mb-4 flex-shrink-0">
                                   <div className="flex items-center space-x-2 lg:space-x-4">
                                     {course.course_type === 'online' ? (
@@ -806,7 +804,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                                     )}
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between flex-shrink-0 mt-auto">
                                   <div className="flex items-baseline gap-1 lg:gap-2">
                                     {isEarlyBirdActive(course) ? (
@@ -869,7 +867,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
               <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100">
                 {t.allCoursesTitle} ({filteredCourses.length})
               </h2>
-              
+
               {(activeFilter !== 'all' || activeCourseTypeFilter !== 'all') && (
                 <div className="flex items-center space-x-2 text-sm">
                   <span className="text-neutral-500 dark:text-neutral-400">{t.activeFilters}</span>
@@ -891,10 +889,10 @@ export default function CourseListPage({ params }: CourseListPageProps) {
             {/* Filters Section */}
             {(() => {
               const availableCourseTypes = [...new Set(courses.map(course => course.course_type))];
-              const availableTypeFilters = Object.entries(t.courseTypeFilters).filter(([key]) => 
+              const availableTypeFilters = Object.entries(t.courseTypeFilters).filter(([key]) =>
                 key === 'all' || availableCourseTypes.includes(key as 'online' | 'live' | 'hybrid')
               );
-              
+
               const availableLevels = [...new Set(courses.map(course => course.level))];
               const levelMapping = {
                 tr: {
@@ -905,25 +903,25 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                 },
                 en: {
                   beginner: 'Beginner',
-                  intermediate: 'Intermediate', 
+                  intermediate: 'Intermediate',
                   advanced: 'Advanced',
                   mixed: 'Mixed'
                 }
               };
-              
+
               const currentMapping = levelMapping[locale as keyof typeof levelMapping] || levelMapping.tr;
-              const availableLevelFilters = Object.entries(t.filters).filter(([key]) => 
+              const availableLevelFilters = Object.entries(t.filters).filter(([key]) =>
                 key === 'all' || availableLevels.includes(currentMapping[key as keyof typeof currentMapping])
               );
-              
+
               const showCourseTypeFilter = availableTypeFilters.length > 2;
               const showLevelFilter = availableLevelFilters.length > 2;
-              
+
               // Don't show filters section if no filters are needed
               if (!showCourseTypeFilter && !showLevelFilter) {
                 return null;
               }
-              
+
               return (
                 <div className="mb-8">
                   <div className={`grid grid-cols-1 ${showCourseTypeFilter && showLevelFilter ? 'md:grid-cols-2' : ''} gap-6`}>
@@ -939,11 +937,10 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                             <button
                               key={key}
                               onClick={() => setActiveCourseTypeFilter(key)}
-                              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${
-                                activeCourseTypeFilter === key
-                                  ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
-                                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
-                              }`}
+                              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${activeCourseTypeFilter === key
+                                ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
+                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
+                                }`}
                             >
                               {label}
                             </button>
@@ -963,11 +960,10 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                             <button
                               key={key}
                               onClick={() => setActiveFilter(key)}
-                              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${
-                                activeFilter === key
-                                  ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
-                                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
-                              }`}
+                              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${activeFilter === key
+                                ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
+                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
+                                }`}
                             >
                               {label}
                             </button>
@@ -1012,7 +1008,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
           {filteredCourses.length > 0 && filteredCourses.length >= 9 && (
             <div className="text-center mt-12">
-              <button 
+              <button
                 onClick={getCourses}
                 className="px-8 py-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-md font-medium hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors border border-neutral-300 dark:border-neutral-700"
               >
