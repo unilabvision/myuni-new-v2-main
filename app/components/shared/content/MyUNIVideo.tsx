@@ -37,7 +37,7 @@ interface CourseVideoRecord {
 
 interface EventVideoRecord {
   id: string;
-  session_id: string;
+  lesson_id: string;
   title: string;
   description: string | null;
   vimeo_id: string | null;
@@ -49,7 +49,7 @@ interface EventVideoRecord {
 }
 
 interface MyUNIVideoProps {
-  contentId: string; // lessonId veya sessionId
+  contentId: string; // lessonId veya sectionId
   userId?: string;
   type: 'course' | 'event'; // İçerik tipi
   onProgress?: (progress: number) => void;
@@ -73,7 +73,7 @@ interface MyUNIVideoProps {
 
 interface VideoContent {
   id: string;
-  content_id: string | null; // lesson_id veya session_id
+  content_id: string | null; // lesson_id veya section_id
   title: string;
   description: string | null;
   vimeo_id: string | null;
@@ -134,6 +134,7 @@ export function MyUNIVideo({
   // Player states - separate from loading states
   const [playerInitialized, setPlayerInitialized] = useState(false);
   const [iframeReady, setIframeReady] = useState(false);
+  const [vimeoApiLoaded, setVimeoApiLoaded] = useState(!!(typeof window !== 'undefined' && window.Vimeo?.Player));
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const playerRef = useRef<VimeoPlayer | null>(null);
@@ -174,7 +175,7 @@ export function MyUNIVideo({
       return {
         videosTable: 'myuni_event_videos', // Assuming this table exists
         progressTable: 'myuni_event_user_progress', // Assuming this table exists
-        contentIdField: 'session_id'
+        contentIdField: 'lesson_id'
       };
     }
   }, [type]);
@@ -222,8 +223,8 @@ export function MyUNIVideo({
         // Event video query
         const { data, error } = await supabase
           .from(videosTable)
-          .select('id, session_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash')
-          .eq('session_id', contentId)
+          .select('id, lesson_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash')
+          .eq('lesson_id', contentId)
           .order('order_index', { ascending: true })
           .limit(1);
 
@@ -233,7 +234,7 @@ export function MyUNIVideo({
           const eventVideo = data[0] as EventVideoRecord;
           const videoData: VideoContent = {
             id: eventVideo.id,
-            content_id: eventVideo.session_id,
+            content_id: eventVideo.lesson_id,
             title: eventVideo.title,
             description: eventVideo.description,
             vimeo_id: eventVideo.vimeo_id,
@@ -289,12 +290,29 @@ export function MyUNIVideo({
         }
       } else {
         // Event progress query
-        const { data, error } = await supabase
+        // contentId'nin lesson.id mi yoksa section.id mi olduğunu tespit et
+        const { data: lessonCheck } = await supabase
+          .from('myuni_event_lessons')
+          .select('id')
+          .eq('id', contentId)
+          .single();
+
+        const isLessonBased = !!lessonCheck;
+
+        let progressQuery = supabase
           .from(progressTable)
           .select('watch_time_seconds, last_position_seconds, is_completed, completed_at, video_watch_count, last_video_watch_at')
-          .eq('user_id', userId)
-          .eq('session_id', contentId)
-          .single();
+          .eq('user_id', userId);
+
+        if (isLessonBased) {
+          // Yeni event: lesson_id ile ara
+          progressQuery = progressQuery.eq('lesson_id', contentId);
+        } else {
+          // Eski event: section_id ile ara, lesson_id NULL olmalı
+          progressQuery = progressQuery.eq('section_id', contentId).is('lesson_id', null);
+        }
+
+        const { data, error } = await progressQuery.single();
 
         if (error && error.code !== 'PGRST116') {
           throw new Error(error.message);
@@ -326,7 +344,7 @@ export function MyUNIVideo({
     try {
       const { progressTable } = getTableNames();
       const currentWatchCount = userProgress?.video_watch_count || 0;
-      
+
       if (type === 'course') {
         // Course progress data
         const progressData = {
@@ -364,10 +382,46 @@ export function MyUNIVideo({
           }));
         }
       } else {
-        // Event progress data
+        // Event video progress
+        // contentId lesson.id (yeni event) veya section.id (eski event) olabilir
+        // myuni_event_lessons tablosunda ara → lesson bazlı mı?
+        const { data: lessonCheck } = await supabase
+          .from('myuni_event_lessons')
+          .select('section_id')
+          .eq('id', contentId)
+          .single();
+
+        const isLessonBased = !!lessonCheck?.section_id;
+        let eventId: string | null = null;
+
+        if (isLessonBased) {
+          // Yeni event: lesson.id → parent section → event_id
+          const { data: sectionData } = await supabase
+            .from('myuni_event_sections')
+            .select('event_id')
+            .eq('id', lessonCheck.section_id)
+            .single();
+          eventId = sectionData?.event_id || null;
+        } else {
+          // Eski event: contentId doğrudan section.id
+          const { data: sectionData } = await supabase
+            .from('myuni_event_sections')
+            .select('event_id')
+            .eq('id', contentId)
+            .single();
+          eventId = sectionData?.event_id || null;
+        }
+
+        if (!eventId) {
+          console.warn('⚠️ Could not resolve event_id for contentId:', contentId);
+          return;
+        }
+
         const progressData = {
           user_id: userId,
-          session_id: contentId,
+          event_id: eventId,
+          section_id: isLessonBased ? null : contentId,   // eski event: section_id dolu
+          lesson_id: isLessonBased ? contentId : null,    // yeni event: lesson_id dolu
           last_position_seconds: Math.floor(position),
           watch_time_seconds: Math.floor(position),
           is_completed: isCompleted,
@@ -376,19 +430,42 @@ export function MyUNIVideo({
           last_video_watch_at: new Date().toISOString()
         };
 
-        console.log('Attempting to save event progress to database:', progressData);
+        console.log('Saving event progress (isLessonBased:', isLessonBased, '):', progressData);
 
-        const { data, error } = await supabase
+        // Mevcut satırı bul
+        let existingQuery = supabase
           .from(progressTable)
-          .upsert(progressData, {
-            onConflict: 'user_id,session_id'
-          })
-          .select();
+          .select('id')
+          .eq('user_id', userId);
+
+        if (isLessonBased) {
+          existingQuery = existingQuery.eq('lesson_id', contentId);
+        } else {
+          existingQuery = existingQuery.eq('section_id', contentId).is('lesson_id', null);
+        }
+
+        const { data: existingRow } = await existingQuery.single();
+
+        let data, error;
+        if (existingRow?.id) {
+          ({ data, error } = await supabase
+            .from(progressTable)
+            .update(progressData)
+            .eq('id', existingRow.id)
+            .select()
+            .single());
+        } else {
+          ({ data, error } = await supabase
+            .from(progressTable)
+            .insert(progressData)
+            .select()
+            .single());
+        }
 
         if (error) {
           console.error('❌ Supabase error saving event progress:', error);
         } else {
-          console.log('✅ Event progress saved successfully to database!');
+          console.log('✅ Event progress saved successfully!');
           setUserProgress(prev => ({
             ...prev,
             last_position_seconds: Math.floor(position),
@@ -401,26 +478,10 @@ export function MyUNIVideo({
         }
       }
 
-      if (error) {
-        console.error('❌ Supabase error saving progress:', error);
-      } else {
-        console.log('✅ Progress saved successfully to database!');
-
-        // Update local state to reflect the saved progress
-        setUserProgress(prev => ({
-          ...prev,
-          last_position_seconds: Math.floor(position),
-          watch_time_seconds: Math.floor(position),
-          is_completed: isCompleted,
-          completed_at: isCompleted ? new Date().toISOString() : prev.completed_at,
-          video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
-          last_video_watch_at: new Date().toISOString()
-        }));
-      }
     } catch (error) {
       console.error('❌ Exception while saving progress:', error);
     }
-  }, [userId, contentId, userProgress?.video_watch_count, getTableNames]);
+  }, [userId, contentId, userProgress?.video_watch_count, getTableNames, type]);
 
   // Initialize Vimeo Player - only when needed
   const initializePlayer = useCallback(async () => {
@@ -445,9 +506,19 @@ export function MyUNIVideo({
       let lastSaved = 0;
       let playerDuration = 0;
 
+      // Fallback: If player doesn't trigger 'loaded', mark it ready after a short timeout anyway
+      const fallbackTimer = setTimeout(() => {
+        if (!playerInitialized && iframeRef.current) {
+          console.log('Vimeo fallback timer triggered');
+          setPlayerInitialized(true);
+          setIframeReady(true);
+        }
+      }, 2000);
+
       // Set up event listeners
       player.on('loaded', async () => {
-        console.log('Player loaded');
+        console.log('Player loaded event fired');
+        clearTimeout(fallbackTimer);
         setPlayerInitialized(true);
         setIframeReady(true);
 
@@ -455,15 +526,12 @@ export function MyUNIVideo({
         try {
           const dur = await player.getDuration();
           playerDuration = dur;
-          console.log('Duration:', dur);
 
-          // Seek to last position if available
-          if (userProgress.last_position_seconds > 0 && userProgress.last_position_seconds < dur) {
+          if (userProgress && userProgress.last_position_seconds > 0 && userProgress.last_position_seconds < dur) {
             try {
               await player.setCurrentTime(userProgress.last_position_seconds);
-              console.log('Resumed from:', userProgress.last_position_seconds);
             } catch (e) {
-              console.warn('Could not seek to last position:', e);
+              console.warn('Could not seek', e);
             }
           }
         } catch (e) {
@@ -567,6 +635,7 @@ export function MyUNIVideo({
   // Load Vimeo API
   useEffect(() => {
     if (window.Vimeo?.Player) {
+      setVimeoApiLoaded(true);
       return; // Already loaded
     }
 
@@ -575,6 +644,7 @@ export function MyUNIVideo({
     script.async = true;
     script.onload = () => {
       console.log('Vimeo API loaded');
+      setVimeoApiLoaded(true);
     };
     script.onerror = () => {
       setError('Failed to load Vimeo Player API');
@@ -583,6 +653,12 @@ export function MyUNIVideo({
     // Only add if not already present
     if (!document.querySelector('script[src*="player.vimeo.com"]')) {
       document.head.appendChild(script);
+    } else {
+      // Script is already in head but not necessarily loaded yet
+      const existingScript = document.querySelector('script[src*="player.vimeo.com"]') as HTMLScriptElement;
+      if (existingScript) {
+        existingScript.addEventListener('load', () => setVimeoApiLoaded(true));
+      }
     }
   }, []);
 
@@ -615,14 +691,14 @@ export function MyUNIVideo({
 
   // Initialize player when iframe is ready and video is loaded
   useEffect(() => {
-    if (iframeReady && currentVideo && !playerInitialized) {
+    if (iframeReady && currentVideo && !playerInitialized && vimeoApiLoaded) {
       const timer = setTimeout(() => {
         initializePlayer();
       }, 500); // Small delay to ensure iframe is fully loaded
 
       return () => clearTimeout(timer);
     }
-  }, [iframeReady, currentVideo, playerInitialized, initializePlayer]);
+  }, [iframeReady, currentVideo, playerInitialized, vimeoApiLoaded, initializePlayer]);
 
   // Handle iframe load
   const handleIframeLoad = useCallback(() => {
@@ -672,15 +748,15 @@ export function MyUNIVideo({
   // Tekrar izleme fonksiyonu
   const handleReplay = async () => {
     if (!playerRef.current) return;
-    
+
     try {
       console.log('🔄 Replaying video...');
       setShowEndScreen(false);
-      
+
       // Video'yu başa sar ve oynat
       await playerRef.current.setCurrentTime(0);
       await playerRef.current.play();
-      
+
       console.log('✅ Video replayed successfully');
     } catch (error) {
       console.error('❌ Error replaying video:', error);
@@ -771,9 +847,8 @@ export function MyUNIVideo({
             <div style={{ padding: '56.25% 0 0 0', position: 'relative' }}>
               {/* Loading Skeleton */}
               <div
-                className={`absolute inset-0 bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center transition-opacity duration-700 ${
-                  (iframeReady && playerInitialized) ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                }`}
+                className={`absolute inset-0 bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center transition-opacity duration-700 ${(iframeReady && playerInitialized) ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
                 style={{ zIndex: 2 }}
               >
                 <div className="text-center space-y-3">
@@ -792,9 +867,8 @@ export function MyUNIVideo({
 
               {/* Custom End Screen Overlay */}
               <div
-                className={`absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-500 ${
-                  showEndScreen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-                }`}
+                className={`absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-500 ${showEndScreen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                  }`}
                 style={{ zIndex: 3 }}
               >
                 <div className="text-center space-y-4 sm:space-y-6 px-4 sm:px-6 max-w-sm sm:max-w-md">
@@ -826,9 +900,8 @@ export function MyUNIVideo({
                     {hasNext && (
                       <button
                         onClick={handleNext}
-                        className={`inline-flex items-center justify-center space-x-2 sm:space-x-3 px-4 py-2.5 sm:px-6 sm:py-3 text-white hover:opacity-90 transition-colors duration-200 font-medium text-sm sm:text-base w-full sm:w-auto ${
-                          type === 'course' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
-                        }`}
+                        className={`inline-flex items-center justify-center space-x-2 sm:space-x-3 px-4 py-2.5 sm:px-6 sm:py-3 text-white hover:opacity-90 transition-colors duration-200 font-medium text-sm sm:text-base w-full sm:w-auto ${type === 'course' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
+                          }`}
                       >
                         <span>{getNextButtonText()}</span>
                         <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />

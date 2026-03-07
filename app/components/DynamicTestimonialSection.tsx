@@ -32,7 +32,7 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
     const texts = {
         tr: {
             badge: "💬 Kursiyer Değerlendirmeleri",
-            title: "Kursiyerlerimiz Neler Söylüyor?",
+            title: "Kursiyerlerimiz neler söylüyor?",
             description: "MyUNI ile hedeflerine ulaşan kursiyerlerimizin kurslarımız hakkındaki değerlendirmelerini okuyun.",
             loading: "Yorumlar yükleniyor...",
             noComments: "Henüz yorum bulunmamaktadır.",

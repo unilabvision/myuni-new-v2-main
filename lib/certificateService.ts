@@ -89,7 +89,7 @@ function generateCertificateNumber(): string {
   const randomNum2 = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
   const randomStr1 = Math.random().toString(36).substring(2, 5).toUpperCase();
   const randomStr2 = Math.random().toString(36).substring(2, 7).toUpperCase();
-  
+
   return `MUNI${year}-${randomNum1}-${randomNum2}-${randomStr1}-${randomStr2}`;
 }
 
@@ -110,7 +110,7 @@ async function getUserFullName(): Promise<string> {
 async function checkCertificateException(userId: string, itemId: string, itemType: 'course' | 'event'): Promise<boolean> {
   try {
     console.log('🔍 İstisna kontrolü yapılıyor:', { userId, itemId, itemType });
-    
+
     const { data, error } = await supabase
       .from('myuni_certificate_exceptions')
       .select('*')
@@ -121,13 +121,13 @@ async function checkCertificateException(userId: string, itemId: string, itemTyp
     console.log('📊 İstisna sorgu sonucu:', { data, error });
 
     const hasException = !error && data && data.length > 0;
-    
+
     if (hasException) {
       console.log('🎯 Sertifika istisnası bulundu:', { userId, itemId, itemType, exception: data[0] });
     } else {
       console.log('❌ Sertifika istisnası bulunamadı:', { userId, itemId, itemType });
     }
-    
+
     return hasException;
   } catch (catchError) {
     console.error('💥 İstisna kontrol hatası:', catchError);
@@ -138,10 +138,10 @@ async function checkCertificateException(userId: string, itemId: string, itemTyp
 /**
  * Event progress verilerini al
  */
-async function getEventProgress(userId: string, eventId: string): Promise<{ 
-  completedSections: number; 
-  totalSections: number; 
-  completionPercentage: number 
+async function getEventProgress(userId: string, eventId: string): Promise<{
+  completedSections: number;
+  totalSections: number;
+  completionPercentage: number
 }> {
   try {
     console.log('📊 Event progress alınıyor:', { userId, eventId });
@@ -158,38 +158,67 @@ async function getEventProgress(userId: string, eventId: string): Promise<{
       return { completedSections: 0, totalSections: 0, completionPercentage: 0 };
     }
 
-    const totalSections = sections.length;
-    
-    if (totalSections === 0) {
-      console.log('⚠️ Event\'te hiç section yok');
+    const sectionIds = sections.map(s => s.id);
+
+    if (sectionIds.length === 0) {
       return { completedSections: 0, totalSections: 0, completionPercentage: 0 };
     }
 
-    const sectionIds = sections.map(s => s.id);
+    // Bu event'in lesson bazlı mı section bazlı mı olduğunu belirle
+    // Yeni eventlerde myuni_event_lessons tablosunda kayıtlar var
+    const { data: lessons } = await supabase
+      .from('myuni_event_lessons')
+      .select('id, section_id')
+      .in('section_id', sectionIds)
+      .eq('is_active', true);
 
-    // User progress'i al
+    const allLessons = lessons || [];
+    const lessonIds = allLessons.map(l => l.id);
+
+    // Tüm progress kayıtlarını al (lesson bazlı + section bazlı)
     const { data: progressData, error: progressError } = await supabase
       .from('myuni_event_user_progress')
-      .select('section_id, is_completed')
+      .select('section_id, lesson_id, is_completed')
       .eq('user_id', userId)
-      .eq('event_id', eventId)
-      .in('section_id', sectionIds);
+      .eq('event_id', eventId);
 
     if (progressError) {
       console.error('❌ Event progress alınamadı:', progressError);
-      return { completedSections: 0, totalSections, completionPercentage: 0 };
+      return { completedSections: 0, totalSections: sections.length, completionPercentage: 0 };
     }
 
-    const completedSections = progressData?.filter(p => p.is_completed).length || 0;
-    const completionPercentage = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0;
+    const allProgress = progressData || [];
 
-    console.log('✅ Event progress hesaplandı:', {
-      completedSections,
-      totalSections,
-      completionPercentage
-    });
+    if (lessonIds.length > 0) {
+      // Yeni event: lesson bazlı takip
+      const completedLessons = allProgress.filter(p =>
+        p.lesson_id && lessonIds.includes(p.lesson_id) && p.is_completed
+      ).length;
+      const totalLessons = lessonIds.length;
+      const completionPercentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
-    return { completedSections, totalSections, completionPercentage };
+      console.log('✅ Lesson bazlı event progress hesaplandı:', {
+        completedLessons,
+        totalLessons,
+        completionPercentage
+      });
+      // completedSections/totalSections alanları aslında lesson sayılarını tutuyor
+      return { completedSections: completedLessons, totalSections: totalLessons, completionPercentage };
+    } else {
+      // Eski event: section bazlı takip
+      const completedSections = allProgress.filter(p =>
+        p.section_id && sectionIds.includes(p.section_id) && p.is_completed
+      ).length;
+      const totalSections = sections.length;
+      const completionPercentage = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0;
+
+      console.log('✅ Section bazlı event progress hesaplandı:', {
+        completedSections,
+        totalSections,
+        completionPercentage
+      });
+      return { completedSections, totalSections, completionPercentage };
+    }
 
   } catch (error) {
     console.error('❌ Event progress hesaplama hatası:', error);
@@ -213,10 +242,10 @@ export async function checkEventCertificateEligibility(userId: string, eventId: 
 
     // Önce istisna kontrolü yap
     const hasException = await checkCertificateException(userId, eventId, 'event');
-    
+
     if (hasException) {
       console.log('✅ Event için sertifika istisnası bulundu, direkt uygun');
-      
+
       // Mevcut sertifika var mı kontrol et
       try {
         const { data: existingCert, error: certError } = await supabase
@@ -285,7 +314,7 @@ export async function checkEventCertificateEligibility(userId: string, eventId: 
 
     // Event progress'i al
     const progress = await getEventProgress(userId, eventId);
-    
+
     // Event'ler için %70+ tamamlama oranı yeterli
     const isEligible = progress.completionPercentage >= 70;
     const missingRequirements: string[] = [];
@@ -343,10 +372,10 @@ async function checkItemCertificateEligibility(userId: string, itemId: string, i
 
     // Önce istisna kontrolü yap
     const hasException = await checkCertificateException(userId, itemId, itemType);
-    
+
     if (hasException) {
       console.log('🎯 Kullanıcı için sertifika istisnası bulundu, direkt uygun');
-      
+
       // Mevcut sertifika var mı kontrol et
       try {
         const { data: existingCert, error: certError } = await supabase
@@ -462,21 +491,21 @@ async function checkItemCertificateEligibility(userId: string, itemId: string, i
       // İlerleme verilerini analiz et
       const totalLessons = lessons.length;
       const completedLessons = progressData?.filter(p => p.is_completed).length || 0;
-      const completionPercentage = totalLessons > 0 ? 
+      const completionPercentage = totalLessons > 0 ?
         Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
 
       // Quiz dersleri ve skorları
       const quizLessons = lessons.filter(l => l.lesson_type === 'quick' || l.lesson_type === 'quiz');
       const totalQuizzes = quizLessons.length;
-      
-      const quizProgress = progressData?.filter(p => 
+
+      const quizProgress = progressData?.filter(p =>
         quizLessons.some(l => l.id === p.lesson_id)
       ) || [];
-      
+
       const completedQuizzes = quizProgress.filter(p => p.is_completed).length;
       const quizScores = quizProgress.map(p => p.quiz_score || 0).filter(score => score > 0);
-      const averageQuizScore = quizScores.length > 0 
-        ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) 
+      const averageQuizScore = quizScores.length > 0
+        ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length)
         : 0;
 
       // Sertifika almaya uygun mu kontrol et
@@ -545,15 +574,15 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
   try {
     // İstisna kontrolü
     const hasException = await checkCertificateException(data.userId, data.itemId, data.itemType);
-    
+
     if (hasException) {
       console.log('🎯 İstisna nedeniyle sertifika oluşturuluyor');
     } else if (!forceGenerate) {
       // Normal kontroller
-      const eligibility = data.itemType === 'event' 
+      const eligibility = data.itemType === 'event'
         ? await checkEventCertificateEligibility(data.userId, data.itemId)
         : await checkItemCertificateEligibility(data.userId, data.itemId, data.itemType);
-        
+
       if (!eligibility.isEligible) {
         throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
       }
@@ -561,11 +590,11 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
 
     // Kullanıcı adını al
     let fullName = data.userFullName || '';
-    
+
     if (!fullName || fullName.trim() === '') {
       fullName = await getUserFullName();
     }
-    
+
     // Benzersiz sertifika numarası oluştur
     let certificateNumber: string;
     let attempts = 0;
@@ -574,13 +603,13 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
     do {
       certificateNumber = generateCertificateNumber();
       attempts++;
-      
+
       // Benzersizlik kontrolü
       try {
         let myuniCheck = null;
         let eventCheck = null;
         let publicCheck = null;
-        
+
         try {
           const myuniResult = await supabase
             .from('myuni_certificates')
@@ -602,7 +631,7 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
         } catch {
           // Ignore check errors
         }
-        
+
         try {
           const publicResult = await supabase
             .from('certificates')
@@ -613,13 +642,13 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
         } catch {
           // Ignore check errors
         }
-          
+
         if (!myuniCheck && !eventCheck && !publicCheck) break;
-        
+
       } catch {
         break;
       }
-      
+
       if (attempts >= maxAttempts) {
         certificateNumber = generateCertificateNumber() + '-' + Date.now();
         break;
@@ -717,7 +746,7 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
     // Public Certificates tablosuna kaydet
     const certificateTypeText = data.itemType === 'course' ? 'Kurs' : 'Etkinlik';
     let templateId = '2';
-    let descriptionText = data.itemType === 'course' 
+    let descriptionText = data.itemType === 'course'
       ? 'Eğitim videolarını tamamlayarak ve sınavdan geçerli notu alarak bu sertifikayı almaya hak kazanmıştır.'
       : 'Etkinlik kapsamında yer alarak, alandaki yenilikçi yaklaşımlar hakkında bilgi edinmiş ve bu sertifikayı almaya hak kazanmıştır.';
 
@@ -761,6 +790,8 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
       organization_slug: 'myuni'
     };
 
+    // Public certificates tablosuna kayıt — best-effort, rollback yapılmaz
+    // myuni_event_certificates veya myuni_certificates kaydı her durumda korunur
     try {
       const publicResponse = await supabase
         .from('certificates')
@@ -769,49 +800,23 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
         .single();
 
       if (publicResponse.error) {
-        // Rollback: MyUNI tablosundaki kaydı sil
-        try {
-          if (data.itemType === 'event') {
-            await supabase
-              .from('myuni_event_certificates')
-              .delete()
-              .eq('id', myuniResult.id);
-          } else {
-            await supabase
-              .from('myuni_certificates')
-              .delete()
-              .eq('id', myuniResult.id);
-          }
-        } catch {
-          // Ignore rollback errors
-        }
-        
-        throw new Error(`Public certificates hatası: ${publicResponse.error.message}`);
+        // Sadece warn log — myuni tablosundaki kaydı silme
+        console.warn('⚠️ Public certificates tablosuna kayıt başarısız (myuni kaydı korunuyor):', {
+          error: publicResponse.error.message,
+          code: publicResponse.error.code,
+          certificateNumber,
+          itemType: data.itemType
+        });
+        // Devam et — myuni_event_certificates kaydı geçerli
+      } else {
+        console.log('✅ Public certificates tablosuna da kaydedildi');
       }
-
     } catch (publicError) {
-      // Rollback: MyUNI tablosundaki kaydı sil
-      if (myuniResult) {
-        try {
-          if (data.itemType === 'event') {
-            await supabase
-              .from('myuni_event_certificates')
-              .delete()
-              .eq('id', myuniResult.id);
-          } else {
-            await supabase
-              .from('myuni_certificates')
-              .delete()
-              .eq('id', myuniResult.id);
-          }
-        } catch {
-          // Ignore rollback errors
-        }
-      }
-      
-      throw new Error(`Public certificates tablosuna kayıt hatası: ${publicError}`);
+      // Sadece warn log — rollback yok
+      console.warn('⚠️ Public certificates tablosuna kayıt exception (myuni kaydı korunuyor):', publicError);
+      // Devam et
     }
-    
+
     return myuniResult;
 
   } catch (error) {
@@ -869,14 +874,14 @@ export async function getUserEventCertificate(userId: string, eventId: string) {
  * Progress-aware certificate generation (kurs/etkinlik için)
  */
 export async function generateCertificateWithProgress(data: CertificateData) {
-  const eligibility = data.itemType === 'event' 
+  const eligibility = data.itemType === 'event'
     ? await checkEventCertificateEligibility(data.userId, data.itemId)
     : await checkItemCertificateEligibility(data.userId, data.itemId, data.itemType);
-  
+
   if (!eligibility.isEligible) {
     throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
   }
-  
+
   return generateCertificate(data, true);
 }
 
@@ -969,7 +974,7 @@ export async function getCertificateStats(courseId: string) {
     const totalCertificates = data?.length || 0;
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    
+
     const recentCertificates = data?.filter(cert => {
       const createdDate = new Date(cert.created_at);
       return createdDate >= oneMonthAgo;
@@ -1017,7 +1022,7 @@ export async function getEventCertificateStats(eventId: string) {
     const totalCertificates = data?.length || 0;
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    
+
     const recentCertificates = data?.filter(cert => {
       const createdDate = new Date(cert.created_at);
       return createdDate >= oneMonthAgo;
@@ -1061,7 +1066,7 @@ export async function getUserEventCertificateException(userId: string, eventId: 
 async function getUserItemCertificateException(userId: string, itemId: string, itemType: 'course' | 'event') {
   try {
     console.log('🔍 İstisna durumu getiriliyor:', { userId, itemId, itemType });
-    
+
     const { data, error } = await supabase
       .from('myuni_certificate_exceptions')
       .select('*')
@@ -1072,13 +1077,13 @@ async function getUserItemCertificateException(userId: string, itemId: string, i
     console.log('📊 İstisna getirme sonucu:', { data, error });
 
     const result = error || !data || data.length === 0 ? null : data[0];
-    
+
     if (result) {
       console.log('✅ İstisna durumu bulundu:', result);
     } else {
       console.log('❌ İstisna durumu bulunamadı');
     }
-    
+
     return result;
   } catch (catchError) {
     console.error('💥 İstisna durumu getirme hatası:', catchError);

@@ -7,22 +7,22 @@ import { useSearchParams } from 'next/navigation';
 import { Play, FileText, Zap, StickyNote, PlusCircle, Bot, BarChart3, Award, ExternalLink, Calendar, MapPin } from 'lucide-react';
 
 // Import services
-import { 
-  getEventWithContent, 
+import {
+  getEventWithContent,
   getUserEventProgress,
   UserEventProgress
 } from '../../../../../lib/eventService';
 
 // Import updated enrollment service
-import { 
-  enrollUserInEvent, 
+import {
+  enrollUserInEvent,
   checkUserEventEnrollmentStatus
 } from '../../../../../lib/eventEnrollmentService';
 
 // Import certificate service
-import { 
-  checkEventCertificateEligibility, 
-  getUserEventCertificate 
+import {
+  checkEventCertificateEligibility,
+  getUserEventCertificate
 } from '../../../../../lib/certificateService';
 
 // Import all components
@@ -61,9 +61,9 @@ interface Event {
 // Helper function to convert a string to URL-friendly slug
 const toUrlSlug = (text: string): string => {
   if (!text) return '';
-  
+
   // Turkish character mapping
-  const turkishChars: {[key: string]: string} = {
+  const turkishChars: { [key: string]: string } = {
     'ç': 'c', 'Ç': 'C',
     'ğ': 'g', 'Ğ': 'G',
     'ı': 'i', 'İ': 'I',
@@ -71,13 +71,13 @@ const toUrlSlug = (text: string): string => {
     'ş': 's', 'Ş': 'S',
     'ü': 'u', 'Ü': 'U'
   };
-  
+
   // Replace Turkish characters with their English equivalents
   let normalizedText = text;
   for (const [turkishChar, englishChar] of Object.entries(turkishChars)) {
     normalizedText = normalizedText.replace(new RegExp(turkishChar, 'g'), englishChar);
   }
-  
+
   return normalizedText
     .toLowerCase()
     .replace(/[^\w\s-]/g, '') // Remove special characters
@@ -111,6 +111,7 @@ interface Lesson {
   lastPosition: number;
   watchTime: number;
   order: number;
+  sectionId?: string;
 }
 
 // Define the lesson type from your service
@@ -120,6 +121,7 @@ interface EventLesson {
   lesson_type: string;
   duration_minutes?: number;
   order_index: number;
+  section_id?: string;
 }
 
 // Define the section type from your service
@@ -168,7 +170,7 @@ const texts = {
     completed: "Tamamlandı",
     inProgress: "Devam Ediyor",
     myuniVideo: "MyUNI Video",
-    myuniNotes: "MyUNI Notes", 
+    myuniNotes: "MyUNI Notes",
     myuniQuick: "MyUNI Quick",
     myuniAnalytics: "MyUNI Analytics",
     mixed: "Video + Notlar",
@@ -216,14 +218,14 @@ const texts = {
   },
   en: {
     eventContent: "Event Content",
-    analytics: "Analytics", 
+    analytics: "Analytics",
     progress: "Progress",
     organizer: "Organizer",
     completed: "Completed",
     inProgress: "In Progress",
     myuniVideo: "MyUNI Video",
     myuniNotes: "MyUNI Notes",
-    myuniQuick: "MyUNI Quick", 
+    myuniQuick: "MyUNI Quick",
     myuniAnalytics: "MyUNI Analytics",
     mixed: "Video + Notes",
     selectContent: "Select content",
@@ -282,6 +284,8 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
+  const [progressUpdateTrigger, setProgressUpdateTrigger] = useState(0);
+  const [liveProgress, setLiveProgress] = useState<{ progress: number; completedLessons: number; totalLessons: number } | null>(null);
 
   // Certificate states
   const [certificateEligible, setCertificateEligible] = useState(false);
@@ -292,7 +296,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   const { locale, slug } = resolvedParams;
   const eventSlug = slug;
   const searchParams = useSearchParams();
-  
+
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   const { user, isLoaded } = useUser();
@@ -339,17 +343,16 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       throw new Error('Invalid event data structure');
     }
 
-    // Create progress map - adjust property name based on actual UserEventProgress structure
+    // Create progress map using section_id field from getUserEventProgress
+    // section_id in the progress table stores the lesson.id (per-lesson tracking)
     const progressMap = new Map(progressData.map(p => [
-      // Replace this with the actual property name from UserEventProgress
-      // Common variations: p.lesson_id, p.id, p.content_id, p.lessonId
-      (p as any).lesson_id || (p as any).id || (p as any).content_id || (p as any).lessonId, 
+      p.section_id, // This is actually the lesson.id stored as section_id in the DB
       p
     ]));
-    
+
     const sections: Section[] = eventData.sections.map((section) => {
       const lessons = section.lessons || [];
-      
+
       if (!Array.isArray(lessons)) {
         return {
           id: section.id,
@@ -367,6 +370,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
           const progress = progressMap.get(lesson.id);
           return {
             id: lesson.id,
+            sectionId: lesson.section_id,
             title: lesson.title,
             type: validateLessonType(lesson.lesson_type),
             duration: lesson.duration_minutes ? `${lesson.duration_minutes} dk` : '0 dk',
@@ -380,13 +384,13 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     });
 
     const totalLessons = sections.reduce((acc: number, section: Section) => acc + section.lessons.length, 0);
-    const completedLessons = sections.reduce((acc: number, section: Section) => 
+    const completedLessons = sections.reduce((acc: number, section: Section) =>
       acc + section.lessons.filter((lesson: Lesson) => lesson.isCompleted).length, 0
     );
-    const totalWatchTime = sections.reduce((acc: number, section: Section) => 
+    const totalWatchTime = sections.reduce((acc: number, section: Section) =>
       acc + section.lessons.reduce((lessonAcc: number, lesson: Lesson) => lessonAcc + lesson.watchTime, 0), 0
     );
-    
+
     const progress = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
 
     const eventType = validateEventType(eventData.event.event_type);
@@ -418,18 +422,18 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   // Check certificate status
   const checkCertificateStatus = useCallback(async () => {
     if (!user || !event) return;
-    
+
     try {
       setCertificateLoading(true);
-      
+
       const eligibility = await checkEventCertificateEligibility(user.id, event.id);
       setCertificateEligible(eligibility.isEligible);
-      
+
       if (eligibility.isEligible || eligibility.existingCertificate) {
         const certificate = await getUserEventCertificate(user.id, event.id);
         setExistingCertificate(certificate);
       }
-      
+
     } catch (error) {
       console.error('Certificate status check error:', error);
     } finally {
@@ -445,7 +449,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       setError(null);
 
       const eventData = await getEventWithContent(eventSlug);
-      
+
       if (!eventData?.event) {
         setError('Event not found');
         return;
@@ -472,13 +476,13 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       if (eventData.sections.length > 0) {
         // Create the initial expanded sections state
         const initialExpandedSections: { [key: string]: boolean } = {};
-        
+
         // Check URL parameters (support both short and long versions)
         const expandedSectionSlug = searchParams.get('e') || searchParams.get('expandedSection');
         const sectionSlug = searchParams.get('s') || searchParams.get('section');
-        
+
         let foundSection = false;
-        
+
         // Check for expanded section by slug
         if (expandedSectionSlug) {
           for (const section of transformedEvent.sections) {
@@ -489,7 +493,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             }
           }
         }
-        
+
         // Check for section by slug
         if (sectionSlug) {
           for (const section of transformedEvent.sections) {
@@ -502,12 +506,12 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             }
           }
         }
-        
+
         // If no sections are expanded yet, expand the first one
         if (!foundSection) {
           initialExpandedSections[eventData.sections[0].id] = true;
         }
-        
+
         setExpandedSections(initialExpandedSections);
       }
 
@@ -516,7 +520,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       if (viewParam === 'analytics') {
         setActiveView('analytics');
       }
-      
+
       // Set sidebar state based on URL parameter
       const sidebarParam = searchParams.get('sb') || searchParams.get('sidebar');
       if (sidebarParam === '1' || sidebarParam === 'open') {
@@ -563,7 +567,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
     // Check for expandedSection parameter (e)
     const expandedSectionSlug = searchParams.get('e') || searchParams.get('expandedSection');
-    
+
     if (expandedSectionSlug) {
       // Try to find section by slug
       for (const section of event.sections) {
@@ -579,7 +583,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
     // Check for section parameter (s)
     const sectionSlug = searchParams.get('s') || searchParams.get('section');
-    
+
     if (sectionSlug) {
       // Try to find lesson by slug
       for (const section of event.sections) {
@@ -594,7 +598,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         }
       }
     }
-    
+
     // Check for secret key parameter (sk)
     const secretKeyParam = searchParams.get('sk');
     if (secretKeyParam) {
@@ -621,7 +625,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
               ...prev,
               [section.id]: true
             }));
-            
+
             // Select the first lesson from this section
             if (section.lessons && section.lessons.length > 0) {
               setSelectedLesson(section.lessons[0]);
@@ -673,13 +677,13 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     try {
       setEvent(prevEvent => {
         if (!prevEvent) return prevEvent;
-        
+
         const updatedEvent = {
           ...prevEvent,
           sections: prevEvent.sections.map(section => ({
             ...section,
-            lessons: section.lessons.map(lesson => 
-              lesson.id === lessonId 
+            lessons: section.lessons.map(lesson =>
+              lesson.id === lessonId
                 ? { ...lesson, isCompleted: true }
                 : lesson
             )
@@ -687,11 +691,11 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         };
 
         const totalLessons = updatedEvent.sections.reduce((acc, section) => acc + section.lessons.length, 0);
-        const completedLessons = updatedEvent.sections.reduce((acc, section) => 
+        const completedLessons = updatedEvent.sections.reduce((acc, section) =>
           acc + section.lessons.filter(lesson => lesson.isCompleted).length, 0
         );
         const progress = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
-        
+
         return {
           ...updatedEvent,
           progress,
@@ -699,14 +703,15 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         };
       });
 
-      setSelectedLesson(prevLesson => 
-        prevLesson && prevLesson.id === lessonId 
+      setSelectedLesson(prevLesson =>
+        prevLesson && prevLesson.id === lessonId
           ? { ...prevLesson, isCompleted: true }
           : prevLesson
       );
 
       setTimeout(() => {
         checkCertificateStatus();
+        setProgressUpdateTrigger(prev => prev + 1);
       }, 1000);
 
     } catch (error) {
@@ -719,7 +724,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
     try {
       setEnrollmentLoading(true);
-      
+
       const result = await enrollUserInEvent(user.id, event.id);
 
       if (result.success) {
@@ -740,7 +745,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   const handleLessonSelect = (lesson: any) => {
     setSelectedLesson(lesson);
     setActiveView('content');
-    
+
     // Find the section this lesson belongs to
     let sectionTitle = '';
     if (event) {
@@ -751,25 +756,25 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         }
       }
     }
-    
+
     // Update the URL with user-friendly section names instead of IDs
     try {
       const url = new URL(window.location.href);
-      
+
       // Use the section title as a slug in the URL
       const lessonSlug = toUrlSlug(lesson.title);
-      
+
       // Use shorter parameter names: s for section
       url.searchParams.set('s', lessonSlug);
-      
+
       // Store section ID in a hidden data field for internal reference
       lesson._sectionId = lesson.id;
-      
+
       window.history.pushState({}, '', url.toString());
     } catch (error) {
       console.error('Error updating URL:', error);
     }
-    
+
     // Don't automatically open the right sidebar on mobile/desktop
     if (window.innerWidth < 1024) {
       setLeftSidebarOpen(false);
@@ -778,7 +783,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
   const handleViewChange = (view: 'content' | 'analytics') => {
     setActiveView(view);
-    
+
     // Update the URL with view parameter
     try {
       const url = new URL(window.location.href);
@@ -788,7 +793,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     } catch (error) {
       console.error('Error updating URL:', error);
     }
-    
+
     if (view === 'analytics') {
       setRightSidebarOpen(false);
     }
@@ -807,10 +812,10 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         try {
           const url = new URL(window.location.href);
           const sectionSlug = toUrlSlug(section.title);
-          
+
           // Use shorter parameter name: e for expandedSection
           url.searchParams.set('e', sectionSlug);
-          
+
           window.history.pushState({}, '', url.toString());
         } catch (error) {
           console.error('Error updating URL:', error);
@@ -826,7 +831,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   const handleRightSidebarToggle = () => {
     const newState = !rightSidebarOpen;
     setRightSidebarOpen(newState);
-    
+
     // Update the URL with sidebar parameter
     try {
       const url = new URL(window.location.href);
@@ -840,7 +845,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     } catch (error) {
       console.error('Error updating URL:', error);
     }
-    
+
     if (!rightSidebarOpen) {
       setActiveView('content');
     }
@@ -856,24 +861,24 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
   const formatEventDate = (dateString?: string | null) => {
     if (!dateString) return '';
-    
+
     try {
       const date = new Date(dateString);
-      return locale === 'tr' 
-        ? date.toLocaleDateString('tr-TR', { 
-            day: 'numeric', 
-            month: 'long', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        : date.toLocaleDateString('en-US', { 
-            day: 'numeric', 
-            month: 'long', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
+      return locale === 'tr'
+        ? date.toLocaleDateString('tr-TR', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        : date.toLocaleDateString('en-US', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
     } catch {
       return dateString;
     }
@@ -907,7 +912,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                 </p>
               </div>
             </div>
-            
+
             <div className="bg-white dark:bg-amber-950/50 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/50">
               <div className="flex items-center justify-between">
                 <div>
@@ -932,7 +937,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                 </button>
               </div>
             </div>
-            
+
             <div className="text-xs text-amber-700 dark:text-amber-300">
               Sertifikanızı LinkedIn ve diğer platformlarda paylaşabilirsiniz
             </div>
@@ -958,7 +963,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                 </p>
               </div>
             </div>
-            
+
             <div className="bg-white dark:bg-green-950/50 rounded-lg p-4 border border-green-200/50 dark:border-green-800/50">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -975,7 +980,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                 </div>
               </div>
             </div>
-            
+
             <div className="text-xs text-green-700 dark:text-green-300">
               Sol bölümden sertifikanızı alabilirsiniz.
             </div>
@@ -1001,7 +1006,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                 </p>
               </div>
             </div>
-            
+
             <div className="bg-white dark:bg-blue-950/50 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/50">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1009,7 +1014,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                   <span className="text-sm font-medium text-blue-900 dark:text-blue-100">{event.progress}%</span>
                 </div>
                 <div className="w-full bg-blue-100 dark:bg-blue-800/30 rounded-full h-2">
-                  <div 
+                  <div
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${event.progress}%` }}
                   />
@@ -1063,8 +1068,8 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
 
     if (activeView === 'analytics') {
       return (
-        <MyUNIAnalytics 
-          contentId={event?.id || ''} 
+        <MyUNIAnalytics
+          contentId={event?.id || ''}
           userId={user?.id || ''}
           texts={t}
           type="event"
@@ -1103,7 +1108,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                       <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
                         Etkinlik Bilgileri
                       </h2>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="space-y-3">
                           <div className="flex items-center space-x-3">
@@ -1115,7 +1120,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                               </div>
                             </div>
                           </div>
-                          
+
                           {event.end_date && (
                             <div className="flex items-center space-x-3">
                               <Calendar className="w-4 h-4 text-neutral-500" />
@@ -1169,11 +1174,11 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                       <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
                         İçerik İlerlemesi
                       </h2>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                         <div className="space-y-1">
                           <div className="text-2xl font-bold text-[#990000] dark:text-white">
-                            {event.progress}%
+                            {liveProgress?.progress ?? event.progress}%
                           </div>
                           <div className="text-neutral-600 dark:text-neutral-400 text-sm">
                             Tamamlandı
@@ -1181,7 +1186,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                         </div>
                         <div className="space-y-1">
                           <div className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                            {event.completedLessons}
+                            {liveProgress?.completedLessons ?? event.completedLessons}
                           </div>
                           <div className="text-neutral-600 dark:text-neutral-400 text-sm">
                             Tamamlanan İçerik
@@ -1189,7 +1194,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                         </div>
                         <div className="space-y-1">
                           <div className="text-2xl font-bold text-neutral-700 dark:text-neutral-300">
-                            {event.totalLessons}
+                            {liveProgress?.totalLessons ?? event.totalLessons}
                           </div>
                           <div className="text-neutral-600 dark:text-neutral-400 text-sm">
                             Toplam İçerik
@@ -1198,9 +1203,9 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                       </div>
 
                       <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-[#990000] dark:bg-white h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${event.progress}%` }}
+                          style={{ width: `${liveProgress?.progress ?? event.progress}%` }}
                         />
                       </div>
                     </div>
@@ -1220,7 +1225,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                           {event.is_online ? 'Online Etkinlik Erişim Bilgileri' : 'Etkinlik Erişim Bilgileri'}
                         </div>
                         <div className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                          {event.is_online 
+                          {event.is_online
                             ? 'Online etkinliğe katılım bilgileriniz e-posta adresinize gönderilecektir.'
                             : 'Etkinliğe katılım bilgileriniz e-posta adresinize gönderilecektir.'
                           }
@@ -1380,7 +1385,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     switch (selectedLesson.type) {
       case 'video':
         return (
-          <MyUNIVideo 
+          <MyUNIVideo
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
@@ -1392,8 +1397,9 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         );
       case 'notes':
         return (
-          <MyUNINotes 
-            contentId={selectedLesson.id}
+          <MyUNINotes
+            contentId={selectedLesson?.sectionId || selectedLesson.id}
+            progressId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
             onNoteCreate={handleNoteCreate}
@@ -1404,7 +1410,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         );
       case 'quick':
         return (
-          <MyUNIQuick 
+          <MyUNIQuick
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
@@ -1415,7 +1421,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         );
       case 'mixed':
         return (
-          <MixedContent 
+          <MixedContent
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
@@ -1427,7 +1433,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         );
       default:
         return (
-          <MyUNIVideo 
+          <MyUNIVideo
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
@@ -1508,6 +1514,8 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
           onSectionToggle={handleSectionToggle}
           userId={user?.id}
           texts={t}
+          progressUpdateTrigger={progressUpdateTrigger}
+          onProgressDataUpdate={(data) => setLiveProgress(data)}
         />
       )}
 
@@ -1540,7 +1548,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       )}
 
       {(leftSidebarOpen || rightSidebarOpen) && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => {
             setLeftSidebarOpen(false);

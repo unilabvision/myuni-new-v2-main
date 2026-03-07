@@ -15,7 +15,7 @@ export interface EventSection {
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
-  section_type: 'notes'; // Always notes for events
+  section_type: 'notes' | 'video'; // Allow video for events
   speaker_name: string | null;
   speaker_title: string | null;
   speaker_bio: string | null;
@@ -50,9 +50,10 @@ export interface EventSection {
 export interface EventLessonItem {
   id: string;
   title: string;
-  lesson_type: 'notes'; // Always notes for events
+  lesson_type: 'notes' | 'video'; // allow video for events
   duration_minutes?: number;
   order_index: number;
+  section_id?: string;
 }
 
 // Event Note interface
@@ -105,7 +106,7 @@ export async function getEventSectionsForAPI(eventId: string): Promise<{
     }
 
     const sections = await getEventSections(eventId);
-    
+
     return {
       success: true,
       data: sections
@@ -145,51 +146,88 @@ export async function getEventSections(eventId: string): Promise<EventSection[]>
       return [];
     }
 
-    // Transform sections to always use notes type
-    const transformedSections: EventSection[] = sections.map(section => ({
-      id: section.id,
-      event_id: section.event_id,
-      title: section.title,
-      description: section.description,
-      start_time: section.start_time,
-      end_time: section.end_time,
-      duration_minutes: section.duration_minutes,
-      section_type: 'notes', // Force all sections to be notes type
-      speaker_name: section.speaker_name,
-      speaker_title: section.speaker_title,
-      speaker_bio: section.speaker_bio,
-      speaker_image_url: section.speaker_image_url,
-      speaker_linkedin_url: section.speaker_linkedin_url,
-      speaker_email: section.speaker_email,
-      location_name: section.location_name,
-      location_details: section.location_details,
-      meeting_room: section.meeting_room,
-      meeting_url: section.meeting_url,
-      is_featured: section.is_featured || false,
-      is_mandatory: section.is_mandatory || false,
-      max_attendees: section.max_attendees,
-      requires_registration: section.requires_registration || false,
-      materials_url: section.materials_url,
-      slides_url: section.slides_url,
-      recording_url: section.recording_url,
-      additional_resources: section.additional_resources,
-      tags: section.tags,
-      category: section.category,
-      difficulty_level: section.difficulty_level,
-      language: section.language || 'tr',
-      order_index: section.order_index,
-      is_active: section.is_active,
-      created_at: section.created_at,
-      updated_at: section.updated_at,
-      // Create lesson item as notes type
-      lessons: [{
+    // Get section IDs to check for videos
+    const sectionIds = sections.map(s => s.id);
+
+    // Check which sections have videos
+    const { data: videoData } = await supabase
+      .from('myuni_event_videos')
+      .select('lesson_id')
+      .in('lesson_id', sectionIds);
+
+    const sectionsWithVideo = new Set(videoData?.map(v => v.lesson_id) || []);
+
+    // Fetch all lessons for these sections
+    const { data: eventLessons } = await supabase
+      .from('myuni_event_lessons')
+      .select('*')
+      .in('section_id', sectionIds)
+      .eq('is_active', true);
+
+    const allLessons = eventLessons || [];
+
+    // Transform sections
+    const transformedSections: EventSection[] = sections.map(section => {
+      const sectionLessons = allLessons
+        .filter(l => l.section_id === section.id)
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+        .map(l => ({
+          id: l.id,
+          title: l.title,
+          lesson_type: l.lesson_type as 'notes' | 'video',
+          duration_minutes: l.duration_minutes,
+          order_index: l.order_index || 0,
+          section_id: section.id
+        }));
+
+      // Fallback if no lessons are found for a section, we can use the section itself as a notes lesson to not break existing data
+      const finalLessons: EventLessonItem[] = sectionLessons.length > 0 ? sectionLessons : [{
         id: section.id,
         title: section.title,
-        lesson_type: 'notes', // Always notes for events
+        lesson_type: (sectionsWithVideo.has(section.id) ? 'video' : 'notes') as 'notes' | 'video', // Dynamic type
         duration_minutes: section.duration_minutes,
-        order_index: section.order_index
-      }]
-    }));
+        order_index: section.order_index,
+        section_id: section.id
+      }];
+
+      return {
+        id: section.id,
+        event_id: section.event_id,
+        title: section.title,
+        description: section.description,
+        start_time: section.start_time,
+        end_time: section.end_time,
+        duration_minutes: section.duration_minutes,
+        section_type: sectionsWithVideo.has(section.id) ? 'video' : 'notes', // Use video section type if it has video
+        speaker_name: section.speaker_name,
+        speaker_title: section.speaker_title,
+        speaker_bio: section.speaker_bio,
+        speaker_image_url: section.speaker_image_url,
+        speaker_linkedin_url: section.speaker_linkedin_url,
+        speaker_email: section.speaker_email,
+        location_name: section.location_name,
+        location_details: section.location_details,
+        meeting_room: section.meeting_room,
+        meeting_url: section.meeting_url,
+        is_featured: section.is_featured || false,
+        is_mandatory: section.is_mandatory || false,
+        max_attendees: section.max_attendees,
+        requires_registration: section.requires_registration || false,
+        materials_url: section.materials_url,
+        slides_url: section.slides_url,
+        recording_url: section.recording_url,
+        additional_resources: section.additional_resources,
+        tags: section.tags,
+        category: section.category,
+        difficulty_level: section.difficulty_level,
+        language: section.language || 'tr',
+        order_index: section.order_index,
+        is_active: section.is_active,
+        created_at: section.created_at,
+        updated_at: section.updated_at,
+        lessons: finalLessons
+      };
+    });
 
     console.log('Transformed sections:', transformedSections);
     return transformedSections;
@@ -221,19 +259,30 @@ export async function getEventLessonContent(sectionId: string) {
       console.log('Supabase error details:', notesError);
     }
 
-    console.log('Event notes loaded:', { 
-      notesCount: notes?.length || 0, 
+    console.log('Event notes loaded:', {
+      notesCount: notes?.length || 0,
       sectionId: sectionId,
-      rawNotes: notes 
+      rawNotes: notes
     });
+
+    // Get videos for this section
+    const { data: videos, error: videosError } = await supabase
+      .from('myuni_event_videos')
+      .select('*')
+      .eq('lesson_id', sectionId)
+      .order('order_index', { ascending: true });
+
+    if (videosError) {
+      console.error('Error fetching event videos:', videosError);
+    }
 
     // Debug: Log the exact return structure
     const result = {
       notes: notes || [],
-      videos: [], // No videos for events
+      videos: videos || [], // Return actual videos
       quicks: []  // No quicks for events
     };
-    
+
     console.log('Returning event lesson content:', result);
 
     return result;
@@ -260,10 +309,10 @@ export async function getUserEventProgress(userId: string, eventId: string): Pro
       return [];
     }
 
-    // Get progress data from new table
+    // Hem lesson_id hem section_id alanlarını çek
     const { data: progressData, error: progressError } = await supabase
       .from('myuni_event_user_progress')
-      .select('section_id, is_completed, watch_time_seconds, last_position_seconds, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at')
+      .select('section_id, lesson_id, is_completed, watch_time_seconds, last_position_seconds, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at')
       .eq('user_id', userId)
       .eq('event_id', eventId);
 
@@ -274,9 +323,10 @@ export async function getUserEventProgress(userId: string, eventId: string): Pro
 
     console.log('Found event progress data:', progressData?.length || 0);
 
-    // Transform to match interface
+    // Normalize: lesson_id varsa lesson_id, yoksa section_id'yi lookup key olarak kullan
+    // Bu sayede EventSidebar'daki sectionProgressMap.get(lesson.id) her iki durumda da çalışır
     const result = (progressData || []).map(p => ({
-      section_id: p.section_id,
+      section_id: p.lesson_id || p.section_id, // unified lookup key
       is_completed: p.is_completed || false,
       watch_time_seconds: p.watch_time_seconds || 0,
       last_position_seconds: p.last_position_seconds || 0,
@@ -289,7 +339,7 @@ export async function getUserEventProgress(userId: string, eventId: string): Pro
       last_video_watch_at: p.last_video_watch_at || null
     }));
 
-    console.log('Returning progress for', result.length, 'sections');
+    console.log('Returning progress for', result.length, 'items (lesson or section based)');
     return result;
 
   } catch (error) {
@@ -302,12 +352,30 @@ export async function getUserEventLessonProgress(userId: string, sectionId: stri
   try {
     console.log('Fetching user event lesson progress for:', { userId, sectionId });
 
-    const { data, error } = await supabase
+    // sectionId parametresi aslında lesson.id veya section.id olabilir
+    // Önce myuni_event_lessons'da ara (lesson bazlı)
+    const { data: lessonCheck } = await supabase
+      .from('myuni_event_lessons')
+      .select('id')
+      .eq('id', sectionId)
+      .single();
+
+    const isLessonBased = !!lessonCheck;
+
+    let query = supabase
       .from('myuni_event_user_progress')
       .select('*')
-      .eq('user_id', userId)
-      .eq('section_id', sectionId)
-      .single();
+      .eq('user_id', userId);
+
+    if (isLessonBased) {
+      // Yeni eventler: lesson_id ile ara
+      query = query.eq('lesson_id', sectionId);
+    } else {
+      // Eski eventler: section_id ile ara, lesson_id NULL olmalı
+      query = query.eq('section_id', sectionId).is('lesson_id', null);
+    }
+
+    const { data, error } = await query.single();
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching user event lesson progress:', error);
@@ -316,7 +384,8 @@ export async function getUserEventLessonProgress(userId: string, sectionId: stri
 
     return data || {
       user_id: userId,
-      section_id: sectionId,
+      section_id: isLessonBased ? null : sectionId,
+      lesson_id: isLessonBased ? sectionId : null,
       watch_time_seconds: 0,
       is_completed: false,
       last_position_seconds: 0,
@@ -347,85 +416,126 @@ export async function updateUserEventProgress(userId: string, sectionId: string,
   try {
     console.log('Updating user event progress:', { userId, sectionId, progressData });
 
-    // First, get the event_id from the section
-    const { data: sectionData, error: sectionError } = await supabase
-      .from('myuni_event_sections')
-      .select('event_id')
+    let eventId: string | null = null;
+    let isLessonBased = false;
+    let lessonId: string | null = null;
+    let realSectionId: string | null = null;
+
+    // Step 1: sectionId parametresi bir lesson.id mi? (yeni event - lesson bazlı)
+    const { data: lessonData } = await supabase
+      .from('myuni_event_lessons')
+      .select('section_id')
       .eq('id', sectionId)
       .single();
 
-    if (sectionError) {
-      console.error('Error fetching section data:', sectionError);
-      throw sectionError;
+    if (lessonData?.section_id) {
+      // Lesson bazlı tracking (yeni eventler)
+      isLessonBased = true;
+      lessonId = sectionId;     // lesson_id kolonu
+      realSectionId = null;     // section_id NULL
+
+      const { data: secData } = await supabase
+        .from('myuni_event_sections')
+        .select('event_id')
+        .eq('id', lessonData.section_id)
+        .single();
+      if (secData?.event_id) eventId = secData.event_id;
     }
 
-    if (!sectionData) {
-      throw new Error('Section not found');
+    // Step 2: Fallback — sectionId bir section.id ise (eski eventler)
+    if (!eventId) {
+      const { data: sectionData } = await supabase
+        .from('myuni_event_sections')
+        .select('event_id')
+        .eq('id', sectionId)
+        .single();
+      if (sectionData?.event_id) {
+        eventId = sectionData.event_id;
+        isLessonBased = false;
+        lessonId = null;          // lesson_id NULL
+        realSectionId = sectionId; // section_id kolonu
+      }
+    }
+
+    if (!eventId) {
+      console.error('Could not resolve event_id for sectionId:', sectionId);
+      throw new Error('Section/Lesson not found or event_id could not be resolved');
     }
 
     const updateData: Record<string, unknown> = {
       user_id: userId,
-      event_id: sectionData.event_id,
-      section_id: sectionId,
+      event_id: eventId,
+      section_id: realSectionId,  // null for lesson-based (yeni eventler)
+      lesson_id: lessonId,         // null for section-based (eski eventler)
       updated_at: new Date().toISOString()
     };
 
-    // Add progress data fields
-    if (progressData.watch_time_seconds !== undefined) {
-      updateData.watch_time_seconds = progressData.watch_time_seconds;
-    }
-    if (progressData.is_completed !== undefined) {
-      updateData.is_completed = progressData.is_completed;
-    }
-    if (progressData.last_position_seconds !== undefined) {
-      updateData.last_position_seconds = progressData.last_position_seconds;
-    }
-    if (progressData.notes !== undefined) {
-      updateData.notes = progressData.notes;
-    }
-    if (progressData.quiz_score !== undefined) {
-      updateData.quiz_score = progressData.quiz_score;
-    }
-    if (progressData.quiz_attempts !== undefined) {
-      updateData.quiz_attempts = progressData.quiz_attempts;
-    }
-    if (progressData.last_quiz_attempt_at !== undefined) {
-      updateData.last_quiz_attempt_at = progressData.last_quiz_attempt_at;
-    }
-    if (progressData.video_watch_count !== undefined) {
-      updateData.video_watch_count = progressData.video_watch_count;
-    }
-    if (progressData.last_video_watch_at !== undefined) {
-      updateData.last_video_watch_at = progressData.last_video_watch_at;
-    }
+    if (progressData.watch_time_seconds !== undefined) updateData.watch_time_seconds = progressData.watch_time_seconds;
+    if (progressData.is_completed !== undefined) updateData.is_completed = progressData.is_completed;
+    if (progressData.last_position_seconds !== undefined) updateData.last_position_seconds = progressData.last_position_seconds;
+    if (progressData.notes !== undefined) updateData.notes = progressData.notes;
+    if (progressData.quiz_score !== undefined) updateData.quiz_score = progressData.quiz_score;
+    if (progressData.quiz_attempts !== undefined) updateData.quiz_attempts = progressData.quiz_attempts;
+    if (progressData.last_quiz_attempt_at !== undefined) updateData.last_quiz_attempt_at = progressData.last_quiz_attempt_at;
+    if (progressData.video_watch_count !== undefined) updateData.video_watch_count = progressData.video_watch_count;
+    if (progressData.last_video_watch_at !== undefined) updateData.last_video_watch_at = progressData.last_video_watch_at;
+    if (progressData.is_completed) updateData.completed_at = new Date().toISOString();
 
-    if (progressData.is_completed) {
-      updateData.completed_at = new Date().toISOString();
-    }
+    console.log('Final update data (isLessonBased:', isLessonBased, '):', updateData);
 
-    console.log('Final update data:', updateData);
-
-    const { data, error } = await supabase
+    // Mevcut satırı bul: lesson veya section bazlı
+    let existingQuery = supabase
       .from('myuni_event_user_progress')
-      .upsert(updateData, {
-        onConflict: 'user_id,event_id,section_id',
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
+      .select('id')
+      .eq('user_id', userId);
+
+    if (isLessonBased) {
+      existingQuery = existingQuery.eq('lesson_id', lessonId!);
+    } else {
+      existingQuery = existingQuery.eq('section_id', realSectionId!).is('lesson_id', null);
+    }
+
+    const { data: existingRow } = await existingQuery.single();
+
+    let data, error;
+
+    if (existingRow?.id) {
+      ({ data, error } = await supabase
+        .from('myuni_event_user_progress')
+        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .eq('id', existingRow.id)
+        .select()
+        .single());
+    } else {
+      ({ data, error } = await supabase
+        .from('myuni_event_user_progress')
+        .insert(updateData)
+        .select()
+        .single());
+    }
 
     if (error) {
-      console.error('Error updating user event progress:', error);
-      throw error;
+      console.error('❌ Error saving event progress:', {
+        message: (error as any).message,
+        code: (error as any).code,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        isLessonBased,
+        lessonId,
+        realSectionId
+      });
+      return null;
     }
 
-    console.log('Successfully updated user event progress:', data);
+    console.log('✅ Successfully updated user event progress:', data);
     return data;
-  } catch (error) {
-    console.error('Error updating user event progress:', error);
-    throw error;
+  } catch (err) {
+    console.error('❌ Exception in updateUserEventProgress:', err);
+    return null;
   }
 }
+
+
 
 // ========================================
 // EVENT MANAGEMENT
@@ -447,19 +557,13 @@ export async function getEventWithContent(eventSlug: string) {
 
     // Get sections and ensure they use notes
     const sections = await getEventSections(event.id);
-    
+
     // Transform sections to match expected interface
     const transformedSections = sections.map(section => ({
       id: section.id,
       title: section.title,
       order_index: section.order_index,
-      lessons: [{
-        id: section.id,
-        title: section.title,
-        lesson_type: 'notes', // Always notes for events
-        duration_minutes: section.duration_minutes,
-        order_index: section.order_index
-      }]
+      lessons: section.lessons
     }));
 
     return {
@@ -513,7 +617,7 @@ export async function getFeaturedEvents(locale: string = 'tr') {
 
     const transformedEvents = data?.map(event => {
       const actualAttendeeCount = enrollmentCountMap.get(event.id) || 0;
-      
+
       return {
         id: event.id,
         slug: event.slug,
@@ -616,7 +720,7 @@ export async function getEventsForFilter(locale: string = 'tr') {
     // Transform data to match EventListFilter component expectations
     const transformedEvents = data.map(event => {
       const actualAttendeeCount = enrollmentCountMap.get(event.id) || 0;
-      
+
       return {
         id: event.id,
         slug: event.slug,
@@ -712,7 +816,7 @@ export async function getAllEvents(locale: string = 'tr') {
 
     const transformedEvents = data?.map(event => {
       const actualAttendeeCount = enrollmentCountMap.get(event.id) || 0;
-      
+
       return {
         id: event.id,
         slug: event.slug,
@@ -783,7 +887,7 @@ export async function getEventBySlug(slug: string, locale: string = 'tr') {
       console.error('Supabase error fetching event by slug:', error);
       throw error;
     }
-    
+
     if (!data) {
       console.log('No event found with slug:', slug);
       return null;
@@ -932,12 +1036,12 @@ export async function markEventLessonCompleted(userId: string, sectionId: string
 export async function getEventCompletionStats(userId: string, eventId: string) {
   try {
     const progressData = await getUserEventProgress(userId, eventId);
-    
+
     const totalLessons = progressData.length;
     const completedLessons = progressData.filter(p => p.is_completed).length;
     const totalWatchTime = progressData.reduce((acc, p) => acc + (p.watch_time_seconds || 0), 0);
-    
-    const completionPercentage = totalLessons > 0 ? 
+
+    const completionPercentage = totalLessons > 0 ?
       Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
 
     return {
@@ -964,10 +1068,10 @@ export async function getUserEventAnalytics(userId: string, eventId: string) {
 
     // Get user's event progress
     const progress = await getUserEventProgress(userId, eventId);
-    
+
     // Get user's enrollment info
     const enrollment = await getUserEventEnrollment(userId, eventId);
-    
+
     // Generate analytics data
     const analytics = await generateUserEventAnalytics(userId, eventId);
 
@@ -1000,12 +1104,12 @@ async function generateUserEventAnalytics(userId: string, eventId: string) {
     // Generate daily analytics for the last 30 days
     const analytics = [];
     const today = new Date();
-    
+
     for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dateString = date.toISOString().split('T')[0];
-      
+
       // Find progress updates for this day
       const dayProgress = progressData?.filter(p => {
         const progressDate = new Date(p.updated_at || p.created_at).toISOString().split('T')[0];
@@ -1013,16 +1117,16 @@ async function generateUserEventAnalytics(userId: string, eventId: string) {
       }) || [];
 
       // Calculate daily metrics
-      const totalWatchTimeMinutes = dayProgress.reduce((acc, p) => 
+      const totalWatchTimeMinutes = dayProgress.reduce((acc, p) =>
         acc + Math.floor((p.watch_time_seconds || 0) / 60), 0
       );
-      
-      const lessonsCompleted = dayProgress.filter(p => 
-        p.is_completed && p.completed_at && 
+
+      const lessonsCompleted = dayProgress.filter(p =>
+        p.is_completed && p.completed_at &&
         new Date(p.completed_at).toISOString().split('T')[0] === dateString
       ).length;
 
-      const notesCreated = dayProgress.filter(p => 
+      const notesCreated = dayProgress.filter(p =>
         p.notes && p.notes.trim().length > 0
       ).length;
 
@@ -1066,7 +1170,7 @@ export async function getLatestEventQuizResult(userId: string, sectionId: string
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    
+
     if (!data || data.quiz_score === null) return null;
 
     return {
@@ -1124,7 +1228,7 @@ function generateEventFeatures(locale: string) {
   const features = {
     tr: [
       "İnteraktif içerik",
-      "Uzman eğitmenler", 
+      "Uzman eğitmenler",
       "Sertifika desteği",
       "Canlı Q&A seansları",
       "Networking fırsatları",
@@ -1135,7 +1239,7 @@ function generateEventFeatures(locale: string) {
     en: [
       "Interactive content",
       "Expert instructors",
-      "Certificate support", 
+      "Certificate support",
       "Live Q&A sessions",
       "Networking opportunities",
       "Recording access",

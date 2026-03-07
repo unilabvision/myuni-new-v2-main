@@ -2,12 +2,13 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { 
-  Play, 
-  FileText, 
-  Zap, 
-  ChevronRight, 
-  ChevronDown, 
+import { useUser } from '@clerk/nextjs';
+import {
+  Play,
+  FileText,
+  Zap,
+  ChevronRight,
+  ChevronDown,
   Clock,
   CheckCircle,
   Circle,
@@ -22,10 +23,10 @@ import {
   MapPin
 } from 'lucide-react';
 
-import { 
-  checkEventCertificateEligibility, 
-  getUserEventCertificate, 
-  generateCertificateWithProgress 
+import {
+  checkEventCertificateEligibility,
+  getUserEventCertificate,
+  generateCertificateWithProgress
 } from '../../../lib/certificateService';
 
 import { getUserEventProgress } from '../../../lib/eventService';
@@ -116,6 +117,7 @@ interface EventSidebarProps {
     cancelled: string;
   };
   onProgressUpdate?: () => void;
+  onProgressDataUpdate?: (data: { progress: number; completedLessons: number; totalLessons: number }) => void;
   progressUpdateTrigger?: number;
 }
 
@@ -129,7 +131,7 @@ const sanitizeText = (text: string): string => {
 
 const isValidCertificateNumber = (certNumber: string): boolean => {
   if (!certNumber || typeof certNumber !== 'string') return false;
-  
+
   const cleanNumber = certNumber.trim().toUpperCase();
   const patterns = [
     /^MUNI\d{4}-\d{6}-\d{4}-[A-Z]{3}-[A-Z0-9]{5}(-\d+)?$/,
@@ -138,7 +140,7 @@ const isValidCertificateNumber = (certNumber: string): boolean => {
     /^CERT-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/,
     /^[A-Z0-9\-_]{8,50}$/
   ];
-  
+
   return patterns.some(pattern => pattern.test(cleanNumber));
 };
 
@@ -166,13 +168,13 @@ const sendCertificateCompletionEmail = async (
     });
 
     const result = await response.json();
-    return response.ok && result.success 
-      ? { success: true } 
+    return response.ok && result.success
+      ? { success: true }
       : { success: false, error: result.error || 'Email gönderim hatası' };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Email gönderilemedi' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Email gönderilemedi'
     };
   }
 };
@@ -190,9 +192,11 @@ export default function EventSidebar({
   userId,
   texts,
   onProgressUpdate,
+  onProgressDataUpdate,
   progressUpdateTrigger
 }: EventSidebarProps) {
-  
+  const { user } = useUser();
+
   // Filter states
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -231,7 +235,7 @@ export default function EventSidebar({
 
       const progressData = await getUserEventProgress(userId, event.id);
       const progressMap = new Map<string, LessonProgress>();
-      
+
       // Map progress data using section_id
       progressData.forEach(progress => {
         progressMap.set(progress.section_id, {
@@ -245,7 +249,7 @@ export default function EventSidebar({
 
       setSectionProgressMap(progressMap);
       setLastProgressUpdate(Date.now());
-      
+
       if (onProgressUpdate) {
         onProgressUpdate();
       }
@@ -257,11 +261,13 @@ export default function EventSidebar({
   }, [userId, event?.id, progressLoading, onProgressUpdate]);
 
   // Progress trigger effect
+  const prevTriggerRef = useRef(progressUpdateTrigger);
   useEffect(() => {
-    if (progressUpdateTrigger && progressUpdateTrigger !== lastProgressUpdate) {
+    if (progressUpdateTrigger && progressUpdateTrigger !== prevTriggerRef.current) {
+      prevTriggerRef.current = progressUpdateTrigger;
       loadUserProgress();
     }
-  }, [progressUpdateTrigger, lastProgressUpdate, loadUserProgress]);
+  }, [progressUpdateTrigger, loadUserProgress]);
 
   // Initial progress load
   useEffect(() => {
@@ -270,17 +276,16 @@ export default function EventSidebar({
     }
   }, [userId, event?.id, loadUserProgress]);
 
-  // Event with progress - updated to use section progress mapping
+  // Event with progress - per-lesson tracking using lesson.id
+  // Progress is stored in DB with section_id = lesson.id (per-lesson), so we look up by lesson.id
   const eventWithProgress = useMemo(() => {
     if (!event || sectionProgressMap.size === 0) return event;
 
     const updatedSections = event.sections.map(section => {
-      // For events, section.id maps to section_id in progress table
-      const progress = sectionProgressMap.get(section.id);
-      
-      // For events, each section typically has one lesson that represents the section content
+      // Each lesson has its own progress row keyed by lesson.id (stored as section_id in DB)
       const updatedLessons = section.lessons.map(lesson => {
-        // Use the section progress for the lesson since in events, lessons are really just section representations
+        // First try lesson.id (per-lesson tracking), then fall back to section.id (legacy)
+        const progress = sectionProgressMap.get(lesson.id) || sectionProgressMap.get(section.id);
         return {
           ...lesson,
           isCompleted: progress?.is_completed || false,
@@ -296,7 +301,7 @@ export default function EventSidebar({
     const allLessons = updatedSections.flatMap(section => section.lessons);
     const completedCount = allLessons.filter(lesson => lesson.isCompleted).length;
     const totalCount = allLessons.length;
-    const progressPercentage = totalCount > 0 ? 
+    const progressPercentage = totalCount > 0 ?
       Math.min(100, Math.round((completedCount / totalCount) * 100)) : 0;
 
     return {
@@ -308,12 +313,25 @@ export default function EventSidebar({
     };
   }, [event, sectionProgressMap]);
 
+  // Notify parent of real-time progress changes
+  const onProgressDataUpdateRef = React.useRef<typeof onProgressDataUpdate>(undefined);
+  onProgressDataUpdateRef.current = onProgressDataUpdate;
+  useEffect(() => {
+    if (eventWithProgress && onProgressDataUpdateRef.current) {
+      onProgressDataUpdateRef.current({
+        progress: eventWithProgress.progress,
+        completedLessons: eventWithProgress.completedLessons,
+        totalLessons: eventWithProgress.totalLessons
+      });
+    }
+  }, [eventWithProgress?.progress, eventWithProgress?.completedLessons, eventWithProgress?.totalLessons]);
+
   // Device detection
   useEffect(() => {
     const checkDevice = () => {
       setIsMobileDevice(window.innerWidth < 1024);
     };
-    
+
     checkDevice();
     window.addEventListener('resize', checkDevice);
     return () => window.removeEventListener('resize', checkDevice);
@@ -370,7 +388,7 @@ export default function EventSidebar({
       document.body.style.position = '';
       document.body.style.width = '';
       document.body.style.height = '';
-      
+
       document.removeEventListener('touchstart', handleTouchStart);
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
@@ -380,27 +398,27 @@ export default function EventSidebar({
   // Certificate status check
   const checkCertificateStatus = useCallback(async () => {
     if (!userId || !eventWithProgress) return;
-    
+
     if (typeof userId !== 'string' || userId.length === 0) {
       console.error('Invalid userId provided');
       return;
     }
-    
+
     if (!eventWithProgress.id || typeof eventWithProgress.id !== 'string') {
       console.error('Invalid event ID provided');
       return;
     }
-    
+
     if (certificateChecked && lastCheckProgress === eventWithProgress.progress && !generating) {
       return;
     }
-    
+
     try {
       setCertificateLoading(true);
-      
+
       const eligibility = await checkEventCertificateEligibility(userId, eventWithProgress.id);
       setCertificateEligible(Boolean(eligibility?.isEligible));
-      
+
       if (eligibility?.isEligible || eligibility?.existingCertificate) {
         const certificate = await getUserEventCertificate(userId, eventWithProgress.id);
         if (certificate?.certificate_number) {
@@ -412,10 +430,10 @@ export default function EventSidebar({
           }
         }
       }
-      
+
       setCertificateChecked(true);
       setLastCheckProgress(eventWithProgress.progress);
-      
+
     } catch (error) {
       console.error('Certificate status check error:', error);
       setError('Sertifika durumu kontrol edilemedi. Lütfen daha sonra tekrar deneyin.');
@@ -440,7 +458,7 @@ export default function EventSidebar({
     } else if (eventWithProgress?.progress >= 50 && !certificateSectionExpanded) {
       setCertificateSectionExpanded(true);
     }
-    
+
     // Otomatik scroll özelliğini kaldırdık - sorun çözülmesi için
   }, [existingCertificate, certificateEligible, eventWithProgress?.progress, certificateSectionExpanded, isMobileDevice]);
 
@@ -462,54 +480,48 @@ export default function EventSidebar({
       setGenerating(true);
       setError(null);
       setCertificateEligible(false);
-      
+
       const eligibility = await checkEventCertificateEligibility(userId, eventWithProgress.id);
-      
+
       if (!eligibility?.isEligible) {
         if (!eligibility?.missingRequirements || !Array.isArray(eligibility.missingRequirements)) {
           throw new Error('Sertifika gereksinimleri tamamlanmamış');
         }
-        
+
         const sanitizedRequirements = eligibility.missingRequirements
           .map(req => sanitizeText(req))
           .filter(req => req.length > 0)
           .slice(0, 10);
-        
+
         throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış:\n• ' + sanitizedRequirements.join('\n• '));
       }
-      
+
       // Get user info
       let userFullName = 'Değerli Katılımcı';
       let userEmail = '';
-      
-      try {
-        if (typeof window !== 'undefined' && (window as any).Clerk?.user) {
-          const user = (window as any).Clerk.user;
-          
-          if (user.emailAddresses?.[0]?.emailAddress) {
-            const email = user.emailAddresses[0].emailAddress;
-            if (email && typeof email === 'string' && email.includes('@')) {
-              userEmail = sanitizeText(email);
-            }
-          }
-          
-          const firstName = user.firstName ? sanitizeText(user.firstName) : '';
-          const lastName = user.lastName ? sanitizeText(user.lastName) : '';
-          const fullName = `${firstName} ${lastName}`.trim();
-          
-          if (fullName && fullName.length >= 2 && fullName.length <= 100) {
-            userFullName = fullName;
-          } else if (userEmail) {
-            const nameFromEmail = sanitizeText(userEmail.split('@')[0].replace(/[._-]/g, ' '));
-            if (nameFromEmail.length >= 2 && nameFromEmail.length <= 50) {
-              userFullName = nameFromEmail;
-            }
+
+      if (user) {
+        if (user.primaryEmailAddress?.emailAddress) {
+          const email = user.primaryEmailAddress.emailAddress;
+          if (email && typeof email === 'string' && email.includes('@')) {
+            userEmail = sanitizeText(email);
           }
         }
-      } catch (clerkError) {
-        console.log('Client-side Clerk error (using fallback):', clerkError);
+
+        const firstName = user.firstName ? sanitizeText(user.firstName) : '';
+        const lastName = user.lastName ? sanitizeText(user.lastName) : '';
+        const fullName = `${firstName} ${lastName}`.trim();
+
+        if (fullName && fullName.length >= 2 && fullName.length <= 100) {
+          userFullName = fullName;
+        } else if (userEmail) {
+          const nameFromEmail = sanitizeText(userEmail.split('@')[0].replace(/[._-]/g, ' '));
+          if (nameFromEmail.length >= 2 && nameFromEmail.length <= 50) {
+            userFullName = nameFromEmail;
+          }
+        }
       }
-      
+
       const eventData = {
         userId: sanitizeText(userId),
         itemId: sanitizeText(eventWithProgress.id),
@@ -534,13 +546,13 @@ export default function EventSidebar({
       }
 
       const cleanCertNumber = newCertificate.certificate_number.trim();
-      
+
       if (!isValidCertificateNumber(cleanCertNumber)) {
         console.warn('⚠️ Certificate number has unexpected format but proceeding:', cleanCertNumber);
       }
 
       const finalCertificate = { ...newCertificate, certificate_number: cleanCertNumber };
-      
+
       // Send email
       if (userEmail) {
         try {
@@ -557,17 +569,17 @@ export default function EventSidebar({
           setError('Sertifika oluşturuldu ancak email gönderilemedi.');
         }
       }
-      
+
       setExistingCertificate(finalCertificate);
       setCertificateEligible(false);
       setCertificateChecked(false);
-      
+
     } catch (error) {
       console.error('❌ Sertifika oluşturma hatası:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
       setCertificateEligible(true);
-      
+
       if (errorMessage.includes('RLS') || errorMessage.includes('policy')) {
         setError('Sertifika oluşturmak için yetki hatası.');
       } else if (errorMessage.includes('gerekli koşullar')) {
@@ -587,12 +599,12 @@ export default function EventSidebar({
   useEffect(() => {
     if (eventWithProgress?.progress >= 70 && userId && !existingCertificate && !generating && certificateChecked) {
       console.log('🎯 Auto-generating certificate for 70% event completion');
-      
+
       // Small delay to ensure all state is properly updated before generating
       const timer = setTimeout(() => {
         handleGenerateCertificate();
       }, 1500);
-      
+
       return () => clearTimeout(timer);
     }
   }, [eventWithProgress?.progress, userId, existingCertificate, generating, certificateChecked]);
@@ -603,10 +615,10 @@ export default function EventSidebar({
       setError('Geçersiz sertifika numarası');
       return;
     }
-    
+
     const cleanNumber = certificateNumber.trim();
     const certificateUrl = `https://certificates.myunilab.net/${encodeURIComponent(cleanNumber)}`;
-    
+
     try {
       const url = new URL(certificateUrl);
       if (url.protocol === 'https:' && url.hostname === 'certificates.myunilab.net') {
@@ -650,7 +662,7 @@ export default function EventSidebar({
         badgeColor: 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30'
       };
     }
-    
+
     // Event'ler için %70+ tamamlama oranı yeterli
     if (certificateEligible || eventWithProgress?.progress >= 70) {
       return {
@@ -661,7 +673,7 @@ export default function EventSidebar({
         badgeColor: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30'
       };
     }
-    
+
     if (eventWithProgress?.progress >= 50) {
       return {
         status: 'close',
@@ -671,7 +683,7 @@ export default function EventSidebar({
         badgeColor: 'text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30'
       };
     }
-    
+
     return {
       status: 'in_progress',
       icon: Circle,
@@ -689,12 +701,12 @@ export default function EventSidebar({
   // Format event date
   const formatEventDate = (dateString?: string | null) => {
     if (!dateString) return '';
-    
+
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('tr-TR', { 
-        day: 'numeric', 
-        month: 'short', 
+      return date.toLocaleDateString('tr-TR', {
+        day: 'numeric',
+        month: 'short',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
@@ -873,7 +885,7 @@ export default function EventSidebar({
           </div>
         );
       }
-      
+
       // Regular UI for eligible but not at 70% yet
       return (
         <div className="space-y-3">
@@ -923,7 +935,7 @@ export default function EventSidebar({
                 </span>
               </div>
               <div className="w-full bg-orange-100 dark:bg-orange-800/30 rounded-full h-1.5">
-                <div 
+                <div
                   className="bg-orange-600 h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(100, Math.max(0, eventWithProgress?.progress || 0))}%` }}
                 />
@@ -959,7 +971,7 @@ export default function EventSidebar({
               </span>
             </div>
             <div className="w-full bg-blue-100 dark:bg-blue-800/30 rounded-full h-1.5">
-              <div 
+              <div
                 className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(100, Math.max(0, eventWithProgress?.progress || 0))}%` }}
               />
@@ -1007,10 +1019,10 @@ export default function EventSidebar({
           }
         }
       `}</style>
-      
+
       {/* Backdrop */}
       {sidebarOpen && (
-        <div 
+        <div
           ref={backdropRef}
           className="fixed inset-0 bg-black/20 z-40 lg:hidden transition-opacity duration-300"
           onClick={handleBackdropClick}
@@ -1021,23 +1033,22 @@ export default function EventSidebar({
           }}
         />
       )}
-      
+
       {/* Sidebar */}
-      <div 
+      <div
         ref={sidebarRef}
-        className={`${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        } fixed left-0 top-0 h-screen w-80 z-50 lg:relative lg:z-auto lg:h-full transition-transform duration-300 ease-out bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col overflow-hidden
+        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          } fixed left-0 top-0 h-screen w-80 z-50 lg:relative lg:z-auto lg:h-full transition-transform duration-300 ease-out bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col overflow-hidden
         ${isMobileDevice ? 'rounded-t-2xl max-h-[92vh] h-[92vh] top-[8vh]' : ''}`}
       >
-      
+
         {/* Header */}
         <div className="flex-shrink-0 p-4 lg:p-6 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-medium text-neutral-900 dark:text-neutral-100 text-lg truncate pr-2">
               {sanitizeText(displayEvent.title || '')}
             </h1>
-            <button 
+            <button
               onClick={onSidebarClose}
               className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors lg:hidden flex-shrink-0"
               aria-label="Close sidebar"
@@ -1045,12 +1056,12 @@ export default function EventSidebar({
               <X className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
             </button>
           </div>
-          
+
           <div className="space-y-2 text-sm">
             <p className="text-neutral-600 dark:text-neutral-400 truncate">
               {texts.organizer}: {sanitizeText(displayEvent.organizer || '')}
             </p>
-            
+
             {/* Event Info */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="flex items-center space-x-1">
@@ -1072,16 +1083,15 @@ export default function EventSidebar({
               <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
                 {displayEvent.event_type ? texts[displayEvent.event_type] || displayEvent.event_type : texts.workshop}
               </span>
-              <span className={`px-2 py-1 text-xs font-medium rounded ${
-                displayEvent.status === 'upcoming' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
+              <span className={`px-2 py-1 text-xs font-medium rounded ${displayEvent.status === 'upcoming' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
                 displayEvent.status === 'ongoing' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                displayEvent.status === 'completed' ? 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300' :
-                'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-              }`}>
+                  displayEvent.status === 'completed' ? 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300' :
+                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                }`}>
                 {displayEvent.status ? texts[displayEvent.status] || displayEvent.status : texts.upcoming}
               </span>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <span className="text-neutral-600 dark:text-neutral-400">{texts.progress}</span>
               <span className="font-medium text-neutral-900 dark:text-neutral-100">
@@ -1089,7 +1099,7 @@ export default function EventSidebar({
               </span>
             </div>
             <div className="w-full bg-neutral-200 dark:bg-neutral-800 rounded-full h-2">
-              <div 
+              <div
                 className="bg-green-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(100, Math.max(0, displayEvent.progress || 0))}%` }}
               ></div>
@@ -1101,21 +1111,19 @@ export default function EventSidebar({
         <div className="flex-shrink-0 flex border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
           <button
             onClick={() => onViewChange('content')}
-            className={`flex-1 px-3 lg:px-4 py-3 text-sm font-medium transition-colors ${
-              activeView === 'content'
-                ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
-                : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-            }`}
+            className={`flex-1 px-3 lg:px-4 py-3 text-sm font-medium transition-colors ${activeView === 'content'
+              ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
           >
             <span className="truncate">{texts.eventContent}</span>
           </button>
           <button
             onClick={() => onViewChange('analytics')}
-            className={`flex-1 px-3 lg:px-4 py-3 text-sm font-medium transition-colors ${
-              activeView === 'analytics'
-                ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
-                : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-            }`}
+            className={`flex-1 px-3 lg:px-4 py-3 text-sm font-medium transition-colors ${activeView === 'analytics'
+              ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
           >
             <span className="truncate">{texts.analytics}</span>
           </button>
@@ -1141,11 +1149,10 @@ export default function EventSidebar({
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                  activeFilter !== 'all' || showFilters
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
-                }`}
+                className={`flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-colors ${activeFilter !== 'all' || showFilters
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 <span>Filtrele</span>
@@ -1172,11 +1179,10 @@ export default function EventSidebar({
                   <button
                     key={filter.key}
                     onClick={() => handleFilterChange(filter.key as FilterType)}
-                    className={`flex items-center justify-between p-2 text-xs rounded transition-colors ${
-                      activeFilter === filter.key
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                        : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
-                    }`}
+                    className={`flex items-center justify-between p-2 text-xs rounded transition-colors ${activeFilter === filter.key
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-600'
+                      }`}
                   >
                     <div className="flex items-center space-x-1.5 flex-1">
                       {filter.icon}
@@ -1202,7 +1208,7 @@ export default function EventSidebar({
                   İçerik bulunamadı
                 </h3>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  {searchTerm 
+                  {searchTerm
                     ? `"${searchTerm}" araması için sonuç bulunamadı`
                     : 'Bu filtre için içerik bulunamadı'
                   }
@@ -1237,16 +1243,15 @@ export default function EventSidebar({
                         <ChevronRight className="w-4 h-4 text-neutral-400 flex-shrink-0" />
                       )}
                     </button>
-                    
+
                     {expandedSections[section.id] && (
                       <div className="bg-neutral-50 dark:bg-neutral-800">
                         {section.lessons.map((lesson) => (
                           <button
                             key={lesson.id}
                             onClick={() => onLessonSelect(lesson)}
-                            className={`w-full flex items-center space-x-3 p-4 text-left hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ${
-                              selectedLesson?.id === lesson.id ? 'bg-neutral-100 dark:bg-neutral-700 border-l-2 border-blue-500' : ''
-                            }`}
+                            className={`w-full flex items-center space-x-3 p-4 text-left hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ${selectedLesson?.id === lesson.id ? 'bg-neutral-100 dark:bg-neutral-700 border-l-2 border-blue-500' : ''
+                              }`}
                           >
                             <div className="flex-shrink-0">
                               {lesson.isCompleted ? (
@@ -1255,7 +1260,7 @@ export default function EventSidebar({
                                 <Circle className="w-5 h-5 text-neutral-400" />
                               )}
                             </div>
-                            
+
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 mb-1">
                                 {getContentIcon(lesson.type)}
@@ -1306,7 +1311,7 @@ export default function EventSidebar({
                         <ChevronRight className="w-4 h-4 text-neutral-400 flex-shrink-0" />
                       )}
                     </button>
-                    
+
                     {certificateSectionExpanded && (
                       <div className="bg-neutral-50 dark:bg-neutral-800 p-4">
                         {error && (
@@ -1319,7 +1324,7 @@ export default function EventSidebar({
                     )}
                   </div>
                 )}
-                
+
                 {/* Mobil cihazlar için ekstra boşluk */}
                 {isMobileDevice && (
                   <div className="pb-40 lg:pb-0 mobile-safe-area">

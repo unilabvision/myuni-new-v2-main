@@ -68,9 +68,9 @@ interface SimilarEvent {
   max_attendees: number | null;
 }
 
-const EventSidebar: React.FC<EventSidebarProps> = ({ 
-  event = {} as Event, 
-  slug = 'event-slug', 
+const EventSidebar: React.FC<EventSidebarProps> = ({
+  event = {} as Event,
+  slug = 'event-slug',
   locale = 'tr'
 }) => {
   const router = useRouter();
@@ -80,16 +80,16 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   const [latestEvents, setLatestEvents] = useState<SimilarEvent[]>([]);
   const [loadingLatestEvents, setLoadingLatestEvents] = useState(true);
   const [imageError, setImageError] = useState(false);
-  
+
   const tooltipRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
 
   // Dinamik katılımcı sayısı için state
   const [attendeeCountLocal, setAttendeeCountLocal] = useState<number>(event.current_attendees || 0);
-  
+
   // Mobil sabit buton için state
   const [showMobileSticky, setShowMobileSticky] = useState(true);
-  
+
   // Scroll pozisyonunu izlemek için effect
   useEffect(() => {
     const handleScroll = () => {
@@ -98,7 +98,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
         setShowMobileSticky(true);
       }
     };
-    
+
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -106,7 +106,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   // Katılımcı sayısını dinamik olarak getir
   const updateAttendeeCount = useCallback(async () => {
     if (!event.id) return;
-    
+
     try {
       const realCount = await getEventAttendeeCount(event.id);
       setAttendeeCountLocal(realCount);
@@ -129,7 +129,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
         setIsUserRegistered(false);
         return;
       }
-      
+
       try {
         const { data, error } = await supabase
           .from('myuni_event_enrollments')
@@ -137,18 +137,18 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           .eq('user_id', user.id)
           .eq('event_id', event.id)
           .single();
-          
+
         if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
           console.error('Error checking registration:', error);
         }
-        
+
         setIsUserRegistered(!!data);
       } catch (error) {
         console.error('Error checking user registration status:', error);
         setIsUserRegistered(false);
       }
     };
-    
+
     checkUserRegistration();
   }, [isSignedIn, user, event.id]);
 
@@ -162,7 +162,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
     const iconCenter = iconRect.left + iconRect.width / 2;
     const tooltipWidth = 288;
-    
+
     const leftPosition = iconCenter - tooltipWidth / 2;
     const rightPosition = leftPosition + tooltipWidth;
 
@@ -198,16 +198,16 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   const fetchLatestEvents = useCallback(async () => {
     try {
       setLoadingLatestEvents(true);
-      
+
       const events = await getAllEvents(locale);
-      
+
       // Mevcut etkinlik hariç, aktif ve kayıt açık etkinlikleri filtrele
       const validEvents = events
-        .filter((eventItem: Event) => 
-          eventItem.id !== event.id && 
-          eventItem.is_active && 
+        .filter((eventItem: Event) =>
+          eventItem.id !== event.id &&
+          eventItem.is_active &&
           eventItem.is_registration_open &&
-          eventItem.slug && 
+          eventItem.slug &&
           eventItem.slug.trim() !== ''
         )
         .slice(0, 3);
@@ -227,7 +227,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           }
         })
       );
-      
+
       setLatestEvents(eventsWithDynamicCount as SimilarEvent[]);
     } catch (error) {
       console.error('Error fetching latest events:', error);
@@ -245,7 +245,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
   const handleLatestEventClick = (eventSlug: string) => {
     if (!eventSlug) return;
-    
+
     const eventRoute = locale === 'tr' ? 'etkinlik' : 'event';
     const url = `/${locale}/${eventRoute}/${eventSlug}`;
     router.push(url);
@@ -272,31 +272,31 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   // Tarih aralığını formatlayan yeni fonksiyon
   const formatDateRange = (startDate: string, endDate?: string | null) => {
     const start = new Date(startDate);
-    
+
     if (!endDate) {
       return formatDate(startDate);
     }
-    
+
     const end = new Date(endDate);
-    
+
     // Aynı gün mü kontrol et
     const sameDay = start.toDateString() === end.toDateString();
-    
+
     if (sameDay) {
       return formatDate(startDate);
     }
-    
+
     // Aynı ay mı kontrol et
     const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-    
+
     if (sameMonth) {
       const startDay = start.getDate();
       const endFormatted = formatDate(endDate);
-      return locale === 'tr' 
+      return locale === 'tr'
         ? `${startDay} - ${endFormatted}`
         : `${startDay} - ${endFormatted}`;
     }
-    
+
     // Farklı aylar
     const startFormatted = formatDate(startDate);
     const endFormatted = formatDate(endDate);
@@ -313,18 +313,18 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
   const formatDuration = (minutes: number | null) => {
     if (!minutes) return locale === 'tr' ? '2 saat' : '2 hours';
-    
+
     if (minutes < 60) {
       return `${minutes} ${locale === 'tr' ? 'dakika' : 'minutes'}`;
     }
-    
+
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     if (remainingMinutes === 0) {
       return `${hours} ${locale === 'tr' ? 'saat' : 'hours'}`;
     }
-    
+
     return `${hours}:${remainingMinutes.toString().padStart(2, '0')} ${locale === 'tr' ? 'saat' : 'hours'}`;
   };
 
@@ -357,7 +357,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   // Tooltip classes
   const getTooltipClasses = () => {
     const baseClasses = "absolute bottom-full mb-2 w-72 p-3 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded-sm shadow-lg z-50 border border-neutral-700 dark:border-neutral-600";
-    
+
     switch (tooltipPosition) {
       case 'left':
         return `${baseClasses} left-0`;
@@ -370,7 +370,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
   const getArrowClasses = () => {
     const baseClasses = "absolute top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-neutral-900 dark:border-t-neutral-700";
-    
+
     switch (tooltipPosition) {
       case 'left':
         return `${baseClasses} left-4`;
@@ -394,7 +394,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   };
 
   const handleRegistrationError = (error: string) => {
-    // You can show a toast notification here
+    // eslint-disable-next-line no-console
     console.error('Registration error:', error);
     alert(error);
   };
@@ -416,9 +416,9 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                 {formatPrice(event.price, event.is_paid)}
               </span>
             </div>
-            
+
             <div className="w-16 h-px bg-[#990000] mb-3"></div>
-            
+
             <div className="inline-block bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-3 py-1 rounded-sm text-sm">
               {getEventTypeText(event.event_type)}
             </div>
@@ -432,16 +432,16 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                 <Calendar className="w-4 h-4" />
                 <span>{locale === 'tr' ? 'Tarih' : 'Date'}</span>
                 <div className="relative" ref={iconRef}>
-                  <Info 
+                  <Info
                     className="w-3 h-3 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 cursor-help transition-colors"
                     onMouseEnter={() => setShowDateTooltip(true)}
                     onMouseLeave={() => setShowDateTooltip(false)}
                     onClick={() => setShowDateTooltip(!showDateTooltip)}
                   />
-                  
+
                   {showDateTooltip && (
                     <>
-                      <div 
+                      <div
                         ref={tooltipRef}
                         className={getTooltipClasses()}
                       >
@@ -476,9 +476,9 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                         </div>
                         <div className={getArrowClasses()}></div>
                       </div>
-                      
-                      <div 
-                        className="fixed inset-0 z-40 md:hidden" 
+
+                      <div
+                        className="fixed inset-0 z-40 md:hidden"
                         onClick={() => setShowDateTooltip(false)}
                       />
                     </>
@@ -499,8 +499,8 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                 <span>{locale === 'tr' ? 'Konum' : 'Location'}</span>
               </span>
               <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                {event.is_online ? 
-                  (locale === 'tr' ? 'Online' : 'Online') : 
+                {event.is_online ?
+                  (locale === 'tr' ? 'Online' : 'Online') :
                   (event.location_name || (locale === 'tr' ? 'Yüz Yüze' : 'In-person'))
                 }
               </span>
@@ -511,7 +511,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
           {/* EventForm - Mobil görünümde gizlenecek */}
           <div className="md:block hidden">
-            <EventForm 
+            <EventForm
               event={{
                 ...event,
                 current_attendees: attendeeCountLocal // Dinamik değeri geç
@@ -529,7 +529,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           <h3 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-4">
             {locale === 'tr' ? 'Diğer Etkinlikler' : 'Other Events'}
           </h3>
-          
+
           {loadingLatestEvents ? (
             <div className="space-y-3">
               {[1, 2, 3].map((index) => (
@@ -547,15 +547,15 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           ) : latestEvents.length > 0 ? (
             <div className="space-y-3">
               {latestEvents.map((latestEvent) => (
-                <div 
+                <div
                   key={`latest-${latestEvent.id}`}
                   onClick={() => handleLatestEventClick(latestEvent.slug)}
                   className="flex items-center space-x-3 p-3 bg-neutral-50 dark:bg-neutral-700/50 rounded-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
                 >
                   <div className="w-12 h-8 bg-neutral-200 dark:bg-neutral-600 rounded-sm flex-shrink-0 overflow-hidden relative">
                     {latestEvent.thumbnail_url ? (
-                      <Image 
-                        src={latestEvent.thumbnail_url} 
+                      <Image
+                        src={latestEvent.thumbnail_url}
                         alt={latestEvent.title}
                         fill
                         className="object-cover"
@@ -566,7 +566,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                       {latestEvent.title}
@@ -624,7 +624,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
       {/* Mobil ekranlarda en altta sabit duracak kayıt butonu */}
       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 md:hidden transition-transform duration-300 z-40">
-        <EventForm 
+        <EventForm
           event={{
             ...event,
             current_attendees: attendeeCountLocal
@@ -635,13 +635,13 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           onAttendeesChange={handleAttendeesChange}
         />
         <p className="text-xs text-center text-neutral-500 dark:text-neutral-400 mt-2">
-          {isUserRegistered 
-            ? (locale === 'tr' 
-                ? 'Etkinlik sayfasına gitmek için butona tıklayın' 
-                : 'Click the button to go to the event page')
-            : (locale === 'tr' 
-                ? 'Kayıt işleminizi tamamlamak için yukarıdaki butona tıklayın' 
-                : 'Click the button above to complete your registration')
+          {isUserRegistered
+            ? (locale === 'tr'
+              ? 'Etkinlik sayfasına gitmek için butona tıklayın'
+              : 'Click the button to go to the event page')
+            : (locale === 'tr'
+              ? 'Kayıt işleminizi tamamlamak için yukarıdaki butona tıklayın'
+              : 'Click the button above to complete your registration')
           }
         </p>
       </div>

@@ -75,7 +75,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
       script.async = true;
       script.onload = () => setIsVimeoReady(true);
       script.onerror = () => setError('Failed to load Vimeo Player API');
-      
+
       if (!document.querySelector('script[src="https://player.vimeo.com/api/player.js"]')) {
         document.body.appendChild(script);
       } else {
@@ -100,7 +100,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
 
       // Fetch the first video of the lesson for preview
       const { data: videos, error: videosError } = await supabase
-        .from('myuni_videos')
+        .from('myuni_event_videos')
         .select('id, lesson_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash')
         .eq('lesson_id', lessonId)
         .order('order_index', { ascending: true })
@@ -155,7 +155,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
               setShowPurchaseOverlay(true);
               player.pause();
             }
-            
+
             if (!videoLoaded) {
               setVideoLoaded(true);
             }
@@ -241,11 +241,11 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="relative z-10 w-full max-w-4xl">
         <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden max-h-[90vh] flex flex-col">
@@ -259,9 +259,9 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
                 {video?.title || lessonTitle}
               </h3>
             </div>
-            
+
             <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-              
+
               <button
                 onClick={onClose}
                 className="p-1.5 sm:p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors"
@@ -310,10 +310,9 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
             {embedUrl && !error && (
               <div style={{ padding: '56.25% 0 0 0', position: 'relative' }}>
                 {/* Loading Skeleton */}
-                <div 
-                  className={`absolute inset-0 bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center transition-opacity duration-700 ${
-                    videoLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                  }`}
+                <div
+                  className={`absolute inset-0 bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center transition-opacity duration-700 ${videoLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                    }`}
                   style={{ zIndex: 2 }}
                 >
                   <div className="text-center space-y-3 p-4">
@@ -332,11 +331,11 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
                   src={embedUrl}
                   frameBorder="0"
                   allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
-                  style={{ 
-                    position: 'absolute', 
-                    top: 0, 
-                    left: 0, 
-                    width: '100%', 
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
                     height: '100%',
                     zIndex: 1,
                     filter: showPurchaseOverlay ? 'blur(4px) brightness(0.8)' : 'none',
@@ -361,7 +360,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
                           Bu dersin tamamına erişmek için kursa kayıt olabilirsiniz.
                         </p>
                       </div>
-                      
+
                       <div className="space-y-3">
                         <button
                           onClick={handlePurchaseClick}
