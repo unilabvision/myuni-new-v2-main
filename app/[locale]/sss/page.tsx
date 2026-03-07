@@ -7,8 +7,8 @@ export const metadata = {
     description: 'Sık Sorulan Sorular (SSS) ve iletişim seçenekleri.',
 };
 
-export default function FAQPage({ params }: { params: { locale: string } }) {
-    const { locale } = params;
+export default async function FAQPage({ params }: { params: Promise<{ locale: string }> }) {
+    const { locale } = await params;
 
     const texts = {
         faqTitle: locale === 'en' ? 'Frequently Asked Questions' : 'Sık Sorulan Sorular',

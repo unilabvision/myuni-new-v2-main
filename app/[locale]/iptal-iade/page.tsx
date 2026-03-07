@@ -218,8 +218,8 @@ const policyData = {
     ]
 };
 
-export default function IptalIadePage({ params }: { params: { locale: string } }) {
-    const { locale } = params;
+export default async function IptalIadePage({ params }: { params: Promise<{ locale: string }> }) {
+    const { locale } = await params;
 
     const currentPolicyData = policyData[locale as keyof typeof policyData] || policyData.tr;
 
