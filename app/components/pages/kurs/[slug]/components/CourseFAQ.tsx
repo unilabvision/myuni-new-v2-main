@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, HelpCircle, MessageCircle } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 interface CourseFAQTexts {
   faqTitle?: string;
@@ -10,13 +11,15 @@ interface CourseFAQTexts {
 
 interface CourseFAQProps {
   texts?: CourseFAQTexts;
+  hideHeader?: boolean;
 }
 
-const CourseFAQ: React.FC<CourseFAQProps> = ({ 
-  texts = {
-    faqTitle: "Sıkça Sorulan Sorular"
-  }
+const CourseFAQ: React.FC<CourseFAQProps> = ({
+  texts = {},
+  hideHeader = false
 }) => {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'tr';
   const [openFAQ, setOpenFAQ] = useState<{ [key: number]: boolean }>({ 0: true });
 
   const toggleFAQ = (index: number) => {
@@ -26,13 +29,63 @@ const CourseFAQ: React.FC<CourseFAQProps> = ({
     }));
   };
 
-  // İletişim sayfasına yönlendirme fonksiyonu
   const handleContactRedirect = () => {
-    window.location.href = '/tr/iletisim';
+    window.location.href = `/${locale}/iletisim`;
   };
 
-  // Basitleştirilmiş FAQ listesi
-  const faqs = [
+  const textsEn = {
+    faqTitle: "Frequently Asked Questions",
+    description: "You can find all your questions here. If you can't find what you are looking for, contact us.",
+    notHereTitle: "Question not here?",
+    notHereDesc: "You can contact us about any topic you are curious about. Our support team is happy to help you.",
+    supportBtn: "Support",
+    askBtn: "Ask a Question",
+    avgResponseTime: "Avg. Response Time",
+    uninterruptedSupport: "Uninterrupted Support",
+    satisfactionRate: "Satisfaction Rate"
+  };
+
+  const textsTr = {
+    faqTitle: "Sıkça Sorulan Sorular",
+    description: "Aklınıza takılan tüm soruları burada bulabilirsiniz. Bulamadığınız bir şey varsa bizimle iletişime geçin.",
+    notHereTitle: "Sorunuz burada yok mu?",
+    notHereDesc: "Merak ettiğiniz herhangi bir konu hakkında bizimle iletişime geçebilirsiniz. Destek ekibimiz size yardımcı olmaktan mutluluk duyar.",
+    supportBtn: "Destek",
+    askBtn: "Soru Sor",
+    avgResponseTime: "Ortalama Yanıt Süresi",
+    uninterruptedSupport: "Kesintisiz Destek",
+    satisfactionRate: "Memnuniyet Oranı"
+  };
+
+  const currentTexts = locale === 'en' ? textsEn : textsTr;
+  const displayTexts = { ...currentTexts, ...texts } as typeof textsTr;
+
+  const faqs = locale === 'en' ? [
+    {
+      question: "Is there any specific time for the courses?",
+      answer: "No, our courses are completely flexible. You can start anytime and progress at your own pace with 24/7 access."
+    },
+    {
+      question: "Will I get a certificate after completing the courses?",
+      answer: "Yes, you will receive a valid digital certificate upon successful completion of the course. The certificate is secured in our database."
+    },
+    {
+      question: "Can I get technical support during the training?",
+      answer: "Absolutely! You can get help from our 24/7 support team for any technical issues you encounter during the training process."
+    },
+    {
+      question: "What payment methods do you accept?",
+      answer: "We accept credit card, debit card, and digital wallet options."
+    },
+    {
+      question: "How long will I have access after enrolling in the course?",
+      answer: "You have lifetime access after enrolling in the course. You will automatically have access to new content when the course is updated."
+    },
+    {
+      question: "Can I communicate with the instructor?",
+      answer: "Yes, our instructors are regularly available in our community. You can contact them via email."
+    }
+  ] : [
     {
       question: "Kursların herhangi bir zamanı var mıdır?",
       answer: "Hayır, kurslarımız tamamen esnek zamanlı olup istediğiniz zaman başlayabilir ve kendi hızınızda ilerleyebilirsiniz. 7/24 erişim imkanı vardır."
@@ -62,21 +115,23 @@ const CourseFAQ: React.FC<CourseFAQProps> = ({
   return (
     <div className="space-y-12">
       {/* Header */}
-      <div className="text-left">
-        <h2 className="text-2xl font-medium text-neutral-900 dark:text-neutral-100 mb-4">
-          {texts.faqTitle}
-        </h2>
-        <div className="w-16 h-px bg-[#990000] mb-6"></div>
-        <p className="text-lg text-neutral-600 dark:text-neutral-400 max-w-3xl leading-relaxed">
-          Aklınıza takılan tüm soruları burada bulabilirsiniz. Bulamadığınız bir şey varsa bizimle iletişime geçin.
-        </p>
-      </div>
+      {!hideHeader && (
+        <div className="mb-16 max-w-4xl text-left">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-light text-neutral-900 dark:text-neutral-100 mb-4 tracking-tight text-left">
+            {displayTexts.faqTitle}
+          </h2>
+          <div className="w-16 h-px bg-[#990000] dark:bg-white mb-8"></div>
+          <p className="text-lg md:text-xl text-neutral-600 dark:text-neutral-400 mb-6 leading-relaxed text-left">
+            {displayTexts.description}
+          </p>
+        </div>
+      )}
 
       {/* FAQ List */}
       <div className="space-y-4">
         {faqs.map((faq, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm overflow-hidden"
           >
             <button
@@ -96,7 +151,7 @@ const CourseFAQ: React.FC<CourseFAQProps> = ({
                 )}
               </div>
             </button>
-            
+
             {openFAQ[index] && (
               <div className="px-6 pb-6 border-t border-neutral-200 dark:border-neutral-700">
                 <div className="pt-4">
@@ -114,59 +169,58 @@ const CourseFAQ: React.FC<CourseFAQProps> = ({
       <div className="p-8 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm">
         <div className="text-left">
           <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-4">
-            Sorunuz burada yok mu?
+            {displayTexts.notHereTitle}
           </h3>
           <div className="w-16 h-px bg-[#990000] mb-4"></div>
           <p className="text-neutral-600 dark:text-neutral-400 mb-6 max-w-2xl leading-relaxed">
-            Merak ettiğiniz herhangi bir konu hakkında bizimle iletişime geçebilirsiniz. 
-            Destek ekibimiz size yardımcı olmaktan mutluluk duyar.
+            {displayTexts.notHereDesc}
           </p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4">
-          <button 
+          <button
             onClick={handleContactRedirect}
             className="flex items-center justify-center space-x-2 bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white px-6 py-3 rounded-sm font-medium transition-colors"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>Destek</span>
+            <span>{displayTexts.supportBtn}</span>
           </button>
-          
-          <button 
+
+          <button
             onClick={handleContactRedirect}
             className="flex items-center justify-center space-x-2 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-800 dark:text-neutral-200 px-6 py-3 rounded-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors"
           >
             <HelpCircle className="w-4 h-4" />
-            <span>Soru Sor</span>
+            <span>{displayTexts.askBtn}</span>
           </button>
         </div>
-        
+
         {/* Support Stats */}
         <div className="grid grid-cols-3 gap-6 mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700">
           <div className="text-left">
             <div className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-1">
-              &lt; 15dk
+              &lt; 15{locale === 'en' ? 'min' : 'dk'}
             </div>
             <div className="text-sm text-neutral-600 dark:text-neutral-400">
-              Ortalama Yanıt Süresi
+              {displayTexts.avgResponseTime}
             </div>
           </div>
-          
+
           <div className="text-left">
             <div className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-1">
               7/24
             </div>
             <div className="text-sm text-neutral-600 dark:text-neutral-400">
-              Kesintisiz Destek
+              {displayTexts.uninterruptedSupport}
             </div>
           </div>
-          
+
           <div className="text-left">
             <div className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-1">
               98%
             </div>
             <div className="text-sm text-neutral-600 dark:text-neutral-400">
-              Memnuniyet Oranı
+              {displayTexts.satisfactionRate}
             </div>
           </div>
         </div>

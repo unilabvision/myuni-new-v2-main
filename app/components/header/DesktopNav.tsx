@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-// import Link from "next/link"; // Removed due to build error
+import Link from "next/link";
 // import { useUser } from "@clerk/nextjs"; // Removed due to build error
 import { ChevronDown } from "lucide-react";
 
@@ -24,17 +24,17 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
         { href: `/${locale}/kurs`, label: "Kurslar" },
         { href: `/${locale}/etkinlik`, label: "Etkinlikler" },
         { href: `/${locale}/kampanyalar`, label: "Kampanyalar" },
-        { 
-          href: `/${locale}/hakkimizda`, 
+        {
+          href: `/${locale}/hakkimizda`,
           label: "Hakkımızda",
           children: [
             { href: `/${locale}/hakkimizda/`, label: "Biz Kimiz" },
-            { href: `/${locale}/kulup`, label: "MyUNI Kulüp Ağı" },
-            { href: `/${locale}/kariyer`, label: "Stajyer Programı" },
-            { href: `/${locale}/egitmen-ol`, label: "Eğitmen Ol!" },
+            { href: `/${locale}/egitmen-ol`, label: "Eğitmen Ol" },
             { href: `/${locale}/bultenimiz`, label: "Bültenimiz" },
-            { href: `/${locale}/sartlar-ve-kosullar`, label: "Şartlar ve Koşullar" },
             { href: `/${locale}/gizlilik`, label: "Gizlilik Politikası" },
+            { href: `/${locale}/sartlar-ve-kosullar`, label: "Kullanım Koşulları" },
+            { href: `/${locale}/iptal-iade`, label: "İptal ve İade Politikası" },
+            { href: `/${locale}/sss`, label: "Sık Sorulan Sorular" },
           ]
         },
         { href: `/${locale}/blog`, label: "Blog" },
@@ -45,16 +45,17 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
         { href: `/${locale}/course`, label: "Courses" },
         { href: `/${locale}/event`, label: "Events" },
         { href: `/${locale}/campaigns`, label: "Campaigns" },
-        { 
-          href: `/${locale}/about`, 
+        {
+          href: `/${locale}/about`,
           label: "About Us",
           children: [
             { href: `/${locale}/about`, label: "Who We Are" },
-            { href: `/${locale}/kulup`, label: "MyUNI Club" },
-            { href: `/${locale}/careers`, label: "Internship Program" },
+            { href: `/${locale}/egitmen-ol`, label: "Become an Instructor" },
             { href: `/${locale}/newsletter`, label: "Newsletter" },
-            { href: `/${locale}/terms`, label: "Terms and Conditions" },
             { href: `/${locale}/privacy`, label: "Privacy Policy" },
+            { href: `/${locale}/terms`, label: "Terms of Use" },
+            { href: `/${locale}/iptal-iade`, label: "Cancellation & Refund" },
+            { href: `/${locale}/sss`, label: "FAQ" },
           ]
         },
         { href: `/${locale}/projects`, label: "Projects" },
@@ -62,10 +63,10 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
         { href: `/${locale}/contact`, label: "Contact" },
       ],
     };
-    
+
     const currentItems = menuItems[locale as keyof typeof menuItems] || menuItems.tr;
 
-   
+
     return currentItems;
   }, [locale]); // Removed 'isSignedIn' from dependency array
 
@@ -117,36 +118,35 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
                   className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200"
                 >
                   {item.label}
-                  <ChevronDown 
-                    className={`ml-1 h-4 w-4 transition-transform duration-200 ${
-                      openDropdown === item.label ? 'rotate-180' : ''
-                    }`} 
+                  <ChevronDown
+                    className={`ml-1 h-4 w-4 transition-transform duration-200 ${openDropdown === item.label ? 'rotate-180' : ''
+                      }`}
                   />
                 </button>
-                
+
                 {/* Dropdown Menu */}
                 {openDropdown === item.label && (
                   <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 py-2 z-50">
                     {item.children.map((child, childIndex) => (
-                      <a
+                      <Link
                         key={childIndex}
                         href={child.href}
                         className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors duration-200"
                         onClick={() => setOpenDropdown(null)}
                       >
                         {child.label}
-                      </a>
+                      </Link>
                     ))}
                   </div>
                 )}
               </div>
             ) : (
-              <a
+              <Link
                 href={item.href}
                 className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200"
               >
                 {item.label}
-              </a>
+              </Link>
             )}
           </div>
         ))}

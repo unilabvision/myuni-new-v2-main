@@ -39,11 +39,11 @@ function getPageTypeFromUrl(url: string, locale: string): {
   canonical: string;
 } {
   const baseUrl = 'https://myunilab.net';
-  
+
   // Remove locale from URL to get clean path
   const cleanPath = url.replace(`/${locale}`, '') || '/';
   const fullCanonical = `${baseUrl}/${locale}${cleanPath === '/' ? '' : cleanPath}`;
-  
+
   // Page type detection
   if (cleanPath === '/') {
     return {
@@ -57,7 +57,7 @@ function getPageTypeFromUrl(url: string, locale: string): {
       canonical: fullCanonical
     };
   }
-  
+
   if (cleanPath.startsWith('/kurs') || cleanPath.startsWith('/course')) {
     // Course pages
     if (cleanPath === '/kurs' || cleanPath === '/course') {
@@ -87,7 +87,7 @@ function getPageTypeFromUrl(url: string, locale: string): {
       };
     }
   }
-  
+
   if (cleanPath.startsWith('/blog')) {
     if (cleanPath === '/blog') {
       return {
@@ -114,7 +114,7 @@ function getPageTypeFromUrl(url: string, locale: string): {
       };
     }
   }
-  
+
   if (cleanPath.startsWith('/hakkimizda') || cleanPath.startsWith('/about')) {
     return {
       pageType: 'about',
@@ -127,7 +127,7 @@ function getPageTypeFromUrl(url: string, locale: string): {
       canonical: fullCanonical
     };
   }
-  
+
   if (cleanPath.startsWith('/iletisim') || cleanPath.startsWith('/contact')) {
     return {
       pageType: 'contact',
@@ -140,7 +140,7 @@ function getPageTypeFromUrl(url: string, locale: string): {
       canonical: fullCanonical
     };
   }
-  
+
   // Default case for other pages
   return {
     pageType: 'general',
@@ -158,19 +158,19 @@ function getPageTypeFromUrl(url: string, locale: string): {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ locale: string; [key: string]: string | string[] }>;
+  params: Promise<{ locale: string;[key: string]: string | string[] }>;
 }): Promise<Metadata> {
   const resolvedParams = await params;
   const locale = resolvedParams.locale || 'tr';
-  
+
   // Construct current URL from params
   const pathSegments = Object.entries(resolvedParams)
     .filter(([key]) => key !== 'locale')
     .map(([, value]) => Array.isArray(value) ? value.join('/') : value)
     .filter(Boolean);
-  
+
   const currentPath = pathSegments.length > 0 ? `/${pathSegments.join('/')}` : '/';
-  
+
   const pageInfo = getPageTypeFromUrl(currentPath, locale);
   const trPath = `https://myunilab.net/tr${currentPath === '/' ? '' : currentPath.replace(/\/(course|kurs)/, locale === 'tr' ? '/kurs' : '/course')}`;
   const enPath = `https://myunilab.net/en${currentPath === '/' ? '' : currentPath.replace(/\/(course|kurs)/, locale === 'tr' ? '/kurs' : '/course')}`;
@@ -180,37 +180,37 @@ export async function generateMetadata({
     description: pageInfo.description,
     keywords: locale === 'tr'
       ? [
-          "MyUNI",
-          "yapay zeka eğitim",
-          "online eğitim platformu",
-          "kariyer geliştirme",
-          "kişiselleştirilmiş öğrenme",
-          "esnek eğitim",
-          "beceri geliştirme",
-          "uzaktan eğitim",
-          ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail' 
-            ? ["kurslar", "eğitim", "sertifika", "online kurs"] 
-            : []),
-          ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail' 
-            ? ["blog", "eğitim haberleri", "teknoloji", "kariyer ipuçları"] 
-            : [])
-        ]
+        "MyUNI",
+        "yapay zeka eğitim",
+        "online eğitim platformu",
+        "kariyer geliştirme",
+        "kişiselleştirilmiş öğrenme",
+        "esnek eğitim",
+        "beceri geliştirme",
+        "uzaktan eğitim",
+        ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
+          ? ["kurslar", "eğitim", "sertifika", "online kurs"]
+          : []),
+        ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail'
+          ? ["blog", "eğitim haberleri", "teknoloji", "kariyer ipuçları"]
+          : [])
+      ]
       : [
-          "MyUNI",
-          "AI education",
-          "online learning platform",
-          "career development",
-          "personalized learning",
-          "flexible education",
-          "skill development",
-          "remote learning",
-          ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail' 
-            ? ["courses", "education", "certificate", "online course"] 
-            : []),
-          ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail' 
-            ? ["blog", "education news", "technology", "career tips"] 
-            : [])
-        ],
+        "MyUNI",
+        "AI education",
+        "online learning platform",
+        "career development",
+        "personalized learning",
+        "flexible education",
+        "skill development",
+        "remote learning",
+        ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
+          ? ["courses", "education", "certificate", "online course"]
+          : []),
+        ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail'
+          ? ["blog", "education news", "technology", "career tips"]
+          : [])
+      ],
     authors: [{ name: "MyUNI Eğitim Platformu" }],
     robots: "index, follow",
     alternates: {
@@ -245,13 +245,13 @@ export async function generateMetadata({
     other: {
       "script:ld+json": JSON.stringify({
         "@context": "https://schema.org",
-        "@type": pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail' 
-          ? "Course" 
-          : pageInfo.pageType === 'blog-detail' 
-            ? "Article" 
+        "@type": pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
+          ? "Course"
+          : pageInfo.pageType === 'blog-detail'
+            ? "Article"
             : "EducationalOrganization",
-        name: pageInfo.pageType === 'course-detail' 
-          ? pageInfo.title.split(' | ')[0] 
+        name: pageInfo.pageType === 'course-detail'
+          ? pageInfo.title.split(' | ')[0]
           : "MyUNI Eğitim Platformu",
         alternateName: "MyUNI",
         url: pageInfo.canonical,
@@ -314,23 +314,23 @@ export function generateStaticParams() {
 }
 
 // Layout component
-export default async function LocaleLayout({ 
-  children, 
-  params 
-}: { 
-  children: React.ReactNode; 
+export default async function LocaleLayout({
+  children,
+  params
+}: {
+  children: React.ReactNode;
   params: Promise<{ locale: string }>;
 }) {
   const resolvedParams = await params;
   const locale = resolvedParams.locale || 'tr';
-  
+
   return (
     <html lang={locale} dir="ltr" className={`${arimo.variable} ${syne.variable} ${geistMono.variable}`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://clerk.com" />
-        
+
         {/* Google Tag Manager */}
         <Script id="google-tag-manager" strategy="afterInteractive">
           {`
@@ -341,7 +341,7 @@ export default async function LocaleLayout({
             })(window,document,'script','dataLayer','GTM-W94586N6');
           `}
         </Script>
-        
+
         {/* Microsoft Clarity */}
         <Script id="microsoft-clarity" strategy="afterInteractive">
           {`
@@ -358,22 +358,36 @@ export default async function LocaleLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="format-detection" content="telephone=no" />
-        
+
         {/* Educational platform specific tags */}
         <meta property="educational:type" content="online-learning" />
         <meta property="educational:level" content="all-levels" />
         <meta property="educational:subject" content="technology,business,design,development" />
+
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
       </head>
       <body className="min-h-screen bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
         <noscript>
-          <iframe 
+          <iframe
             src="https://www.googletagmanager.com/ns.html?id=GTM-W94586N6"
-            height="0" 
-            width="0" 
-            style={{display: 'none', visibility: 'hidden'}}
+            height="0"
+            width="0"
+            style={{ display: 'none', visibility: 'hidden' }}
           ></iframe>
         </noscript>
-        
+
         <ClerkProvider
           afterSignOutUrl={`/${locale}`}
           appearance={{

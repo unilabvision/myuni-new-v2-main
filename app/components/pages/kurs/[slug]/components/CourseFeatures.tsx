@@ -18,11 +18,11 @@ interface CourseFeaturesProps {
   texts?: CourseFeaturesTexts;
 }
 
-const CourseFeatures: React.FC<CourseFeaturesProps> = ({ 
+const CourseFeatures: React.FC<CourseFeaturesProps> = ({
   texts = {
     myuniEbook: 'MyUNI eBook',
     myuniEbookDesc: 'Kurs ile birlikte interaktif eBook erişimi',
-    myuniNotes: 'MyUNI Notes', 
+    myuniNotes: 'MyUNI Notes',
     myuniNotesDesc: 'Akıllı not alma sistemi ile öğrenmenizi güçlendirin',
     discoverButton: 'Keşfet'
   }
@@ -76,7 +76,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
       {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {features.map((feature, index) => (
-          <div 
+          <div
             key={index}
             className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm overflow-hidden hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
           >
@@ -88,7 +88,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                 fill
                 className="object-cover"
               />
-              
+
             </div>
 
             {/* Content */}
@@ -106,7 +106,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
               {/* Feature Details */}
               <div className="space-y-3 mb-6">
                 {feature.details.map((detail, detailIndex) => (
-                  <div 
+                  <div
                     key={detailIndex}
                     className="flex items-center space-x-3"
                   >
@@ -117,7 +117,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
               </div>
 
               {/* CTA Button */}
-              <button 
+              <button
                 onClick={handleDiscoverClick}
                 className="w-full py-3 px-6 bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white rounded-sm font-medium transition-colors text-sm"
               >
@@ -132,7 +132,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
       <div className="p-8 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm">
         <div className="text-left mb-8">
           <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-4">
-            Kursa Kayıt Olduğunuzda Ücretsiz Dahil
+            Kursa Kayıt Olduğunuzda Ücretsiz
           </h3>
           <div className="w-16 h-px bg-[#990000] mb-4"></div>
           <p className="text-neutral-600 dark:text-neutral-400">
@@ -140,13 +140,12 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-12 sm:gap-64">
           {[
-            { icon: Download, label: 'Kaynak Kodları' },
             { icon: Award, label: 'Sertifika' },
             { icon: Zap, label: 'Ömür Boyu Erişim' }
           ].map((bonus, index) => (
-            <div key={index} className="text-left">
+            <div key={index} className="flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-sm flex items-center justify-center mb-3">
                 <bonus.icon className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
               </div>
@@ -192,7 +191,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                   MyUNI Eğitim Platformu
                 </div>
               </div>
-              
+
               {/* Mobile Layout - Stack vertically */}
               <div className="block sm:hidden space-y-3">
                 {/* Mobile Header */}
@@ -200,7 +199,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                   <div className="h-2 bg-neutral-200 dark:bg-neutral-600 rounded-sm mb-2"></div>
                   <div className="h-2 bg-[#990000] rounded-sm w-3/4"></div>
                 </div>
-                
+
                 {/* Mobile Video Section */}
                 <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm p-3">
                   <div className="h-20 bg-neutral-200 dark:bg-neutral-600 rounded-sm mb-3 flex items-center justify-center">
@@ -215,7 +214,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                     <div className="h-1.5 bg-neutral-200 dark:bg-neutral-600 rounded-sm w-2/3"></div>
                   </div>
                 </div>
-                
+
                 {/* Mobile AI Section */}
                 <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm p-3">
                   <div className="space-y-1.5">
@@ -225,7 +224,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                   </div>
                 </div>
               </div>
-              
+
               {/* Tablet and Desktop Layout - Grid */}
               <div className="hidden sm:grid grid-cols-12 gap-3 sm:gap-4 h-40 sm:h-48">
                 {/* Left Sidebar */}
@@ -235,7 +234,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                   <div className="h-1.5 sm:h-2 bg-neutral-200 dark:bg-neutral-600 rounded-sm w-1/2"></div>
                   <div className="h-1.5 sm:h-2 bg-neutral-200 dark:bg-neutral-600 rounded-sm"></div>
                 </div>
-                
+
                 {/* Main Content */}
                 <div className="col-span-6 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm p-3 sm:p-4">
                   <div className="h-20 sm:h-24 bg-neutral-200 dark:bg-neutral-600 rounded-sm mb-3 sm:mb-4 flex items-center justify-center">
@@ -250,7 +249,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                     <div className="h-1.5 sm:h-2 bg-neutral-200 dark:bg-neutral-600 rounded-sm w-2/3"></div>
                   </div>
                 </div>
-                
+
                 {/* Right Sidebar */}
                 <div className="col-span-3 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-sm p-3 sm:p-4 space-y-2 sm:space-y-3">
                   <div className="space-y-1">
@@ -264,7 +263,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                 </div>
               </div>
             </div>
-            
+
             {/* Floating Feature Badges - Responsive positioning */}
             <div className="absolute -top-1 -left-1 sm:-top-2 sm:-left-2 bg-neutral-800 dark:bg-neutral-600 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-sm text-xs font-medium">
               <span className="hidden sm:inline">MyUNI Sections</span>

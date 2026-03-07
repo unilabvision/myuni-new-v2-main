@@ -12,7 +12,7 @@ interface FooterProps {
 
 const Footer = ({ locale }: FooterProps) => {
   const pathname = usePathname();
-  
+
   // Determine if the current path is under /tr/watch/ or /en/watch/
   const isWatchPage = pathname.startsWith(`/${locale}/watch/`);
 
@@ -27,17 +27,16 @@ const Footer = ({ locale }: FooterProps) => {
         {
           title: 'MyUNI',
           items: [
-            { label: 'Ana Sayfa', href: `/${locale}` },
             { label: 'Hakkımızda', href: `/${locale}/hakkimizda` },
-            { label: 'MyUNI Kulüp Ağı', href: `/${locale}/kulup` },
-            { label: 'UNILAB Vision', href: 'https://unilabvision.com' },
-            { label: 'İletişim', href: `/${locale}/iletisim` },
+            { label: 'Gizlilik Politikası', href: `/${locale}/gizlilik` },
+            { label: 'Kullanım Koşulları', href: `/${locale}/sartlar-ve-kosullar` },
+            { label: 'İptal ve İade Politikası', href: `/${locale}/iptal-iade` },
           ],
         },
         {
           title: 'Eğitim',
           items: [
-            { label: 'Kurslar', href: `/${locale}/kurslar` },
+            { label: 'Kurslar', href: `/${locale}/kurs` },
             { label: 'Etkinlikler', href: `/${locale}/etkinlik` },
             { label: 'Sertifikalar', href: 'https://certificates.myunilab.net' },
           ],
@@ -45,8 +44,8 @@ const Footer = ({ locale }: FooterProps) => {
         {
           title: 'Destek',
           items: [
-            { label: 'Yardım Merkezi', href: `/${locale}/iletisim` },
-            { label: 'Blog', href: `/${locale}/blog` },
+            { label: 'Sık Sorulan Sorular', href: `/${locale}/sss` },
+            { label: 'İletişim', href: `/${locale}/iletisim` },
           ],
         },
       ],
@@ -60,17 +59,16 @@ const Footer = ({ locale }: FooterProps) => {
         {
           title: 'MyUNI',
           items: [
-            { label: 'Home', href: `/${locale}` },
             { label: 'About Us', href: `/${locale}/about` },
-            { label: 'MyUNI Club', href: `/${locale}/kulup` },
-            { label: 'UNILAB Vision', href: 'https://unilabvision.com' },
-            { label: 'Contact', href: `/${locale}/contact` },
+            { label: 'Privacy Policy', href: `/${locale}/privacy` },
+            { label: 'Terms of Service', href: `/${locale}/terms` },
+            { label: 'Cancellation & Refund', href: `/${locale}/iptal-iade` },
           ],
         },
         {
           title: 'Education',
           items: [
-            { label: 'Courses', href: `/${locale}/courses` },
+            { label: 'Courses', href: `/${locale}/course` },
             { label: 'Events', href: `/${locale}/event` },
             { label: 'Certificates', href: 'https://certificates.myunilab.net' },
           ],
@@ -78,8 +76,8 @@ const Footer = ({ locale }: FooterProps) => {
         {
           title: 'Support',
           items: [
-            { label: 'Help Center', href: `/${locale}/contact` },
-            { label: 'Blog', href: `/${locale}/blog` },
+            { label: 'FAQ', href: `/${locale}/sss` },
+            { label: 'Contact', href: `/${locale}/contact` },
           ],
         },
       ],
@@ -110,7 +108,7 @@ const Footer = ({ locale }: FooterProps) => {
   ];
 
   return (
-    <footer className="bg-neutral-900 dark:bg-neutral-950 text-neutral-300 py-16 px-6">
+    <footer className="bg-black text-neutral-300 py-16 px-6">
       <div className={`container mx-auto 
         ${isWatchPage ? 'max-w-none' : 'max-w-7xl px-0 sm:px-0 md:px-6 lg:px-6 xl:px-6 2xl:px-6'}`}> {/* Conditionally apply wider max-width */}
         {/* Main Footer Content */}
@@ -169,27 +167,25 @@ const Footer = ({ locale }: FooterProps) => {
           ))}
         </div>
 
+        {/* Payment Methods */}
+        <div className="mt-16 flex justify-center lg:justify-end">
+          <div className="relative h-12 w-64 sm:h-16 sm:w-96 bg-transparent rounded-md overflow-hidden">
+            <Image
+              src="/iyzico_dark.jpg"
+              alt="iyzico payment methods"
+              fill
+              className="object-contain"
+            />
+          </div>
+        </div>
+
         {/* Bottom Bar */}
-        <div className="mt-16 pt-6 border-t border-neutral-800">
+        <div className="mt-8 pt-6 border-t border-neutral-800">
           <div className="flex flex-col lg:flex-row justify-between items-center">
             <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-8">
               <p className="text-neutral-500 text-sm text-center md:text-left">
                 {t.copyright}
               </p>
-            </div>
-            <div className="flex space-x-6 mt-4 lg:mt-0">
-              <Link 
-                href={locale === 'tr' ? '/tr/gizlilik' : '/en/privacy'} 
-                className="text-neutral-500 hover:text-[#a90013] dark:hover:text-[#ffdee2] transition-colors duration-200 text-sm"
-              >
-                {t.privacyPolicy}
-              </Link>
-              <Link 
-                href={locale === 'tr' ? '/tr/sartlar-ve-kosullar' : '/en/terms'} 
-                className="text-neutral-500 hover:text-[#a90013] dark:hover:text-[#ffdee2] transition-colors duration-200 text-sm"
-              >
-                {t.termsOfService}
-              </Link>
             </div>
           </div>
         </div>

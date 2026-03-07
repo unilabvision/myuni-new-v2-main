@@ -39,14 +39,17 @@ const isPublicRoute = createRouteMatcher([
   '/en/blog(.*)',
   '/tr/gizlilik(.*)',
   '/en/privacy(.*)',
+  '/tr/iptal-iade(.*)',
+  '/en/iptal-iade(.*)',
   '/tr/projelerimiz(.*)',
   '/en/projects(.*)',
   '/tr/bultenimiz(.*)',
   '/en/newsletter(.*)',
   '/tr/sartlar-ve-kosullar(.*)',
   '/en/terms(.*)',
-  '/tr/search(.*)',
   '/en/search(.*)',
+  '/tr/sss(.*)',
+  '/en/sss(.*)',
   '/tr/soon(.*)',
   '/en/soon(.*)',
   '/tr/temsilcilik(.*)',
@@ -54,7 +57,7 @@ const isPublicRoute = createRouteMatcher([
   // Payment success pages (public to handle redirects)
   '/tr/payment-success(.*)',
   '/en/payment-success(.*)',
-  '/tr/payment-failed(.*)', 
+  '/tr/payment-failed(.*)',
   '/en/payment-failed(.*)',
   '/tr/egitmen-ol(.*)',
   '/en/egitmen-ol(.*)',
@@ -155,7 +158,7 @@ const isValidRoute = createRouteMatcher([
   '/en/sso-callback',
   '/tr/complete-profile',
   '/en/complete-profile',
-  '/en/course(.*)', 
+  '/en/course(.*)',
   '/tr/watch(.*)', // Course watching pages
   '/en/watch(.*)', // Course watching pages
   '/tr/kariyer(.*)',
@@ -172,8 +175,12 @@ const isValidRoute = createRouteMatcher([
   '/en/egitmen-ol(.*)',
   '/tr/search(.*)',
   '/en/search(.*)',
+  '/tr/sss(.*)',
+  '/en/sss(.*)',
   '/tr/gizlilik(.*)',
   '/en/privacy(.*)',
+  '/tr/iptal-iade(.*)',
+  '/en/iptal-iade(.*)',
   '/tr/bultenimiz(.*)',
   '/en/newsletter(.*)',
   '/tr/sartlar-ve-kosullar(.*)',
@@ -248,10 +255,10 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Handle robots.txt - allow indexing in production
   if (pathname === '/robots.txt') {
-    const robotsTxt = process.env.NODE_ENV === 'production' 
+    const robotsTxt = process.env.NODE_ENV === 'production'
       ? `User-agent: *\nAllow: /\nSitemap: ${process.env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`
       : `User-agent: *\nDisallow: /`;
-    
+
     return new NextResponse(robotsTxt, {
       status: 200,
       headers: {
@@ -278,13 +285,13 @@ export default clerkMiddleware(async (auth, req) => {
       console.log('✅ Allowing access to Shopier API endpoint');
       return response;
     }
-    
+
     // Payment success/failed pages should be accessible (redirects from Shopier)
     if (pathname.includes('/payment-success') || pathname.includes('/payment-failed')) {
       console.log('✅ Allowing access to payment result page');
       return response;
     }
-    
+
     // Checkout pages require authentication
     if (pathname.includes('/checkout')) {
       if (!userId) {
@@ -303,12 +310,12 @@ export default clerkMiddleware(async (auth, req) => {
       console.log('✅ Allowing access to complete-profile for signed-in user');
       return response;
     }
-    
+
     if (pathname.includes('/verify-email')) {
       console.log('✅ Allowing access to verify-email');
       return response;
     }
-    
+
     return response;
   }
 
@@ -318,7 +325,7 @@ export default clerkMiddleware(async (auth, req) => {
       console.log('✅ Allowing signed-in user to access auth flow routes');
       return response;
     }
-    
+
     console.log('🔄 Signed in user accessing auth route, redirecting to homepage');
     const locale = pathname.startsWith('/tr') ? 'tr' : 'en';
     return NextResponse.redirect(new URL(`/${locale}`, req.url));

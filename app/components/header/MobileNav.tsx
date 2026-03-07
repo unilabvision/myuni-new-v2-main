@@ -27,17 +27,17 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
       { href: `/${locale}/kurs`, label: "Kurslar" },
       { href: `/${locale}/etkinlik`, label: "Etkinlikler" },
       { href: `/${locale}/kampanyalar`, label: "Kampanyalar" },
-      { 
-        href: `/${locale}/hakkimizda`, 
+      {
+        href: `/${locale}/hakkimizda`,
         label: "Hakkımızda",
         children: [
           { href: `/${locale}/hakkimizda/`, label: "Biz Kimiz" },
-          { href: `/${locale}/kulup`, label: "MyUNI Kulüp Ağı" },
-            { href: `/${locale}/kariyer`, label: "Stajyer Programı" },
           { href: `/${locale}/egitmen-ol`, label: "Eğitmen Ol" },
           { href: `/${locale}/bultenimiz`, label: "Bültenimiz" },
-          { href: `/${locale}/sartlar-ve-kosullar`, label: "Şartlar ve Koşullar" },
           { href: `/${locale}/gizlilik`, label: "Gizlilik Politikası" },
+          { href: `/${locale}/sartlar-ve-kosullar`, label: "Kullanım Koşulları" },
+          { href: `/${locale}/iptal-iade`, label: "İptal ve İade Politikası" },
+          { href: `/${locale}/sss`, label: "Sık Sorulan Sorular" },
         ]
       },
       { href: `/${locale}/blog`, label: "Blog" },
@@ -48,16 +48,17 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
       { href: `/${locale}/course`, label: "Courses" },
       { href: `/${locale}/event`, label: "Events" },
       { href: `/${locale}/kampanyalar`, label: "Campaigns" },
-      { 
-        href: `/${locale}/about`, 
+      {
+        href: `/${locale}/about`,
         label: "About Us",
         children: [
           { href: `/${locale}/about`, label: "Who We Are" },
-          { href: `/${locale}/kulup`, label: "MyUNI Club" },
-            { href: `/${locale}/careers`, label: "Internship Program" },
+          { href: `/${locale}/egitmen-ol`, label: "Become an Instructor" },
           { href: `/${locale}/newsletter`, label: "Newsletter" },
-          { href: `/${locale}/terms`, label: "Terms and Conditions" },
           { href: `/${locale}/privacy`, label: "Privacy Policy" },
+          { href: `/${locale}/terms`, label: "Terms of Use" },
+          { href: `/${locale}/iptal-iade`, label: "Cancellation & Refund" },
+          { href: `/${locale}/sss`, label: "FAQ" },
         ]
       },
       { href: `/${locale}/projects`, label: "Projects" },
@@ -66,7 +67,7 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
     ],
   };
 
-  
+
 
   const items = menuItems[locale as keyof typeof menuItems] || menuItems.tr;
 
@@ -92,13 +93,12 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
                   className="flex items-center justify-between w-full text-base font-medium text-gray-700 dark:text-gray-200 hover:text-primary dark:hover:text-primary transition-colors duration-200"
                 >
                   <span>{item.label}</span>
-                  <ChevronDown 
-                    className={`h-4 w-4 transition-transform duration-200 ${
-                      openDropdown === item.label ? 'rotate-180' : ''
-                    }`} 
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform duration-200 ${openDropdown === item.label ? 'rotate-180' : ''
+                      }`}
                   />
                 </button>
-                
+
                 {/* Dropdown Menu */}
                 {openDropdown === item.label && (
                   <div className="mt-3 ml-4 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4">

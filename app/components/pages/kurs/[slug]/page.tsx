@@ -11,7 +11,7 @@ import CourseSidebar from './components/CourseSidebar';
 import CourseSections from './components/CourseSections';
 import CourseFeatures from './components/CourseFeatures';
 import CourseCertificate from './components/CourseCertificate';
-import CourseFAQ from './components/CourseFAQ';
+
 import CourseTestimonials from './components/CourseTestimonials';
 import CourseLoadingSkeleton from './components/CourseLoadingSkeleton';
 import CourseErrorState from './components/CourseErrorState';
@@ -867,10 +867,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
           <CourseCertificate texts={componentTexts} />
         </div>
 
-        {/* FAQ Section */}
-        <div className="mt-12 sm:mt-16">
-          <CourseFAQ texts={componentTexts} />
-        </div>
+
 
         {/* Testimonials */}
         <div className="mt-12 sm:mt-16">
