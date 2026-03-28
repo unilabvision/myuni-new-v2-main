@@ -33,7 +33,7 @@ export interface EventSection {
   materials_url: string | null;
   slides_url: string | null;
   recording_url: string | null;
-  additional_resources: any | null;
+  additional_resources: unknown | null;
   tags: string[] | null;
   category: string | null;
   difficulty_level: 'beginner' | 'intermediate' | 'advanced' | null;
@@ -516,10 +516,10 @@ export async function updateUserEventProgress(userId: string, sectionId: string,
 
     if (error) {
       console.error('❌ Error saving event progress:', {
-        message: (error as any).message,
-        code: (error as any).code,
-        details: (error as any).details,
-        hint: (error as any).hint,
+        message: (error as Error).message,
+        code: (error as unknown as Record<string, unknown>).code,
+        details: (error as unknown as Record<string, unknown>).details,
+        hint: (error as unknown as Record<string, unknown>).hint,
         isLessonBased,
         lessonId,
         realSectionId
@@ -580,7 +580,7 @@ export async function getEventWithContent(eventSlug: string) {
   }
 }
 
-export async function getFeaturedEvents(locale: string = 'tr') {
+export async function getFeaturedEvents(_locale: string = 'tr') {
   try {
     const { data, error } = await supabase
       .from('myuni_events')
@@ -675,7 +675,7 @@ export async function getFeaturedEvents(locale: string = 'tr') {
   }
 }
 
-export async function getEventsForFilter(locale: string = 'tr') {
+export async function getEventsForFilter(_locale: string = 'tr') {
   try {
     console.log('Fetching events for filter component');
 
@@ -781,7 +781,7 @@ export async function getEventsForFilter(locale: string = 'tr') {
   }
 }
 
-export async function getAllEvents(locale: string = 'tr') {
+export async function getAllEvents(_locale: string = 'tr') {
   try {
     const { data, error } = await supabase
       .from('myuni_events')

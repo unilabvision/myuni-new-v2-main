@@ -17,7 +17,6 @@ if (!supabaseUrl) {
 
 if (!serviceRoleKey) {
   // Don't hard-crash in dev, but this is required for reliable server-side writes under RLS.
-  // eslint-disable-next-line no-console
   console.warn(
     '[supabaseAdmin] SUPABASE_SERVICE_ROLE_KEY missing. Falling back to anon key; server-side writes may fail under RLS.'
   );

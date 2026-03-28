@@ -408,8 +408,10 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
       .eq('package_id', data.id)
       .order('order_index', { ascending: true });
       
-    let coursesList: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const coursesList: any[] = [];
     if (!pcError && packageCourses) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawCourses = packageCourses.map((pc: any) => pc.myuni_courses).filter(Boolean);
       
       // Her kurs için sections/lessons çekip süre hesapla
@@ -425,8 +427,10 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
           
           if (sections && sections.length > 0) {
             let totalMinutes = 0;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             sections.forEach((section: any) => {
               if (section.myuni_lessons) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 section.myuni_lessons.forEach((lesson: any) => {
                   const dur = String(lesson.duration || '0');
                   if (dur.includes('dk')) {
@@ -756,8 +760,11 @@ export async function getCourseWithContent(courseSlug: string) {
     // Transform sections to filter active lessons and sort them
     const transformedSections = sections?.map(section => {
       const activeLessons = (section.lessons || [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((lesson: any) => lesson.is_active)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .sort((a: any, b: any) => a.order_index - b.order_index)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((lesson: any) => ({
           id: lesson.id,
           title: lesson.title,

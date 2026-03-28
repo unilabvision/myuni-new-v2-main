@@ -385,7 +385,7 @@ export async function getUserEventEnrollments(userId: string): Promise<UserEvent
 
     // Her etkinlik için dinamik katılımcı sayısını hesapla
     const enrollmentsWithDynamicCount = await Promise.all(
-      (data || []).map(async (enrollment: any) => {
+      (data || []).map(async (enrollment: Partial<UserEventEnrollmentWithEvent> & Record<string, unknown>) => {
         if (enrollment.event) {
           const attendeeCount = await getEventAttendeeCount(enrollment.event.id);
           enrollment.event.current_attendees = attendeeCount;
@@ -424,7 +424,7 @@ export async function getUserUpcomingEvents(userId: string): Promise<UserEventEn
 
     // Her etkinlik için dinamik katılımcı sayısını hesapla
     const eventsWithDynamicCount = await Promise.all(
-      (data || []).map(async (enrollment: any) => {
+      (data || []).map(async (enrollment: Partial<UserEventEnrollmentWithEvent> & Record<string, unknown>) => {
         if (enrollment.event) {
           const attendeeCount = await getEventAttendeeCount(enrollment.event.id);
           enrollment.event.current_attendees = attendeeCount;
@@ -462,7 +462,7 @@ export async function getUserPastEvents(userId: string): Promise<UserEventEnroll
 
     // Her etkinlik için dinamik katılımcı sayısını hesapla
     const eventsWithDynamicCount = await Promise.all(
-      (data || []).map(async (enrollment: any) => {
+      (data || []).map(async (enrollment: Partial<UserEventEnrollmentWithEvent> & Record<string, unknown>) => {
         if (enrollment.event) {
           const attendeeCount = await getEventAttendeeCount(enrollment.event.id);
           enrollment.event.current_attendees = attendeeCount;
@@ -538,7 +538,7 @@ export async function unenrollFromEvent(userId: string, eventId: string): Promis
 }
 
 // Etkinlik için katılımcı listesi getir (admin/organizer için)
-export async function getEventAttendees(eventId: string): Promise<any[]> {
+export async function getEventAttendees(eventId: string): Promise<Record<string, unknown>[]> {
   try {
     console.log('Fetching event attendees for:', eventId);
 
@@ -668,7 +668,7 @@ export async function bulkUpdateAttendanceStatus(
 // Send enrollment confirmation email via API route
 export async function sendEnrollmentEmail(
   userInfo: { name: string; email: string },
-  eventInfo: any,
+  eventInfo: Record<string, unknown>,
   enrollmentInfo: { id: string; enrolled_at: string },
   locale: string = 'tr'
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {

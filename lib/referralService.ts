@@ -402,7 +402,7 @@ export async function incrementUsageCountAfterPayment(userId: string): Promise<{
     for (const code of usedDiscountCodes) {
       console.log(`Updating usage count for discount code: ${code.code}`);
       
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         usage_count: code.usage_count + 1
       };
 
