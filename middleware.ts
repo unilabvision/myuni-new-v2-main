@@ -34,6 +34,8 @@ const isPublicRoute = createRouteMatcher([
   '/tr/iletisim(.*)',
   '/tr/kurs(.*)', // TR için course route'ları - course detail pages
   '/en/course(.*)', // EN için course route'ları - course detail pages
+  '/tr/paket(.*)',
+  '/en/package(.*)',
   '/en/contact(.*)',
   '/tr/blog(.*)',
   '/en/blog(.*)',
@@ -158,6 +160,8 @@ const isValidRoute = createRouteMatcher([
   '/en/sso-callback',
   '/tr/complete-profile',
   '/en/complete-profile',
+  '/tr/paket(.*)',
+  '/en/package(.*)',
   '/en/course(.*)',
   '/tr/watch(.*)', // Course watching pages
   '/en/watch(.*)', // Course watching pages

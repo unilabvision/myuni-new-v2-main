@@ -380,6 +380,121 @@ export async function getCourseBySlug(slug: string, locale: string = 'tr') {
   }
 }
 
+export async function getPackageBySlug(slug: string, locale: string = 'tr') {
+  try {
+    const { data, error } = await supabase
+      .from('myuni_packages')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows found - package doesn't exist
+        return null;
+      }
+      throw error;
+    }
+    if (!data) return null;
+
+    // Fetch included courses
+    const { data: packageCourses, error: pcError } = await supabase
+      .from('myuni_package_courses')
+      .select(`
+        order_index,
+        myuni_courses (*)
+      `)
+      .eq('package_id', data.id)
+      .order('order_index', { ascending: true });
+      
+    let coursesList: any[] = [];
+    if (!pcError && packageCourses) {
+      const rawCourses = packageCourses.map((pc: any) => pc.myuni_courses).filter(Boolean);
+      
+      // Her kurs için sections/lessons çekip süre hesapla
+      for (const course of rawCourses) {
+        let calculatedDuration = course.duration || '';
+        
+        // Eğer kurs online ise ve duration boşsa, sections/lessons'dan hesapla
+        if ((!calculatedDuration || calculatedDuration.trim() === '') && course.course_type === 'online') {
+          const { data: sections } = await supabase
+            .from('myuni_sections')
+            .select('id, myuni_lessons(duration)')
+            .eq('course_id', course.id);
+          
+          if (sections && sections.length > 0) {
+            let totalMinutes = 0;
+            sections.forEach((section: any) => {
+              if (section.myuni_lessons) {
+                section.myuni_lessons.forEach((lesson: any) => {
+                  const dur = String(lesson.duration || '0');
+                  if (dur.includes('dk')) {
+                    totalMinutes += parseInt(dur.replace('dk', '').trim()) || 0;
+                  } else if (dur.includes('sa')) {
+                    totalMinutes += (parseInt(dur.replace('sa', '').trim()) || 0) * 60;
+                  } else {
+                    totalMinutes += parseInt(dur) || 0;
+                  }
+                });
+              }
+            });
+            
+            if (totalMinutes > 0) {
+              if (totalMinutes >= 60) {
+                const hours = Math.floor(totalMinutes / 60);
+                const mins = totalMinutes % 60;
+                calculatedDuration = `${hours}sa${mins > 0 ? ` ${mins}dk` : ''}`;
+              } else {
+                calculatedDuration = `${totalMinutes}dk`;
+              }
+            }
+          }
+        }
+        
+        coursesList.push({ ...course, duration: calculatedDuration || course.duration || '' });
+      }
+    }
+
+    return {
+      id: data.id,
+      slug: data.slug,
+      name: data.title,
+      title: data.title,
+      description: data.description || '',
+      price: data.price || 0,
+      originalPrice: data.original_price || null,
+      original_price: data.original_price || null,
+      duration: data.duration || '',
+      level: data.level || 'Beginner',
+      students: Math.floor(Math.random() * 3000) + 500,
+      rating: (Math.random() * 1.5 + 3.5),
+      instructor: data.instructor_name || 'Instructor',
+      instructor_name: data.instructor_name || 'Instructor',
+      image: data.thumbnail_url || data.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
+      thumbnail_url: data.thumbnail_url,
+      banner_url: data.banner_url,
+      banner: {
+        url: data.banner_url || data.thumbnail_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=1200&h=600&fit=crop`
+      },
+      features: generateCourseFeatures(locale),
+      course_type: 'online',
+      is_active: data.is_active,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      shopier_product_id: data.shopier_product_id || null,
+      shopier_product_url: data.shopier_product_url || null,
+      learning_outcomes: Array.isArray(data.objectives) ? data.objectives : [],
+      prerequisites: Array.isArray(data.requirements) ? data.requirements : [],
+      included_courses: coursesList
+    };
+  } catch (error) {
+    console.error('Error fetching package by slug:', error);
+    throw error;
+  }
+}
+
+
 export async function getLatestQuizResult(userId: string, quickId: string) {
   try {
     console.log('=== FETCHING LATEST QUIZ RESULT ===');

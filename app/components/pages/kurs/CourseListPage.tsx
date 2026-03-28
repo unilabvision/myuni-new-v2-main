@@ -174,6 +174,7 @@ const texts = {
 
 export default function CourseListPage({ params }: CourseListPageProps) {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [packages, setPackages] = useState<any[]>([]);
   const [ratingMap, setRatingMap] = useState<Record<string, { avg: number; count: number }>>({});
   const [topSellerIds, setTopSellerIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -250,6 +251,16 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       });
 
       setCourses(mappedCourses);
+
+      // Fetch packages
+      const { data: packagesData, error: packagesError } = await supabase
+        .from('myuni_packages')
+        .select('*')
+        .eq('is_active', true);
+        
+      if (!packagesError && packagesData) {
+        setPackages(packagesData);
+      }
 
       // Fetch ratings for all mapped courses
       const courseIds = mappedCourses.map((c) => String(c.id));
@@ -531,31 +542,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
             {renderRichText(course.description, true)}
           </div>
 
-          <div className="flex items-center justify-between text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-            <div className="flex items-center space-x-4">
-              {course.course_type === 'online' ? (
-                <span className="flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  {course.duration}
-                </span>
-              ) : (
-                <>
-                  {course.live_start_date && (
-                    <span className="flex items-center">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      {formatDate(course.live_start_date)}
-                    </span>
-                  )}
-                  {course.session_count && (
-                    <span className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      {course.session_count} {t.sessionsInfo}
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+
 
 
           <div className="flex items-center justify-between">
@@ -1018,6 +1005,73 @@ export default function CourseListPage({ params }: CourseListPageProps) {
           )}
         </div>
       </section>
+
+      {/* Eğitim Paketleri Section */}
+      {packages.length > 0 && (
+        <section className="py-16 bg-white dark:bg-neutral-900">
+          <div className="max-w-7xl px-6 sm:px-6 md:px-6 lg:px-6 xl:px-6 2xl:px-6 mx-auto">
+            <div className="mb-12">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100">
+                  {locale === 'tr' ? 'Eğitim Paketleri' : 'Course Packages'} ({packages.length})
+                </h2>
+              </div>
+              <div className="w-16 h-px bg-[#990000] mb-8"></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {packages.map((pkg) => (
+                <Link
+                  href={addRefToUrl(`/${locale}/paket/${pkg.slug}`)}
+                  key={pkg.id}
+                  className="bg-white dark:bg-neutral-900 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group"
+                >
+                  <div className="relative w-full h-48 overflow-hidden">
+                    <Image
+                      src={pkg.thumbnail_url || pkg.banner_url || '/default-course.jpg'}
+                      alt={pkg.title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-3 left-3 bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium tracking-wide">
+                      {locale === 'tr' ? 'Eğitim Paketi' : 'Course Package'}
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    <div className="mb-3 flex items-center gap-2 flex-wrap">
+                      <span className="inline-block bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-3 py-1 rounded-lg text-sm">
+                        {pkg.level || (locale === 'tr' ? 'Tüm Seviyeler' : 'All Levels')}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-[#990000] transition-colors">
+                      {pkg.title}
+                    </h3>
+
+                    <div className="mb-4 leading-relaxed text-neutral-500 dark:text-neutral-400 text-sm line-clamp-2">
+                      {pkg.description ? pkg.description.replace(/<[^>]*>/g, '').slice(0, 120) + (pkg.description.length > 120 ? '...' : '') : ''}
+                    </div>
+
+                    <div className="flex items-center justify-between flex-shrink-0 mt-auto pt-4">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+                          {pkg.price === 0 ? t.free : `${t.currency}${pkg.price}`}
+                        </span>
+                        {pkg.original_price && (
+                          <span className="text-lg text-neutral-400 line-through">
+                            {t.currency}{pkg.original_price}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

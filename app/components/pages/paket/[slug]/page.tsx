@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Calendar, MapPin, Users, Clock, AlertCircle, GraduationCap, BookOpen, Target, Award, Star } from 'lucide-react';
-import { getCourseBySlug, mapLevelToLocale } from '../../../../../lib/courseService';
+import { getPackageBySlug, mapLevelToLocale } from '../../../../../lib/courseService';
 import CourseHeroSection from './components/CourseHeroSection';
 import CourseMainContent from './components/CourseMainContent';
 import CourseSidebar from './components/CourseSidebar';
@@ -62,6 +62,7 @@ interface Course {
   shopier_product_id?: string | null;
   /** Shopier satın alma sayfası URL (Shopier'da satın al butonu) */
   shopier_product_url?: string | null;
+  included_courses?: any[];
   [key: string]: unknown;
 }
 
@@ -141,6 +142,7 @@ interface APICourseResponse {
   thumbnail_url?: unknown;
   shopier_product_id?: unknown;
   shopier_product_url?: unknown;
+  included_courses?: any[];
   [key: string]: unknown;
 }
 
@@ -201,7 +203,7 @@ interface CourseDetailPageProps {
   }>;
 }
 
-export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+export default function PackageDetailPage({ params }: CourseDetailPageProps) {
   const [courseDetail, setCourseDetails] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,8 +216,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
   // Geçerli courseType kontrolü
   const validCourseTypes = {
-    tr: 'kurs',
-    en: 'course'
+    tr: 'paket',
+    en: 'package'
   };
 
   // Eğer courseType geçerli değilse 404 göster
@@ -285,11 +287,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       setLoading(true);
       setError(null);
 
-      const courseData: APICourseResponse | null = await getCourseBySlug(courseSlug, courseLocale);
+      const courseData: any = await getPackageBySlug(courseSlug, courseLocale);
 
-      console.log('🔍 COURSE DETAIL PAGE - Raw API Response:', courseData);
-      console.log('🔍 COURSE DETAIL PAGE - Early bird price from API:', courseData?.early_bird_price);
-      console.log('🔍 COURSE DETAIL PAGE - Early bird deadline from API:', courseData?.early_bird_deadline);
+      console.log('🔍 PACKAGE DETAIL PAGE - Raw API Response:', courseData);
 
       if (!courseData) {
         setError('Course not found');
@@ -317,12 +317,13 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         session_duration_minutes: courseData.session_duration_minutes ? Number(courseData.session_duration_minutes) : undefined,
         max_participants: courseData.max_participants ? Number(courseData.max_participants) : undefined,
         learning_outcomes: Array.isArray(courseData.learning_outcomes)
-          ? courseData.learning_outcomes.map(outcome => String(outcome))
+          ? courseData.learning_outcomes.map((outcome: unknown) => String(outcome))
           : undefined,
         banner_url: courseData.banner_url ? String(courseData.banner_url) : undefined,
         thumbnail_url: courseData.thumbnail_url ? String(courseData.thumbnail_url) : undefined,
         shopier_product_id: courseData.shopier_product_id ? String(courseData.shopier_product_id) : undefined,
         shopier_product_url: courseData.shopier_product_url ? String(courseData.shopier_product_url) : undefined,
+        included_courses: Array.isArray(courseData.included_courses) ? courseData.included_courses : [],
         // Transform sections with proper defaults for required fields
         sections: courseData.sections?.map((section: APISection, index: number) => ({
           id: String(section.id || ''),
@@ -340,9 +341,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         })) || []
       };
 
-      console.log('🔍 COURSE DETAIL PAGE - Mapped Course:', mappedCourse);
-      console.log('🔍 COURSE DETAIL PAGE - Mapped early_bird_price:', mappedCourse.early_bird_price);
-      console.log('🔍 COURSE DETAIL PAGE - Mapped early_bird_deadline:', mappedCourse.early_bird_deadline);
+      console.log('🔍 PACKAGE DETAIL PAGE - Mapped Package:', mappedCourse);
 
       setCourseDetails(mappedCourse);
 
@@ -449,7 +448,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       <div className="border-b border-neutral-100 dark:border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-3 sm:py-4">
           <Link
-            href={`/${locale}/${courseType}`}
+            href={`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`}
             className="inline-flex items-center text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -737,14 +736,15 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
             />
 
             {/* Course Sections - Only show for online courses */}
-            {courseDetail.course_type === 'online' && courseDetail.sections && (
+            {courseDetail.course_type === 'online' && (
               <CourseSections
                 courseSlug={slug}
                 courseId={courseDetail.id}
-                sections={courseDetail.sections}
+                sections={courseDetail.sections || []}
                 totalLessons={totalLessons}
                 locale={locale}
                 texts={componentTexts}
+                included_courses={courseDetail.included_courses || []}
               />
             )}
 

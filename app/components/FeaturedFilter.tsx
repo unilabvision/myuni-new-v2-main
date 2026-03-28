@@ -238,18 +238,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
             </div>
           )}
 
-          {/* Course Stats */}
-          <div className="flex items-center justify-between text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-            <div className="flex items-center space-x-4">
-              {course.duration && (
-                <span className="flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  {course.duration}
-                </span>
-              )}
-              
-            </div>
-          </div>
+
 
           {/* Price Section */}
           <div className="flex items-center justify-between">

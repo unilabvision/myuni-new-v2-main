@@ -60,6 +60,15 @@ export default function LanguageSwitcher({
       ((currentLocale === 'tr' && segments[2] === 'etkinlik') || 
        (currentLocale === 'en' && segments[2] === 'event')) && segments[3];
     
+    // Paket sayfası kontrolü (TR: paket, EN: package)
+    const isPackageList = (segments.length === 3 && 
+      ((currentLocale === 'tr' && segments[2] === 'paket') || 
+       (currentLocale === 'en' && segments[2] === 'package')));
+       
+    const isPackageDetail = (segments.length >= 4 && 
+      ((currentLocale === 'tr' && segments[2] === 'paket') || 
+       (currentLocale === 'en' && segments[2] === 'package')) && segments[3]);
+
     let calculatedTargetPath = '';
     
     if (isBlogPost && blogPostAlternateSlug) {
@@ -83,6 +92,15 @@ export default function LanguageSwitcher({
         const courseBasePath = targetLocale === 'tr' ? 'kurs' : 'course';
         calculatedTargetPath = `/${targetLocale}/${courseBasePath}/${currentSlug}`;
       }
+    } else if (isPackageList) {
+      // Paket listesi sayfası için
+      const packageListPath = targetLocale === 'tr' ? 'paket' : 'package';
+      calculatedTargetPath = `/${targetLocale}/${packageListPath}`;
+    } else if (isPackageDetail) {
+      // Paket detay sayfası için - aynı slug'ı kullan
+      const currentSlug = segments[3];
+      const packageBasePath = targetLocale === 'tr' ? 'paket' : 'package';
+      calculatedTargetPath = `/${targetLocale}/${packageBasePath}/${currentSlug}`;
     } else if (isEventPage || isEventDetailPage) {
       // Etkinlik sayfası için
       const eventPath = targetLocale === 'tr' ? 'etkinlik' : 'event';

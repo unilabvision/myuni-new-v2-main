@@ -325,7 +325,7 @@ export default async function LocaleLayout({
   const locale = resolvedParams.locale || 'tr';
 
   return (
-    <html lang={locale} dir="ltr" className={`${arimo.variable} ${syne.variable} ${geistMono.variable}`}>
+    <html lang={locale} dir="ltr" className={`${arimo.variable} ${syne.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />

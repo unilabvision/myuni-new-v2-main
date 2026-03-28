@@ -63,7 +63,7 @@ interface SimilarCourse {
   thumbnail_url?: string;
   slug: string;
   level: string;
-  duration: string;
+  duration?: string;
 }
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ 
@@ -270,53 +270,12 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   };
 
   const getTotalDuration = () => {
-    
-    // Yöntem 1: Online kurslar için video derslerinden (lessons) süre hesapla
-    if (course.course_type === 'online' && sections && sections.length > 0) {
-      const totalMinutes = sections.reduce((total, section) => {
-        const duration = calculateSectionDuration(section.lessons);
-        let minutes = 0;
-        
-        if (duration.includes('sa')) {
-          const parts = duration.split('sa');
-          minutes += parseInt(parts[0]) * 60;
-          if (parts[1] && parts[1].includes('dk')) {
-            minutes += parseInt(parts[1].replace('dk', '').trim()) || 0;
-          }
-        } else if (duration.includes('dk')) {
-          minutes += parseInt(duration.replace('dk', '').trim()) || 0;
-        }
-        
-        return total + minutes;
-      }, 0);
-
-      if (totalMinutes > 0) {
-        if (totalMinutes >= 60) {
-          const hours = Math.floor(totalMinutes / 60);
-          const minutes = totalMinutes % 60;
-          return `${hours}sa${minutes > 0 ? ` ${minutes}dk` : ''}`;
-        }
-        return `${totalMinutes}dk`;
-      }
-    }
-    
-    // Yöntem 2: Live/hybrid kurslar veya ders süresi 0 çıkan online kurslar için doğrudan veritabanındaki 'duration' sütununu kullan
+    // Paketler için doğrudan veritabanındaki duration alanını kullan
     if (course.duration && course.duration.trim() !== '') {
       return course.duration;
     }
     
-    // Yöntem 3: Eğer duration girilmemişse ama live/hybrid ise ve oturum süreleri varsa hesapla
-    if ((course.course_type === 'live' || course.course_type === 'hybrid') && 
-        course.session_count && course.session_duration_minutes) {
-      const totalMinutes = course.session_count * course.session_duration_minutes;
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      return hours > 0 
-        ? `${hours} saat${minutes > 0 ? ` ${minutes} dk` : ''}` 
-        : `${minutes} dk`;
-    }
-    
-    // Tüm hesaplamalar başarısız olursa Fallback
+    // Fallback
     return '6 saat';
   };
 
@@ -325,12 +284,11 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
     try {
       setLoadingLatestCourses(true);
       
-      // En son eklenen kursları getir (mevcut kurs hariç)
+      // En son eklenen paketleri getir (mevcut paket hariç)
       const { data: courses, error } = await supabase
-        .from('myuni_courses')
-        .select('id, title, price, original_price, early_bird_price, early_bird_deadline, thumbnail_url, slug, level, duration')
+        .from('myuni_packages')
+        .select('id, title, price, original_price, thumbnail_url, slug, level, duration')
         .eq('is_active', true)
-        .eq('is_registration_open', true) // Added this filter
         .neq('id', course.id)
         .order('created_at', { ascending: false })
         .limit(2);
@@ -363,17 +321,12 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       setCheckingEnrollment(true);
       
       const { data: enrollmentData, error } = await supabase
-        .from('myuni_enrollments')
+        .from('myuni_package_enrollments')
         .select('id, is_active')
         .eq('user_id', user?.id)
-        .eq('course_id', course.id)
+        .eq('package_id', course.id)
         .eq('is_active', true)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Enrollment check error:', error);
-        return;
-      }
+        .maybeSingle();
 
       setIsEnrolled(!!enrollmentData);
     } catch (error) {
@@ -406,9 +359,9 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       return;
     }
 
-    // Eğer kullanıcı kursa kayıtlıysa, kayıt durumu ne olursa olsun kursa devam edebilsin
+    // Eğer kullanıcı pakete kayıtlıysa dashboard'a yönlendir
     if (isEnrolled) {
-      router.push(`/${locale}/watch/course/${slug}`);
+      router.push(`/${locale}/dashboard`);
       return;
     }
 
@@ -444,7 +397,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
     }
     
     // Dil bazlı URL formatı
-    const courseRoute = locale === 'tr' ? 'kurs' : 'course';
+    const courseRoute = locale === 'tr' ? 'paket' : 'package';
     let url = `/${locale}/${courseRoute}/${courseSlug}`;
     
     // Ref parametresini ekle
@@ -522,7 +475,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       );
     }
 
-    // Kullanıcı giriş yapmış ve kursa kayıtlıysa - kayıt durumu ne olursa olsun kursa devam edebilsin
+    // Kullanıcı giriş yapmış ve pakete kayıtlıysa
     if (isSignedIn && isEnrolled) {
       return (
         <button 
@@ -530,7 +483,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
           className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-sm font-medium transition-colors flex items-center justify-center"
         >
           <Play className="w-4 h-4 mr-2" fill="currentColor" />
-          Kursa Git
+          Kurslarıma Git
         </button>
       );
     }
@@ -766,7 +719,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         {/* Son Kurslar */}
         <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 p-6 rounded-sm">
           <h3 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-4">
-            Son kurslar
+            Son paketler
           </h3>
           
           {loadingLatestCourses ? (

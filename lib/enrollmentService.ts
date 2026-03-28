@@ -279,3 +279,58 @@ export async function getUserEnrollments(userId: string): Promise<UserEnrollment
     return [];
   }
 }
+
+// Kullanıcının pakete sahip olup olmadığını kontrol et
+export async function checkUserPackageEnrollment(userId: string, packageId: string): Promise<boolean> {
+  try {
+    if (!userId || !packageId) return false;
+
+    const { data, error } = await supabase
+      .from('myuni_package_enrollments')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('package_id', packageId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error checking package enrollment:', error);
+      return false;
+    }
+
+    return !!data;
+  } catch (error) {
+    console.error('Unexpected error checking package enrollment:', error);
+    return false;
+  }
+}
+
+// Kullanıcıyı pakete kaydet
+export async function enrollUserInPackage(userId: string, packageId: string, orderId?: string): Promise<boolean> {
+  try {
+    if (!userId || !packageId) return false;
+
+    // Önce zaten kayıtlı mı kontrol et
+    const alreadyEnrolled = await checkUserPackageEnrollment(userId, packageId);
+    if (alreadyEnrolled) return true;
+
+    const { error } = await supabase
+      .from('myuni_package_enrollments')
+      .insert({
+        user_id: userId,
+        package_id: packageId,
+        order_id: orderId || null,
+        is_active: true
+      });
+
+    if (error) {
+      console.error('Error enrolling user in package:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Unexpected error enrolling user in package:', error);
+    return false;
+  }
+}
