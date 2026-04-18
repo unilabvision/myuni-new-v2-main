@@ -34,6 +34,7 @@ import { MyUNIVideo } from '../../../../components/shared/content/MyUNIVideo';
 import { MyUNINotes } from '../../../../components/shared/content/MyUNINotes';
 import { MyUNIQuick } from '../../../../components/shared/content/MyUNIQuick';
 import { MixedContent } from '../../../../components/shared/content/MixedContent';
+import { EventCompetitionContainer } from '../../../../components/pages/event/[slug]/components/EventCompetition';
 
 // Define proper types
 interface Event {
@@ -105,7 +106,7 @@ interface Section {
 interface Lesson {
   id: string;
   title: string;
-  type: "video" | "notes" | "quick" | "mixed";
+  type: "video" | "notes" | "quick" | "mixed" | "competition";
   duration: string;
   isCompleted: boolean;
   lastPosition: number;
@@ -316,8 +317,8 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     return 'upcoming';
   };
 
-  const validateLessonType = (type: string): "video" | "notes" | "quick" | "mixed" => {
-    if (type === 'video' || type === 'notes' || type === 'quick' || type === 'mixed') {
+  const validateLessonType = (type: string): "video" | "notes" | "quick" | "mixed" | "competition" => {
+    if (type === 'video' || type === 'notes' || type === 'quick' || type === 'mixed' || type === 'competition') {
       return type;
     }
     return 'video';
@@ -1426,6 +1427,17 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             userId={user?.id || ''}
             type="event"
             onProgress={handleProgress}
+            onComplete={async () => {
+              await handleLessonCompletion(selectedLesson.id);
+            }}
+          />
+        );
+      case 'competition':
+        return (
+          <EventCompetitionContainer
+            lessonId={selectedLesson.id}
+            eventId={event?.id || ''}
+            userId={user?.id || ''}
             onComplete={async () => {
               await handleLessonCompletion(selectedLesson.id);
             }}

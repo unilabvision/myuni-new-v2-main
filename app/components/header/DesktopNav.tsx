@@ -23,7 +23,7 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
         { href: `/${locale}/`, label: "Ana Sayfa" },
         { href: `/${locale}/kurs`, label: "Kurslar" },
         { href: `/${locale}/etkinlik`, label: "Etkinlikler" },
-        { href: `/${locale}/kampanyalar`, label: "Kampanyalar" },
+        { href: `/${locale}/collection`, label: "Koleksiyon" },
         {
           href: `/${locale}/hakkimizda`,
           label: "Hakkımızda",
@@ -44,7 +44,7 @@ export default function DesktopNav({ locale }: DesktopNavProps) {
         { href: `/${locale}/`, label: "Home" },
         { href: `/${locale}/course`, label: "Courses" },
         { href: `/${locale}/event`, label: "Events" },
-        { href: `/${locale}/campaigns`, label: "Campaigns" },
+        { href: `/${locale}/collection`, label: "Collection" },
         {
           href: `/${locale}/about`,
           label: "About Us",

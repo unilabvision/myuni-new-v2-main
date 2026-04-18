@@ -12,8 +12,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/kulup(.*)',
   '/en/about(.*)',
   '/tr/kariyer(.*)',
-  '/tr/kampanyalar(.*)',
-  '/en/campaigns(.*)',
+  '/tr/collection(.*)',
+  '/en/collection(.*)',
   '/tr/login(.*)', // Auth routes
   '/en/login(.*)', // Auth routes
   '/tr/sign-up(.*)', // Auth routes
@@ -139,8 +139,8 @@ const isValidRoute = createRouteMatcher([
   '/tr/hakkimizda(.*)',
   '/tr/deneme(.*)',
   '/en/about(.*)',
-  '/tr/kampanyalar(.*)',
-  '/en/campaigns(.*)',
+  '/tr/collection(.*)',
+  '/en/collection(.*)',
   '/tr/kurs(.*)',
   '/tr/etkinlik(.*)',
   '/en/event(.*)',
@@ -237,9 +237,9 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   const response = NextResponse.next();
-  // Redirect English 404 page to English campaigns listing
+  // Redirect English 404 page to English collection listing
   if (pathname === '/en/404') {
-    return NextResponse.redirect(new URL('/en/campaigns', req.url));
+    return NextResponse.redirect(new URL('/en/collection', req.url));
   }
 
 
@@ -275,9 +275,9 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isValidRoute(req)) {
     console.log('❌ Invalid route detected:', pathname);
     const locale = pathname.startsWith('/tr') ? 'tr' : 'en';
-    // For EN invalid routes, redirect to campaigns listing instead of 404
+    // For EN invalid routes, redirect to collection listing instead of 404
     if (locale === 'en') {
-      return NextResponse.redirect(new URL('/en/campaigns', req.url));
+      return NextResponse.redirect(new URL('/en/collection', req.url));
     }
     return NextResponse.redirect(new URL('/tr/404', req.url));
   }

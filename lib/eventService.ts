@@ -15,7 +15,7 @@ export interface EventSection {
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
-  section_type: 'notes' | 'video'; // Allow video for events
+  section_type: 'notes' | 'video' | 'competition'; // Allow video for events
   speaker_name: string | null;
   speaker_title: string | null;
   speaker_bio: string | null;
@@ -50,7 +50,7 @@ export interface EventSection {
 export interface EventLessonItem {
   id: string;
   title: string;
-  lesson_type: 'notes' | 'video'; // allow video for events
+  lesson_type: 'notes' | 'video' | 'competition'; // allow competition for events
   duration_minutes?: number;
   order_index: number;
   section_id?: string;
@@ -174,7 +174,7 @@ export async function getEventSections(eventId: string): Promise<EventSection[]>
         .map(l => ({
           id: l.id,
           title: l.title,
-          lesson_type: l.lesson_type as 'notes' | 'video',
+          lesson_type: l.lesson_type as 'notes' | 'video' | 'competition',
           duration_minutes: l.duration_minutes,
           order_index: l.order_index || 0,
           section_id: section.id
@@ -184,7 +184,7 @@ export async function getEventSections(eventId: string): Promise<EventSection[]>
       const finalLessons: EventLessonItem[] = sectionLessons.length > 0 ? sectionLessons : [{
         id: section.id,
         title: section.title,
-        lesson_type: (sectionsWithVideo.has(section.id) ? 'video' : 'notes') as 'notes' | 'video', // Dynamic type
+        lesson_type: (sectionsWithVideo.has(section.id) ? 'video' : 'notes') as 'notes' | 'video' | 'competition', // Dynamic type
         duration_minutes: section.duration_minutes,
         order_index: section.order_index,
         section_id: section.id
