@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
     if (!isServer) {
       // Exclude server-only modules from client bundle

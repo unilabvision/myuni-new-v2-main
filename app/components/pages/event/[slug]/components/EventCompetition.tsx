@@ -85,7 +85,7 @@ export const EventCompetition: React.FC<EventCompetitionProps> = ({
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">{title || "Genel Kültür Yarışması"}</h2>
         <p className="text-gray-400 max-w-md">
-          Yarışmaya hoş geldiniz. Toplam {questions.length} sorunuz ve {durationMinutes} dakikanız var. Geri sayım siz "Yarışmayı Başlat" butonuna tıkladığınız an başlayacaktır. Süre bitiminde işaretlediğiniz şıklar otomatik gönderilir.
+          Yarışmaya hoş geldiniz. Toplam {questions.length} sorunuz ve {durationMinutes} dakikanız var. Geri sayım siz &ldquo;Yarışmayı Başlat&rdquo; butonuna tıkladığınız an başlayacaktır. Süre bitiminde işaretlediğiniz şıklar otomatik gönderilir.
         </p>
         <button 
           onClick={handleStart}
