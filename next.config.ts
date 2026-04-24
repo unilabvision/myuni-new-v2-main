@@ -7,6 +7,10 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    // react-pdf (pdfjs-dist) canvas paketini isteğe bağlı arar, ancak tarayıcıda bulunmadığı için Next.js derlemesi hata verir.
+    config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
+
     if (!isServer) {
       // Exclude server-only modules from client bundle
       config.resolve.fallback = {

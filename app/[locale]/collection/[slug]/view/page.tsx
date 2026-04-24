@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import dynamic from 'next/dynamic';
+
+const PdfViewer = dynamic(() => import('./PdfViewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 w-full bg-gray-100 dark:bg-neutral-950 flex flex-col items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+      <span className="text-sm text-neutral-500">PDF Okuyucu Yükleniyor...</span>
+    </div>
+  )
+});
 
 interface ProductBasic {
   id: string;
@@ -25,6 +36,39 @@ export default function CollectionViewPage({
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Güvenlik Korumaları (Katman 1)
+  useEffect(() => {
+    // Sağ tık engelleme
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    // Klavye kısayolları (Ctrl+P, Ctrl+S, F12 vb.) engelleme
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+        (e.metaKey && e.altKey && e.key === 'I')
+      ) {
+        e.preventDefault();
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === 's' || e.key === 'p' || e.key === 'c')
+      ) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadAndAuthorize() {
@@ -139,14 +183,7 @@ export default function CollectionViewPage({
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex-1 w-full">
-        <iframe
-          src={`${product.product_content}#toolbar=0&navpanes=0&scrollbar=1`}
-          className="w-full h-[calc(100vh-56px)]"
-          title={product.title}
-          style={{ border: 'none' }}
-        />
-      </div>
+      <PdfViewer url={`/api/collection/pdf-proxy?product_id=${product.id}`} />
     </div>
   );
 }
