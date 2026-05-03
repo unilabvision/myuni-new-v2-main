@@ -515,16 +515,22 @@ export async function updateUserEventProgress(userId: string, sectionId: string,
     }
 
     if (error) {
-      console.error('❌ Error saving event progress:', {
-        message: (error as Error).message,
-        code: (error as unknown as Record<string, unknown>).code,
-        details: (error as unknown as Record<string, unknown>).details,
-        hint: (error as unknown as Record<string, unknown>).hint,
+      const pgError = error as any;
+      // Note: .single() might return an error (like PGRST116) even if the database operation 
+      // succeeded, usually because RLS policies prevent reading the record back.
+      console.warn('⚠️ Event progress update notice:', {
+        message: pgError.message || 'No message',
+        code: pgError.code,
         isLessonBased,
         lessonId,
         realSectionId
       });
-      return null;
+
+      // If it's a real error (not just a return data visibility issue), return null.
+      // PGRST116 is "JSON object requested, but no rows returned".
+      if (pgError.code !== 'PGRST116') {
+        return null;
+      }
     }
 
     console.log('✅ Successfully updated user event progress:', data);

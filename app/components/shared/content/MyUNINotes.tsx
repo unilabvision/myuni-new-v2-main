@@ -163,10 +163,15 @@ export function MyUNINotes({
 
       // Use time-based completion for both courses and events
       if (!forceComplete && !userProgress.is_completed) {
-        // Estimate completion based on reading time
-        const estimatedReadingTime = calculateEstimatedReadingTime(currentNote.content);
-        const completionPercent = Math.min((timeSpent / estimatedReadingTime) * 100, 100);
-        isCompleted = completionPercent >= 90; // requires 90% time spent
+        // If content_type is 'secret_key', it MUST be forceCompleted (via password)
+        if (currentNote.content_type === 'secret_key') {
+          isCompleted = false;
+        } else {
+          // Estimate completion based on reading time
+          const estimatedReadingTime = calculateEstimatedReadingTime(currentNote.content);
+          const completionPercent = Math.min((timeSpent / estimatedReadingTime) * 100, 100);
+          isCompleted = completionPercent >= 90; // requires 90% time spent
+        }
       }
 
       const wasCompleted = userProgress.is_completed;
