@@ -164,8 +164,9 @@ export default function CollectionDetailPage({
   const handleBuy = () => {
     if (product?.is_free) {
       handleView();
-    } else if (product?.shopier_link) {
-      window.open(product.shopier_link, '_blank', 'noopener,noreferrer');
+    } else if (product?.id) {
+      // Iyzico ödeme sistemi: checkout sayfasına yönlendir
+      router.push(`/${locale}/checkout?id=${product.id}&type=product`);
     } else {
       alert(t.buyError);
     }

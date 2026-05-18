@@ -100,36 +100,39 @@ export default function CollectionPage() {
   // Carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Satın alınan ürün ID'lerini çek
+  // Ürünleri ve satın alımları paralel olarak yükle (flicker/gecikmeyi önlemek için)
   useEffect(() => {
-    async function fetchPurchases() {
-      try {
-        const res = await fetch('/api/collection/my-purchases');
-        const json = await res.json();
-        if (json.purchasedIds) {
-          setPurchasedIds(new Set(json.purchasedIds));
-        }
-      } catch (err) {
-        console.error('Purchases fetch failed:', err);
-      }
-    }
-    fetchPurchases();
-  }, []);
-
-  useEffect(() => {
-    async function fetchProducts() {
+    async function loadData() {
       try {
         setLoading(true);
-        const { data, error } = await supabase
+        
+        // İki isteği aynı anda paralel başlat
+        const productsPromise = supabase
           .from('myuni_products')
           .select('*')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error("Ürünler çekilirken hata oluştu:", error);
+        const purchasesPromise = fetch('/api/collection/my-purchases')
+          .then(res => res.json())
+          .catch(err => {
+            console.error('Purchases fetch failed:', err);
+            return { purchasedIds: [] };
+          });
+
+        const [productsResult, purchasesResult] = await Promise.all([
+          productsPromise,
+          purchasesPromise
+        ]);
+
+        if (productsResult.error) {
+          console.error("Ürünler çekilirken hata oluştu:", productsResult.error);
         } else {
-          setProducts(data || []);
+          setProducts(productsResult.data || []);
+        }
+
+        if (purchasesResult.purchasedIds) {
+          setPurchasedIds(new Set(purchasesResult.purchasedIds));
         }
       } catch (err) {
         console.error("Beklenmeyen hata:", err);
@@ -137,7 +140,7 @@ export default function CollectionPage() {
         setLoading(false);
       }
     }
-    fetchProducts();
+    loadData();
   }, []);
 
   // Varsayılan olarak en son eklenenleri "Öne Çıkan" kabul et veya spesifik is_featured eklenebilir. Şimdilik ilk 3'ü:

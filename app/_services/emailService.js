@@ -30,6 +30,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const isTurkish = locale === 'tr';
     const isLive = courseType === 'live';
     const isCertificate = courseType === 'certificate';
+    const isProduct = courseType === 'product'; // Koleksiyon dijital ürünü
     
     // Determine if this is an event certificate (from orderInfo.itemType)
     const isEventCertificate = orderInfo.itemType === 'event';
@@ -47,6 +48,10 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           ? `Kurs Sertifikanız Hazır - ${courseInfo.title}`
           : `Your Course Certificate is Ready - ${courseInfo.title}`;
       }
+    } else if (isProduct) {
+      subject = isTurkish
+        ? `${courseInfo.title} - Dijital Ürün Satın Alma Onayı`
+        : `${courseInfo.title} - Digital Product Purchase Confirmation`;
     } else {
       subject = isTurkish 
         ? `${courseInfo.title} - ${isLive ? 'Canlı Eğitim Onayı' : 'Kurs Satın Alma Onayı'}`
@@ -75,6 +80,13 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           ? 'Kurs sertifikanızı görüntülemek için aşağıdaki bağlantıyı kullanabilirsiniz.'
           : 'You can use the link below to view your course certificate.';
       }
+    } else if (isProduct) {
+      thankYou = isTurkish
+        ? 'MyUNI Koleksiyonu\'nu tercih ettiğiniz için teşekkürler.'
+        : 'Thank you for choosing MyUNI Collection.';
+      courseReady = isTurkish
+        ? 'Dijital ürününüz hesabınıza tanımlandı. Hemen erişebilirsiniz.'
+        : 'Your digital product has been added to your account. You can access it immediately.';
     } else {
       thankYou = isTurkish
         ? 'MyUNI\'yi tercih ettiğiniz için teşekkürler.'
@@ -91,13 +103,19 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
     const courseUrl = isCertificate && orderInfo.certificateUrl 
       ? orderInfo.certificateUrl 
+      : isProduct
+        ? `${baseUrl}/${locale}/dashboard?tab=collection`
+        : `${baseUrl}/${locale}/dashboard`;
+    const dashboardUrl = isProduct
+      ? `${baseUrl}/${locale}/dashboard?tab=collection`
       : `${baseUrl}/${locale}/dashboard`;
-    const dashboardUrl = `${baseUrl}/${locale}/dashboard`;
     
     // Content type label for email
     const contentTypeLabel = isEventCertificate 
       ? (isTurkish ? 'Etkinlik' : 'Event')
-      : (isTurkish ? 'Kurs' : 'Course');
+      : isProduct
+        ? (isTurkish ? 'Ürün' : 'Product')
+        : (isTurkish ? 'Kurs' : 'Course');
     
     const htmlContent = `
 <!DOCTYPE html>
@@ -359,7 +377,9 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         <a href="${courseUrl}" class="cta-button">
           ${isCertificate 
             ? (isTurkish ? 'Sertifikayı Görüntüle' : 'View Certificate')
-            : (isTurkish ? 'Kurslarım' : 'My Courses')
+            : isProduct
+              ? (isTurkish ? 'Koleksiyonum' : 'My Collection')
+              : (isTurkish ? 'Kurslarım' : 'My Courses')
           }
         </a>
       </div>
@@ -374,6 +394,15 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           ${isEventCertificate ? `
           <li>${isTurkish ? 'Etkinlik katılımınızı belgeleyen resmi bir dokümandır' : 'It serves as official documentation of your event participation'}</li>
           ` : ''}
+        </ol>
+      </div>
+      ` : isProduct ? `
+      <div class="steps">
+        <h3>${isTurkish ? 'Nasıl Erişirim?' : 'How to Access?'}</h3>
+        <ol>
+          <li>${isTurkish ? 'Hesabınıza giriş yapın' : 'Login to your account'}</li>
+          <li>${isTurkish ? '"Koleksiyonlarım" bölümüne gidin' : 'Go to "My Collection"'}</li>
+          <li>${isTurkish ? 'Ürününüzü görüntüleyin' : 'View your product'}</li>
         </ol>
       </div>
       ` : (!isLive ? `
@@ -427,9 +456,11 @@ ${!isCertificate ? `${isTurkish ? 'Tutar' : 'Amount'}: ${orderInfo.isFree ? (isT
 
 ${isCertificate 
   ? `${isTurkish ? 'Sertifikanızı görüntülemek için' : 'View your certificate'}: ${courseUrl}`
-  : `${isTurkish ? 'Kursunuza erişmek için' : 'Access your course'}: ${courseUrl}`
+  : isProduct
+    ? `${isTurkish ? 'Ürününüze erişmek için' : 'Access your product'}: ${courseUrl}`
+    : `${isTurkish ? 'Kursunuza erişmek için' : 'Access your course'}: ${courseUrl}`
 }
-${isTurkish ? 'Dashboard sayfası' : 'Dashboard page'}: ${dashboardUrl}
+${isTurkish ? (isProduct ? 'Koleksiyonum sayfası' : 'Dashboard sayfası') : (isProduct ? 'My Collection page' : 'Dashboard page')}: ${dashboardUrl}
 
 ${isTurkish ? 'İletişim' : 'Contact'}: info@myunilab.net
 

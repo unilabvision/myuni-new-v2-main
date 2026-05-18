@@ -6,6 +6,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  serverExternalPackages: ['iyzipay'],
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
     // react-pdf (pdfjs-dist) canvas paketini isteğe bağlı arar, ancak tarayıcıda bulunmadığı için Next.js derlemesi hata verir.
     config.resolve.alias.canvas = false;

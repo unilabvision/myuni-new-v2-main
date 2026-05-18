@@ -69,6 +69,8 @@ const isPublicRoute = createRouteMatcher([
   '/api/shopier-payment', // Shopier payment endpoint
   '/api/shopier-callback', // Shopier callback (webhook)
   '/api/shopier-return', // Shopier return (user redirect)
+  '/api/iyzico-payment',
+  '/api/iyzico-callback',
   '/api/comments',
   '/api/forms/submit',
   '/api/contact',
@@ -127,6 +129,8 @@ const isPaymentRoute = createRouteMatcher([
   '/api/shopier-payment',
   '/api/shopier-callback',
   '/api/shopier-return',
+  '/api/iyzico-payment',
+  '/api/iyzico-callback',
 ]);
 
 // Valid routes
@@ -228,6 +232,12 @@ const isAuthFlowRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
   const { pathname } = req.nextUrl;
+  
+  // API Callback ve Webhook'ları Clerk handshake'inden korumak için auth() öncesi bypass
+  if (pathname.startsWith('/api/shopier-') || pathname.startsWith('/api/iyzico-')) {
+    return NextResponse.next();
+  }
+
   const { userId } = await auth();
 
   // Course-preview route'larını özel olarak handle et (next.config.js'te rewrite var)
@@ -365,10 +375,10 @@ export const config = {
     // Match all request paths except for the ones starting with:
     // - _next/static (static files)
     // - _next/image (image optimization files)
-    // - favicon.ico (favicon file)
+    // - api/iyzico-callback, api/shopier-callback (webhooks that fail on cross-origin POST with Clerk)
     // - public folder files
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    '/((?!_next|api/iyzico-callback|api/shopier-callback|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes EXCEPT webhooks
+    '/(api(?!/iyzico-callback|/shopier-callback)|trpc)(.*)',
   ],
 };

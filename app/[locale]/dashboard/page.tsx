@@ -4,12 +4,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
-import { Clock, Users, Play, CheckCircle, Book, TrendingUp, Award, Download, Calendar, MapPin, Trophy, X, Copy, ChevronDown } from 'lucide-react';
+import { Clock, Users, Play, CheckCircle, Book, TrendingUp, Award, Download, Calendar, MapPin, Trophy, X, Copy, ChevronDown, ShoppingBag } from 'lucide-react';
 import { getCourseCompletionStats } from '../../../lib/courseService';
 import { supabase } from '../../../lib/supabase';
 import { getUserEventEnrollments } from '../../../lib/eventEnrollmentService';
 import { useUser } from '@clerk/nextjs';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 // Types
 interface Enrollment {
@@ -113,6 +113,22 @@ interface DiscountCode {
   is_referral: boolean;
 }
 
+interface ProductPurchase {
+  id: string;
+  user_id: string;
+  product_id: string;
+  price_paid: number;
+  purchased_at: string;
+  product?: {
+    id: string;
+    title: string;
+    slug: string;
+    thumbnail_url?: string;
+    product_type?: string;
+    price?: number;
+  };
+}
+
 
 // Next.js sayfa props interface'i
 interface DashboardPageProps {
@@ -129,6 +145,7 @@ const texts = {
     tabs: {
       courses: "Kurslar",
       events: "Etkinliklerim",
+      collection: "koleksiyonum",
       certificates: "Sertifikalarım",
       competitions: "Yarışmalarım",
       discountCodes: "İndirim Kodlarım"
@@ -194,6 +211,7 @@ const texts = {
     tabs: {
       courses: "My Courses",
       events: "My Events",
+      collection: "My Collection",
       certificates: "My Certificates",
       competitions: "My Competitions",
       discountCodes: "My Discount Codes",
@@ -277,7 +295,15 @@ export default function DashboardPage({ params }: DashboardPageProps) {
     );
   }
 
-  return <DashboardContent locale={locale} />;
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900 dark:border-neutral-100"></div>
+      </div>
+    }>
+      <DashboardContent locale={locale} />
+    </React.Suspense>
+  );
 }
 
 // İçerik bileşeni
@@ -286,10 +312,20 @@ function DashboardContent({ locale }: { locale: string }) {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [eventEnrollments, setEventEnrollments] = useState<EventEnrollment[]>([]);
   const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([]);
+  const [productPurchases, setProductPurchases] = useState<ProductPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('courses');
+
+  const searchParams = useSearchParams();
+  const tabParam = searchParams ? searchParams.get('tab') : null;
+
+  useEffect(() => {
+    if (tabParam && ['courses', 'events', 'collection', 'certificates', 'competitions', 'discountCodes'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [hasCompetition, setHasCompetition] = useState<boolean | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   
@@ -333,7 +369,7 @@ function DashboardContent({ locale }: { locale: string }) {
       }
       
       // Paralel olarak hem enrollments hem certificates'ları çek
-      const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult] = await Promise.all([
+      const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult, productPurchasesResult] = await Promise.all([
         // Enrollments
         supabase
           .from('myuni_enrollments')
@@ -370,12 +406,18 @@ function DashboardContent({ locale }: { locale: string }) {
         // Event Enrollments
         getUserEventEnrollments(userId),
 
-        // Discount Codes (kullanıcının sahip olduğu kodlar)
+        // Discount Codes
         supabase
           .from('discount_codes')
           .select('*')
           .eq('owner_id', userId)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+
+        // Product Purchases (Koleksiyon) - Server-side API'den çekerek RLS'yi aş
+        fetch(`/api/collection/my-purchased-products`).then(res => res.json()).catch(err => {
+          console.error('Error fetching detailed products:', err);
+          return { success: false, purchases: [] };
+        })
       ]);
 
       const { data: enrollmentsData, error: enrollmentsError } = enrollmentsResult;
@@ -383,6 +425,7 @@ function DashboardContent({ locale }: { locale: string }) {
       const { data: eventCertificatesData, error: eventCertificatesError } = eventCertificatesResult;
       const eventEnrollmentsData = eventEnrollmentsResult;
       const { data: discountCodesData, error: discountCodesError } = discountCodesResult;
+      const productPurchasesData = productPurchasesResult?.success ? productPurchasesResult.purchases : [];
 
       if (enrollmentsError) {
         throw enrollmentsError;
@@ -398,10 +441,11 @@ function DashboardContent({ locale }: { locale: string }) {
 
       if (discountCodesError) {
         console.error('Error fetching discount codes:', discountCodesError);
-        // Discount codes hatası kritik değil, devam et
       } else {
         setDiscountCodes(discountCodesData || []);
       }
+
+      setProductPurchases(productPurchasesData || []);
 
       console.log('5. Raw enrollments data:', enrollmentsData);
       console.log('6. Raw course certificates data:', courseCertificatesData);
@@ -1846,6 +1890,16 @@ function DashboardContent({ locale }: { locale: string }) {
               {t.tabs.events}
             </button>
             <button
+              onClick={() => setActiveTab('collection')}
+              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-xs ${
+                activeTab === 'collection'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.collection}
+            </button>
+            <button
               onClick={() => setActiveTab('certificates')}
               className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-xs ${
                 activeTab === 'certificates'
@@ -1878,7 +1932,7 @@ function DashboardContent({ locale }: { locale: string }) {
           </div>
 
           {/* Desktop: Horizontal Flex */}
-          <div className="hidden sm:flex space-x-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-lg max-w-2xl">
+          <div className="hidden sm:flex space-x-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-lg max-w-4xl">
             <button
               onClick={() => setActiveTab('courses')}
               className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 text-sm lg:text-base ${
@@ -1898,6 +1952,16 @@ function DashboardContent({ locale }: { locale: string }) {
               }`}
             >
               {t.tabs.events}
+            </button>
+            <button
+              onClick={() => setActiveTab('collection')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 text-sm lg:text-base ${
+                activeTab === 'collection'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.collection}
             </button>
             <button
               onClick={() => setActiveTab('certificates')}
@@ -2037,6 +2101,81 @@ function DashboardContent({ locale }: { locale: string }) {
           </>
         )}
         
+        {activeTab === 'collection' && (
+          <>
+            {productPurchases.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {productPurchases.map((purchase) => {
+                  const product = purchase.product;
+                  if (!product) return null;
+                  const imageUrl = product.thumbnail_url;
+                  return (
+                    <div key={purchase.id} className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300">
+                      <Link href={`/${locale}/collection/${product.slug}`} className="block">
+                        <div className="relative w-full h-32 sm:h-48 overflow-hidden bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center border-b border-neutral-100 dark:border-neutral-700">
+                          {imageUrl ? (
+                            <Image
+                              src={imageUrl}
+                              alt={product.title}
+                              fill
+                              className="object-cover hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <ShoppingBag className="w-10 h-10 text-neutral-400 dark:text-neutral-500" />
+                          )}
+                        </div>
+                      </Link>
+                      <div className="p-4 sm:p-6">
+                        <Link href={`/${locale}/collection/${product.slug}`}>
+                          <h3 className="text-lg sm:text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 leading-tight hover:text-[#990000] transition-colors cursor-pointer">
+                            {product.title}
+                          </h3>
+                        </Link>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+                          {locale === 'tr' ? 'Satın Alındı' : 'Purchased'}: {new Date(purchase.purchased_at).toLocaleDateString(locale === 'tr' ? 'tr-TR' : 'en-US')}
+                        </p>
+                        <div className="flex gap-2">
+                          <Link
+                            href={`/${locale}/collection/${product.slug}/view`}
+                            className="flex-1 bg-[#990000] hover:bg-[#770000] text-white px-4 py-2 rounded-md transition-colors flex items-center justify-center font-medium text-sm text-center"
+                          >
+                            {locale === 'tr' ? 'Ürünü İncele' : 'View Product'}
+                          </Link>
+                          <Link
+                            href={`/${locale}/collection/${product.slug}`}
+                            className="px-4 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors text-sm text-neutral-700 dark:text-neutral-300"
+                          >
+                            {locale === 'tr' ? 'Detay' : 'Detail'}
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 sm:py-12">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-neutral-200 dark:bg-neutral-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                  <Book className="w-6 h-6 sm:w-8 sm:h-8 text-neutral-400 dark:text-neutral-500" />
+                </div>
+                <h3 className="text-base sm:text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
+                  {locale === 'tr' ? 'Henüz koleksiyon ürününüz yok' : 'No collection items yet'}
+                </h3>
+                <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 mb-4">
+                  {locale === 'tr' ? 'Dijital ürünlere göz atmak için koleksiyonu ziyaret edin' : 'Visit the collection to browse digital products'}
+                </p>
+                <Link
+                  href={`/${locale}/collection`}
+                  className="inline-flex items-center px-4 sm:px-6 py-2 bg-[#990000] hover:bg-[#880000] text-white rounded-lg transition-colors font-medium"
+                >
+                  <Book className="w-4 h-4 mr-2" />
+                  {locale === 'tr' ? 'Koleksiyona Git' : 'Go to Collection'}
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+
         {activeTab === 'certificates' && (
           <>
             {/* Certificates Grid */}
@@ -2234,16 +2373,6 @@ function DashboardContent({ locale }: { locale: string }) {
             )}
           </>
         )}
-        
-        {/* Admin: İndirim kodu yönetimi linki */}
-        <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700">
-          <Link
-            href={`/${locale}/dashboard/admin/discount-codes`}
-            className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-[#990000] dark:hover:text-[#990000]"
-          >
-            {locale === 'tr' ? 'İndirim kodu yönetimi (yönetici)' : 'Discount code management (admin)'}
-          </Link>
-        </div>
       </div>
     </div>
   );

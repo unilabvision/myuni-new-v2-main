@@ -111,7 +111,7 @@ const texts = {
     proceedToPayment: "Ödemeye Geç",
     processing: "İşleniyor...",
     securePayment: "Güvenli Ödeme",
-    paymentInfo: "Ödeme işleminiz güvenli Shopier altyapısı üzerinden gerçekleştirilecektir.",
+    paymentInfo: "Ödeme işleminiz güvenli iyzico altyapısı üzerinden gerçekleştirilecektir.",
     privacyNote: "Ödemeye geçerek Gizlilik Politikamızı ve Mesafeli Satış Sözleşmemizi kabul etmiş olursunuz.",
     required: "zorunludur",
     currency: "₺",
@@ -169,7 +169,7 @@ const texts = {
     proceedToPayment: "Proceed to Payment",
     processing: "Processing...",
     securePayment: "Secure Payment",
-    paymentInfo: "Your payment will be processed through secure Shopier infrastructure.",
+    paymentInfo: "Your payment will be processed through secure iyzico infrastructure.",
     privacyNote: "By proceeding to payment, you accept our Privacy Policy and Distance Sales Agreement.",
     required: "is required",
     currency: "$",
@@ -226,6 +226,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   const [courseData, setCourseData] = useState<CourseData | null>(null);
+  const [productData, setProductData] = useState<{ id: string; title: string; price: number; thumbnail_url?: string | null; slug: string; description: string } | null>(null);
+  const [itemType, setItemType] = useState<'course' | 'product'>('course');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pageLoading, setPageLoading] = useState(true);
@@ -324,14 +326,44 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
       setCourseData(data as CourseData);
 
-      // Shopier link entegrasyonu: Bu kurs link ile satılıyorsa checkout'ta kalmayalım, doğrudan Shopier sayfasına yönlendir (OAuth2 yok)
-      const shopierUrl = (data as { shopier_product_url?: string | null }).shopier_product_url;
-      if (shopierUrl && typeof window !== 'undefined') {
-        window.location.href = shopierUrl;
-        return;
-      }
+      // Shopier url check removed to keep user on checkout page for Iyzico
     } catch (fetchError) {
       console.error('Error fetching course:', fetchError);
+      setError(t.error);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [locale, router, t.error]);
+
+  const fetchProductData = useCallback(async (productId: string) => {
+    try {
+      setPageLoading(true);
+      const { data, error: supabaseError } = await supabase
+        .from('myuni_products')
+        .select('id, title, price, original_price, thumbnail_url, slug, description, short_description')
+        .eq('id', productId)
+        .eq('is_active', true)
+        .single();
+
+      if (supabaseError || !data) {
+        console.error('Product fetch error:', supabaseError);
+        router.push(`/${locale}/collection`);
+        return;
+      }
+      // Map product to courseData shape so existing UI reuses without changes
+      setCourseData({
+        id: data.id,
+        title: data.title,
+        description: data.description || data.short_description || '',
+        price: data.price,
+        original_price: data.original_price,
+        thumbnail_url: data.thumbnail_url,
+        slug: data.slug,
+        is_active: true,
+      } as CourseData);
+      setProductData(data);
+    } catch (fetchError) {
+      console.error('Error fetching product:', fetchError);
       setError(t.error);
     } finally {
       setPageLoading(false);
@@ -461,7 +493,14 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       }));
     }
 
-    fetchCourseData(courseId);
+    const type = searchParams.get('type');
+    if (type === 'product') {
+      setItemType('product');
+      fetchProductData(courseId);
+    } else {
+      setItemType('course');
+      fetchCourseData(courseId);
+    }
     
     // Setup an async function to handle everything in sequence
     const initializePageData = async () => {
@@ -495,7 +534,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     // Run the initialization sequence
     initializePageData();
     
-  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchDiscountCodes]);
+  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchDiscountCodes]);
 
   // Early bird countdown timer
   useEffect(() => {
@@ -793,7 +832,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     return Object.keys(errors).length === 0;
   };
   
-  const proceedToShopier = async () => {
+  const proceedToPayment = async () => {
     if (!user || !courseData) {
       router.push(`/${locale}/sign-in`);
       return;
@@ -836,16 +875,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         referralCode: appliedReferral,
         notes: formData.notes,
         locale: locale,
-        // ÖNEMLİ: Clerk user ID'sini ekle
-        clerkUserId: user.id, // Bu satır kritik!
-        userId: user.id // Fallback için
+        clerkUserId: user.id,
+        userId: user.id,
+        itemType: itemType, // 'course' veya 'product'
       };
       
       console.log('=== PAYMENT DATA TO API ===');
       console.log('Payment data:', paymentData);
       console.log('===========================');
       
-      const response = await fetch('/api/shopier-payment', {
+      const response = await fetch('/api/iyzico-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1397,7 +1436,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
             
             {/* Ödeme Butonu */}
             <button
-              onClick={proceedToShopier}
+              onClick={proceedToPayment}
               disabled={loading}
               className="w-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 py-3 px-4 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >

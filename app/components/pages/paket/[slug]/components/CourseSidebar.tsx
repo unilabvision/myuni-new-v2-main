@@ -372,9 +372,16 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
 
     if (course.price === 0) {
       // Free course logic here
-    } else if (course.shopier_product_url) {
-      // Shopier link ile satış: doğrudan Shopier satın alma sayfasına git
-      window.open(course.shopier_product_url, '_blank', 'noopener,noreferrer');
+      let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refCode = urlParams.get('ref');
+        
+        if (refCode) {
+          checkoutUrl += `&ref=${encodeURIComponent(refCode)}`;
+        }
+      }
+      router.push(checkoutUrl);
     } else {
       // Site checkout (ödeme API entegrasyonu)
       let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
