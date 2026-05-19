@@ -34,6 +34,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Bakiye sınırlı olmayan (standart yüzdesel ve sabit tutarlı) kodlar için kullanıcı başına 1 kullanım sınırlaması
+    if (!discountCode.has_balance_limit) {
+      const { data: previousOrders, error: ordersError } = await supabase
+        .from('orders')
+        .select('orderid')
+        .eq('status', 'completed')
+        .eq('discountcode', code)
+        .or(`useremail.eq."${userId}",custom_data->>userId.eq."${userId}",custom_data->>clerkUserId.eq."${userId}"`);
+
+      if (ordersError) {
+        console.error('Error checking previous orders:', ordersError);
+      }
+
+      if (previousOrders && previousOrders.length > 0) {
+        const isEnglish = request.nextUrl.searchParams.get('locale') === 'en';
+        return NextResponse.json({ 
+          success: false, 
+          error: isEnglish
+            ? 'You have already used this discount code in a completed purchase. Each code can only be used once.'
+            : 'Bu indirim kodunu daha önce başarıyla tamamlanan bir alışverişte kullandınız. Her kod yalnızca bir kez kullanılabilir.'
+        });
+      }
+    }
+
     // Geçerlilik tarihi: valid_until = o günün sonu (23:59:59) kabul edilir
     const validUntilStr = discountCode.valid_until;
     if (validUntilStr) {

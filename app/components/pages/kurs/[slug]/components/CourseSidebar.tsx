@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
 import supabase from '../../../../../_services/supabaseClient';
+import AddToCartButton from '../../../../cart/AddToCartButton';
 
 interface Course {
   id: string;
@@ -521,7 +522,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       return (
         <button 
           disabled
-          className="w-full bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-sm font-medium flex items-center justify-center"
+          className="w-full bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium flex items-center justify-center"
         >
           <div className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin mr-2"></div>
           Kontrol ediliyor...
@@ -534,7 +535,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       return (
         <button 
           onClick={handleEnrollment}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-sm font-medium transition-colors flex items-center justify-center"
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-medium transition-colors flex items-center justify-center"
         >
           <Play className="w-4 h-4 mr-2" fill="currentColor" />
           Kursa Git
@@ -548,7 +549,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         <div className="space-y-2">
           <button 
             disabled
-            className="w-full bg-neutral-300 dark:bg-neutral-600 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-sm font-medium cursor-not-allowed flex items-center justify-center"
+            className="w-full bg-neutral-300 dark:bg-neutral-600 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium cursor-not-allowed flex items-center justify-center"
           >
             <AlertCircle className="w-4 h-4 mr-2" />
             Kayıt Kapalı
@@ -560,24 +561,100 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       );
     }
 
+    const cartItem = {
+      id: course.id || '',
+      title: course.title || '',
+      price: activePrice,
+      originalPrice: displayOriginalPrice || undefined,
+      thumbnailUrl: course.thumbnail_url,
+      type: 'course' as const,
+      slug: course.slug || ''
+    };
+
     return (
-      <button 
-        onClick={handleEnrollment}
-        className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors"
-      >
-        {!isSignedIn ? 'Satın Al/Giriş Yap' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : course.shopier_product_url ? 'Satın Al' : 'Kursa Kayıt Ol')}
-      </button>
+      <div className="flex flex-col gap-2.5 w-full">
+        <button 
+          onClick={handleEnrollment}
+          className="w-full bg-[#990000] hover:bg-[#b30000] dark:bg-[#990000] dark:hover:bg-[#b30000] text-white py-3 px-6 rounded-xl font-medium transition-colors text-center"
+        >
+          {!isSignedIn ? 'Hemen Satın Al' : (course.price === 0 ? 'Ücretsiz Kayıt Ol' : 'Hemen Satın Al')}
+        </button>
+        {course.price > 0 && (
+          <AddToCartButton item={cartItem} variant="outline" className="w-full py-3 rounded-xl" />
+        )}
+      </div>
+    );
+  };
+
+  const MobileEnrollmentButton = () => {
+    if (checkingEnrollment) {
+      return (
+        <button 
+          disabled
+          className="w-full bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium flex items-center justify-center"
+        >
+          <div className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+          Kontrol ediliyor...
+        </button>
+      );
+    }
+
+    if (isSignedIn && isEnrolled) {
+      return (
+        <button 
+          onClick={handleEnrollment}
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-medium transition-colors flex items-center justify-center"
+        >
+          <Play className="w-4 h-4 mr-2" fill="currentColor" />
+          Kursa Git
+        </button>
+      );
+    }
+
+    if (course.is_registration_open === false) {
+      return (
+        <button 
+          disabled
+          className="w-full bg-neutral-300 dark:bg-neutral-600 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium cursor-not-allowed flex items-center justify-center"
+        >
+          <AlertCircle className="w-4 h-4 mr-2" />
+          Kayıt Kapalı
+        </button>
+      );
+    }
+
+    const cartItem = {
+      id: course.id || '',
+      title: course.title || '',
+      price: activePrice,
+      originalPrice: displayOriginalPrice || undefined,
+      thumbnailUrl: course.thumbnail_url,
+      type: 'course' as const,
+      slug: course.slug || ''
+    };
+
+    return (
+      <div className="flex gap-2 items-center w-full">
+        <button 
+          onClick={handleEnrollment}
+          className="flex-1 bg-[#990000] hover:bg-[#b30000] text-white py-3 px-4 rounded-xl font-medium transition-colors text-center text-sm"
+        >
+          {!isSignedIn ? 'Hemen Al' : (course.price === 0 ? 'Kayıt Ol' : 'Hemen Al')}
+        </button>
+        {course.price > 0 && (
+          <div className="flex-1">
+            <AddToCartButton item={cartItem} variant="outline" className="w-full py-3 text-sm rounded-xl" />
+          </div>
+        )}
+      </div>
     );
   };
 
   return (
     <>
       {/* Mobil cihazlar için altta sabit buton - Her zaman görünür */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 lg:hidden z-50">
-        <EnrollmentButton />
-        <p className="text-xs text-center mt-2 text-neutral-500 dark:text-neutral-400">
-          Hemen başla, hızlıca öğren
-        </p>
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 lg:hidden z-50 shadow-lg">
+        <MobileEnrollmentButton />
       </div>
       
       <div className="sticky top-24 space-y-6">

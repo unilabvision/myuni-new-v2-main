@@ -1,13 +1,16 @@
 // app/[locale]/checkout/page.tsx
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, Suspense, use, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, ExternalLink, X, Shield } from 'lucide-react';
+import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
 import supabase from '../../_services/supabaseClient.js';
+import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -225,9 +228,14 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const { locale } = resolvedParams;
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
+  // Cart mode support
+  const { items: cartItems, clearCart } = useCart();
+  const isCartMode = searchParams.get('mode') === 'cart';
+  const cartIdsParam = searchParams.get('cartIds') || '';
+
   const [courseData, setCourseData] = useState<CourseData | null>(null);
   const [productData, setProductData] = useState<{ id: string; title: string; price: number; thumbnail_url?: string | null; slug: string; description: string } | null>(null);
-  const [itemType, setItemType] = useState<'course' | 'product'>('course');
+  const [itemType, setItemType] = useState<'course' | 'product' | 'package'>('course');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pageLoading, setPageLoading] = useState(true);
@@ -370,6 +378,40 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
   }, [locale, router, t.error]);
 
+  const fetchPackageData = useCallback(async (packageId: string) => {
+    try {
+      setPageLoading(true);
+      const { data, error: supabaseError } = await supabase
+        .from('myuni_packages')
+        .select('id, title, price, original_price, thumbnail_url, slug, description')
+        .eq('id', packageId)
+        .eq('is_active', true)
+        .single();
+
+      if (supabaseError || !data) {
+        console.error('Package fetch error:', supabaseError);
+        router.push(`/${locale}`);
+        return;
+      }
+      // Map package to courseData shape so existing UI reuses without changes
+      setCourseData({
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+        price: data.price,
+        original_price: data.original_price,
+        thumbnail_url: data.thumbnail_url,
+        slug: data.slug,
+        is_active: true,
+      } as CourseData);
+    } catch (fetchError) {
+      console.error('Error fetching package:', fetchError);
+      setError(t.error);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [locale, router, t.error]);
+
   // Bugünün tarihi yerel saatte (YYYY-MM-DD) - indirim kodları geçerlilik karşılaştırması için
   const getTodayLocalDateString = useCallback(() => {
     const now = new Date();
@@ -425,7 +467,17 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
 
     const courseId = searchParams.get('id');
-    if (!courseId) {
+    const isCartMode = searchParams.get('mode') === 'cart' || searchParams.get('cartMode') === 'true';
+
+    // URL parametreleri henüz yüklenmediyse (Next.js hydration gecikmesi) yönlendirmeyi beklet
+    const hasId = searchParams.has('id');
+    const hasCart = searchParams.has('mode') || searchParams.has('cartIds');
+    if (!hasId && !hasCart) {
+      return;
+    }
+
+    // Eğer sepet modunda değilsek ve courseId yoksa, kurslar sayfasına yönlendir
+    if (!isCartMode && !courseId) {
       const coursePath = locale === 'tr' ? 'kurs' : 'course';
       router.push(`/${locale}/${coursePath}`);
       return;
@@ -440,7 +492,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       console.log('Referral code found:', referralCodeToUse, 'Source:', urlReferralCode ? 'URL' : 'localStorage');
       setReferralCode(referralCodeToUse);
       
-      // Otomatik olarak referral kodunu doğrula ve uygula
       const applyReferralCode = async () => {
         try {
           setReferralLoading(true);
@@ -462,12 +513,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
             setReferralError('');
             showToast(t.referralCodeApplied || 'Referans kodu otomatik olarak uygulandı!', 'success');
             
-            // localStorage'dan referral kodunu temizle
             if (typeof window !== 'undefined') {
               localStorage.removeItem('myuni_referral_code');
             }
           } else {
-            // Hata durumunda sadece log'la, kullanıcıya gösterme
             console.log('Referral code validation failed:', data.error);
             setReferralError(data.error || 'Geçersiz referral kodu');
           }
@@ -479,7 +528,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         }
       };
       
-      // Referral kodunu uygula
       applyReferralCode();
     }
 
@@ -493,48 +541,42 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       }));
     }
 
-    const type = searchParams.get('type');
-    if (type === 'product') {
-      setItemType('product');
-      fetchProductData(courseId);
-    } else {
-      setItemType('course');
-      fetchCourseData(courseId);
+    if (isCartMode) {
+      // Sepet modunda tekil ürün doğrulamalarını atla
+      setPageLoading(false);
+    } else if (courseId) {
+      const type = searchParams.get('type');
+      if (type === 'product') {
+        setItemType('product');
+        fetchProductData(courseId);
+      } else if (type === 'package') {
+        setItemType('package');
+        fetchPackageData(courseId);
+      } else {
+        setItemType('course');
+        fetchCourseData(courseId);
+      }
     }
     
     // Setup an async function to handle everything in sequence
     const initializePageData = async () => {
       console.log('Initializing checkout page data...');
       
-      // Step 1: Fetch discount codes first and wait for completion
       const codesLoaded = await fetchDiscountCodes();
       console.log('Discount codes loaded:', codesLoaded);
       
-      // Step 2: Check if there's an affiliate code in localStorage
       if (typeof window !== 'undefined') {
-        console.log('Checkout page: Checking for affiliate code in localStorage...');
         const affiliateCode = localStorage.getItem('myuni_affiliate_code');
-        console.log('Checkout page: Found affiliate code in localStorage:', affiliateCode);
-        
         if (affiliateCode && codesLoaded) {
-          console.log('Checkout page: Setting discount code input value to:', affiliateCode);
           setDiscountCode(affiliateCode);
-          
-          // Step 3: Validate the code immediately since codes are already loaded
-          console.log('Checkout page: Validating affiliate code immediately:', affiliateCode);
           validateDiscountCodeWithValue(affiliateCode);
-        } else if (affiliateCode) {
-          console.log('Checkout page: Could not validate affiliate code - discount codes not loaded');
-        } else {
-          console.log('Checkout page: No affiliate code found in localStorage');
         }
       }
     };
     
-    // Run the initialization sequence
     initializePageData();
     
-  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchDiscountCodes]);
+  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchDiscountCodes]);
 
   // Early bird countdown timer
   useEffect(() => {
@@ -625,7 +667,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       return;
     }
     
-    if (foundCode.applicableCourses.length > 0 && courseData && !foundCode.applicableCourses.includes(courseData.id)) {
+    if (!isCartMode && foundCode.applicableCourses.length > 0 && courseData && !foundCode.applicableCourses.includes(courseData.id)) {
       console.log('Code not applicable for this course, showing error');
       setDiscountError(t.discountNotApplicable);
       setDiscountLoading(false);
@@ -633,61 +675,101 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
     
     let discountValue = 0;
+    const activeCartItems = isCartMode ? cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id)) : [];
+    const cartTotal = isCartMode ? activeCartItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0) : 0;
     
-    // Eğer bakiye limiti aktifse, discount_amount'u görmezden gel ve bakiye mantığına göre hesapla
-    if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined && courseData) {
-      const coursePrice = getActivePrice(courseData);
-      const remainingBalance = foundCode.remaining_balance;
-      
-      // Bakiye yeterliyse %100 indirim (kurs bedava)
-      if (remainingBalance >= coursePrice) {
-        discountValue = coursePrice;
-        console.log(`Balance limit active: Full discount (100%) applied: ${discountValue} TL`);
-      } else {
-        // Bakiye yetersizse, sadece kalan bakiye kadar indirim yap
-        discountValue = remainingBalance;
-        console.log(`Balance limit active: Partial discount applied (remaining balance): ${discountValue} TL`);
+    if (isCartMode) {
+      // ---- CART MODE DISCOUNT CALCULATION ----
+      const eligibleItems = foundCode.applicableCourses.length > 0
+        ? activeCartItems.filter(ci => foundCode.applicableCourses.includes(ci.id))
+        : activeCartItems;
+
+      if (foundCode.applicableCourses.length > 0 && eligibleItems.length === 0) {
+        console.log('Code not applicable for any items in the cart, showing error');
+        setDiscountError(t.discountNotApplicable);
+        setDiscountLoading(false);
+        return;
       }
-    } else if (courseData) {
-      // Normal indirim hesaplama (bakiye limiti yoksa)
-      if (foundCode.type === 'percentage') {
-        discountValue = (courseData.price * foundCode.discountAmount) / 100;
-        console.log(`Applying ${foundCode.discountAmount}% discount: ${discountValue}`);
-      } else {
-        discountValue = foundCode.discountAmount;
-        if (discountValue > courseData.price) {
-          discountValue = courseData.price;
+
+      const eligibleTotal = eligibleItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0);
+
+      if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined) {
+        const remainingBalance = foundCode.remaining_balance;
+        if (remainingBalance >= cartTotal) {
+          discountValue = cartTotal;
+        } else {
+          discountValue = remainingBalance;
         }
-        console.log(`Applying fixed discount: ${discountValue}`);
+        console.log(`Cart balance limit active: ${discountValue} TL applied`);
+      } else {
+        if (foundCode.type === 'percentage') {
+          discountValue = (eligibleTotal * foundCode.discountAmount) / 100;
+          console.log(`Cart percentage discount: Applied ${foundCode.discountAmount}% to ${eligibleTotal} TL = ${discountValue} TL`);
+        } else {
+          discountValue = foundCode.discountAmount;
+          if (discountValue > cartTotal) {
+            discountValue = cartTotal;
+          }
+          console.log(`Cart fixed discount: Applied ${discountValue} TL`);
+        }
+      }
+    } else {
+      // ---- SINGLE ITEM DISCOUNT CALCULATION ----
+      // Eğer bakiye limiti aktifse, discount_amount'u görmezden gel ve bakiye mantığına göre hesapla
+      if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined && courseData) {
+        const coursePrice = getActivePrice(courseData);
+        const remainingBalance = foundCode.remaining_balance;
+        
+        // Bakiye yeterliyse %100 indirim (kurs bedava)
+        if (remainingBalance >= coursePrice) {
+          discountValue = coursePrice;
+          console.log(`Balance limit active: Full discount (100%) applied: ${discountValue} TL`);
+        } else {
+          // Bakiye yetersizse, sadece kalan bakiye kadar indirim yap
+          discountValue = remainingBalance;
+          console.log(`Balance limit active: Partial discount applied (remaining balance): ${discountValue} TL`);
+        }
+      } else if (courseData) {
+        // Normal indirim hesaplama (bakiye limiti yoksa)
+        if (foundCode.type === 'percentage') {
+          discountValue = (courseData.price * foundCode.discountAmount) / 100;
+          console.log(`Applying ${foundCode.discountAmount}% discount: ${discountValue}`);
+        } else {
+          discountValue = foundCode.discountAmount;
+          if (discountValue > courseData.price) {
+            discountValue = courseData.price;
+          }
+          console.log(`Applying fixed discount: ${discountValue}`);
+        }
       }
     }
     
     // İndirim kodunu veritabanında kullanıldı olarak işaretle
     try {
-      const response = await fetch('/api/discount-usage', {
+      const response = await fetch(`/api/discount-usage?locale=${locale}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
           code: foundCode.code, 
-          userId: user?.id,
+          userId: user?.id || user?.emailAddresses?.[0]?.emailAddress,
           discountAmount: discountValue, // Bakiye güncellemesi için indirim miktarını gönder
-          coursePrice: courseData ? getActivePrice(courseData) : 0 // Kurs fiyatını da gönder (bakiye kontrolü için)
+          coursePrice: isCartMode ? cartTotal : (courseData ? getActivePrice(courseData) : 0) // Kurs/Sepet fiyatını gönder
         }),
       });
 
       const data = await response.json();
 
       if (!data.success) {
-        console.error('Discount code usage failed:', data.error);
+        console.warn('Discount code usage info:', data.error);
         // Spesifik hata mesajlarını göster
         if (data.error === 'Bu kodun kullanım limiti dolmuş') {
-          setDiscountError('Bu kodun kullanım limiti dolmuş');
+          setDiscountError(locale === 'tr' ? 'Bu indirim kodunu daha önce başarıyla tamamlanan bir alışverişte kullandınız. Her kod yalnızca bir kez kullanılabilir.' : 'You have already used this discount code in a completed purchase. Each code can only be used once.');
         } else if (data.error === 'Geçersiz indirim kodu') {
           setDiscountError(t.invalidDiscount);
         } else {
-          setDiscountError(data.error || 'İndirim kodu uygulanamadı');
+          setDiscountError(data.error || (locale === 'tr' ? 'İndirim kodu uygulanamadı' : 'Discount code could not be applied'));
         }
         setDiscountLoading(false);
         return;
@@ -833,7 +915,13 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   };
   
   const proceedToPayment = async () => {
-    if (!user || !courseData) {
+    if (!user) {
+      router.push(`/${locale}/sign-in`);
+      return;
+    }
+
+    // Cart mode: use cart items; single mode: require courseData
+    if (!isCartMode && !courseData) {
       router.push(`/${locale}/sign-in`);
       return;
     }
@@ -848,56 +936,80 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     
     try {
       const totalDiscount = calculateTotalDiscount();
-      const activePrice = getActivePrice(courseData);
-      const finalPrice = activePrice - totalDiscount; // KDV zaten dahil
-      
-      // DEBUG: User ID'sini kontrol et
-      console.log('=== CHECKOUT USER ID DEBUG ===');
-      console.log('Clerk User Object:', user);
-      console.log('Clerk User ID:', user.id);
-      console.log('User Email:', user.primaryEmailAddress?.emailAddress);
-      console.log('Form Email:', formData.email);
-      console.log('===============================');
-      
-      const paymentData = {
-        courseId: courseData.id,
-        courseName: courseData.title,
-        amount: finalPrice > 0 ? finalPrice : 0,
-        email: formData.email,
-        phone: formData.phone,
-        name: formData.fullName,
-        address: formData.address,
-        city: formData.city,
-        district: formData.district,
-        zipCode: formData.zipCode,
-        discountCodes: appliedDiscounts.map(d => d.code).join(','),
-        totalDiscount: totalDiscount,
-        referralCode: appliedReferral,
-        notes: formData.notes,
-        locale: locale,
-        clerkUserId: user.id,
-        userId: user.id,
-        itemType: itemType, // 'course' veya 'product'
-      };
-      
-      console.log('=== PAYMENT DATA TO API ===');
-      console.log('Payment data:', paymentData);
-      console.log('===========================');
+
+      let paymentData: Record<string, unknown>;
+
+      if (isCartMode) {
+        // ---- CART MODE: multiple items ----
+        const activeCartItems = cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id));
+        const cartTotal = activeCartItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0);
+        const finalPrice = Math.max(0, cartTotal - totalDiscount);
+
+        paymentData = {
+          // Cart mode marker
+          cartMode: true,
+          cartItems: activeCartItems.map(ci => ({
+            id: ci.id,
+            title: ci.title,
+            price: getCartItemActivePrice(ci),
+            originalPrice: ci.price,
+            type: ci.type,
+            slug: ci.slug,
+          })),
+          // Legacy single-item fields for backward compat (primary item)
+          courseId: 'CART',
+          courseName: `Sepet (${activeCartItems.length} ürün)`,
+          amount: finalPrice,
+          email: formData.email,
+          phone: formData.phone,
+          name: formData.fullName,
+          address: formData.address,
+          city: formData.city,
+          district: formData.district,
+          zipCode: formData.zipCode,
+          discountCodes: appliedDiscounts.map(d => d.code).join(','),
+          totalDiscount: totalDiscount,
+          referralCode: appliedReferral,
+          notes: formData.notes,
+          locale: locale,
+          clerkUserId: user.id,
+          userId: user.id,
+          itemType: 'cart',
+        };
+      } else {
+        // ---- SINGLE ITEM MODE (original flow) ----
+        const activePrice = getActivePrice(courseData!);
+        const finalPrice = activePrice - totalDiscount;
+
+        paymentData = {
+          courseId: courseData!.id,
+          courseName: courseData!.title,
+          amount: finalPrice > 0 ? finalPrice : 0,
+          email: formData.email,
+          phone: formData.phone,
+          name: formData.fullName,
+          address: formData.address,
+          city: formData.city,
+          district: formData.district,
+          zipCode: formData.zipCode,
+          discountCodes: appliedDiscounts.map(d => d.code).join(','),
+          totalDiscount: totalDiscount,
+          referralCode: appliedReferral,
+          notes: formData.notes,
+          locale: locale,
+          clerkUserId: user.id,
+          userId: user.id,
+          itemType: itemType,
+        };
+      }
       
       const response = await fetch('/api/iyzico-payment', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(paymentData),
       });
       
       const data = await response.json();
-      
-      console.log('=== API RESPONSE ===');
-      console.log('API Response:', data);
-      console.log('User ID Used:', data.userIdUsed);
-      console.log('====================');
       
       if (!data.success) {
         throw new Error(data.message || 'Ödeme başlatılamadı');
@@ -905,25 +1017,23 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       
       // %100 indirim için direkt yönlendirme
       if (data.redirectToDirect && data.redirectUrl) {
-        console.log('Redirecting to direct payment success:', data.redirectUrl);
+        if (isCartMode) clearCart();
         window.location.href = data.redirectUrl;
         return;
       }
       
-      // OAuth2 için Shopier sayfasına yönlendir
+      // Iyzico ödeme sayfasına yönlendir
       if (data.redirectUrl) {
-        console.log('Redirecting to Shopier OAuth2:', data.redirectUrl);
         window.location.href = data.redirectUrl;
         return;
       }
       
-      // Legacy: Eski form-based sistem (fallback)
+      // Legacy: form-based fallback
       if (data.formAction && data.formData) {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = data.formAction;
         form.style.display = 'none';
-        
         Object.entries(data.formData).forEach(([key, value]) => {
           const input = document.createElement('input');
           input.type = 'hidden';
@@ -931,7 +1041,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           input.value = value as string;
           form.appendChild(input);
         });
-        
         document.body.appendChild(form);
         form.submit();
         return;
@@ -946,8 +1055,9 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       setLoading(false);
     }
   };
+
   
-  if (!isLoaded || pageLoading || !courseData) {
+  if (!isLoaded || pageLoading || (!isCartMode && !courseData)) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
         <div className="p-8 max-w-md w-full mx-auto">
@@ -964,12 +1074,33 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   
   // Course URL'ini locale'e göre düzenle
   const getCoursePath = () => {
+    if (isCartMode) return `/${locale}/cart`;
+    if (!courseData) return `/${locale}`;
+    
+    if (itemType === 'package') {
+      const packagePath = locale === 'tr' ? 'paket' : 'package';
+      return `/${locale}/${packagePath}/${courseData.slug}`;
+    }
+    
+    if (itemType === 'product') {
+      return `/${locale}/collection`;
+    }
+    
     if (locale === 'tr') {
       return `/${locale}/kurs/${courseData.slug}`;
     } else {
       return `/${locale}/course/${courseData.slug}`;
     }
   };
+
+  // Cart mode: compute active cart items from cartIdsParam
+  const activeCartItems = isCartMode
+    ? cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id))
+    : [];
+  const cartTotal = isCartMode
+    ? activeCartItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0)
+    : 0;
+  const finalCartTotal = Math.max(0, cartTotal - totalDiscount);
   
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-900 py-12">
@@ -985,115 +1116,147 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           <h1 className="text-xl font-medium text-neutral-800 dark:text-neutral-200">{t.pageTitle}</h1>
         </div>
         
-        {/* Course Preview */}
-        <div className="bg-neutral-50 dark:bg-neutral-800 p-6 rounded-lg mb-8">
-          <div className="flex items-start gap-6">
-            <div className="relative w-24 h-24 flex-shrink-0">
-              <Image 
-                src={courseData.thumbnail_url || '/images/default-course.jpg'} 
-                alt={courseData.title}
-                fill
-                className="object-cover rounded-lg"
-              />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-                {courseData.title}
+        {/* Course/Cart Preview */}
+        {isCartMode ? (
+          <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg mb-8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center gap-3">
+              <ShoppingBag size={18} className="text-neutral-500 dark:text-neutral-400" />
+              <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                {locale === 'tr' ? 'Sepetinizdeki Ürünler' : 'Items in Your Cart'} ({activeCartItems.length})
               </h2>
-              <p className="text-neutral-500 dark:text-neutral-400 text-sm mb-4">
-                {stripRichText(courseData.description)}
-              </p>
-              
-              <div className="mt-4">
-                {isEarlyBirdActive(courseData) ? (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl sm:text-2xl font-medium text-amber-600 dark:text-amber-500">
-                          {t.currency}{getActivePrice(courseData)?.toFixed(2) || "0.00"}
-                        </span>
-                        <span className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
-                          (KDV Dahil)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                        <span className="text-xs sm:text-sm text-amber-600 dark:text-amber-500 font-medium">
-                          {t.earlyBirdPrice}
-                        </span>
-                      </div>
+            </div>
+            <ul className="divide-y divide-neutral-100 dark:divide-neutral-700">
+              {activeCartItems.map(ci => {
+                const ap = getCartItemActivePrice(ci);
+                const isEb = ci.earlyBirdPrice && ap !== ci.price;
+                return (
+                  <li key={ci.id} className="flex items-center gap-4 px-6 py-4">
+                    <div className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-neutral-200 dark:bg-neutral-700">
+                      {ci.thumbnailUrl ? (
+                        <Image src={ci.thumbnailUrl} alt={ci.title} fill className="object-cover" sizes="48px" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ShoppingBag size={16} className="text-neutral-400" />
+                        </div>
+                      )}
                     </div>
-                    {courseData.original_price && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-base sm:text-lg text-neutral-400 line-through">
-                          {t.currency}{courseData.original_price.toFixed(2)}
-                        </span>
-                        <span className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
-                          (Normal Fiyat)
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200 line-clamp-1">{ci.title}</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {ci.type === 'course' 
+                          ? (locale === 'tr' ? 'Eğitim' : 'Course') 
+                          : ci.type === 'package'
+                            ? (locale === 'tr' ? 'Eğitim Paketi' : 'Training Package')
+                            : (locale === 'tr' ? 'Ürün' : 'Product')}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className={`text-sm font-semibold ${isEb ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
+                        {ap.toFixed(2)}₺
+                      </span>
+                      {isEb && (
+                        <p className="text-xs text-neutral-400 dark:text-neutral-500 line-through">{ci.price.toFixed(2)}₺</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : courseData ? (
+          <div className="bg-neutral-50 dark:bg-neutral-800 p-6 rounded-lg mb-8">
+            <div className="flex items-start gap-6">
+              <div className="relative w-24 h-24 flex-shrink-0">
+                <Image 
+                  src={courseData.thumbnail_url || '/images/default-course.jpg'} 
+                  alt={courseData.title}
+                  fill
+                  className="object-cover rounded-lg"
+                />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+                  {courseData.title}
+                </h2>
+                <p className="text-neutral-500 dark:text-neutral-400 text-sm mb-4">
+                  {stripRichText(courseData.description)}
+                </p>
+                
+                <div className="mt-4">
+                  {isEarlyBirdActive(courseData) ? (
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl sm:text-2xl font-medium text-amber-600 dark:text-amber-500">
+                            {t.currency}{getActivePrice(courseData)?.toFixed(2) || "0.00"}
+                          </span>
+                          <span className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
+                            (KDV Dahil)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                          <span className="text-xs sm:text-sm text-amber-600 dark:text-amber-500 font-medium">
+                            {t.earlyBirdPrice}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    {countdown && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                        <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 font-medium mb-2">
-                          {t.earlyBirdEndsIn}
-                        </p>
-                        <div className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:gap-4 text-xs sm:text-sm">
-                          <div className="text-center">
-                            <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">
-                              {countdown.days}
+                      {courseData.original_price && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-base sm:text-lg text-neutral-400 line-through">
+                            {t.currency}{courseData.original_price.toFixed(2)}
+                          </span>
+                          <span className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
+                            (Normal Fiyat)
+                          </span>
+                        </div>
+                      )}
+                      {countdown && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                          <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 font-medium mb-2">
+                            {t.earlyBirdEndsIn}
+                          </p>
+                          <div className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:gap-4 text-xs sm:text-sm">
+                            <div className="text-center">
+                              <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">{countdown.days}</div>
+                              <div className="text-xs text-amber-600 dark:text-amber-500">{t.days}</div>
                             </div>
-                            <div className="text-xs text-amber-600 dark:text-amber-500">
-                              {t.days}
+                            <div className="text-center">
+                              <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">{countdown.hours}</div>
+                              <div className="text-xs text-amber-600 dark:text-amber-500">{t.hours}</div>
                             </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">
-                              {countdown.hours}
+                            <div className="text-center">
+                              <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">{countdown.minutes}</div>
+                              <div className="text-xs text-amber-600 dark:text-amber-500">{t.minutes}</div>
                             </div>
-                            <div className="text-xs text-amber-600 dark:text-amber-500">
-                              {t.hours}
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">
-                              {countdown.minutes}
-                            </div>
-                            <div className="text-xs text-amber-600 dark:text-amber-500">
-                              {t.minutes}
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">
-                              {countdown.seconds}
-                            </div>
-                            <div className="text-xs text-amber-600 dark:text-amber-500">
-                              {t.seconds}
+                            <div className="text-center">
+                              <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-500">{countdown.seconds}</div>
+                              <div className="text-xs text-amber-600 dark:text-amber-500">{t.seconds}</div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <span className="text-2xl font-medium text-neutral-800 dark:text-neutral-200">
-                      {t.currency}{courseData.price?.toFixed(2) || "0.00"}
-                    </span>
-                    <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-400">
-                      (KDV Dahil)
-                    </span>
-                    {courseData.original_price && (
-                      <span className="ml-3 text-lg text-neutral-400 line-through">
-                        {t.currency}{courseData.original_price.toFixed(2)}
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-2xl font-medium text-neutral-800 dark:text-neutral-200">
+                        {t.currency}{courseData.price?.toFixed(2) || "0.00"}
                       </span>
-                    )}
-                  </div>
-                )}
+                      <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-400">
+                        (KDV Dahil)
+                      </span>
+                      {courseData.original_price && (
+                        <span className="ml-3 text-lg text-neutral-400 line-through">
+                          {t.currency}{courseData.original_price.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : null}
         
         {/* Error Message */}
         {error && (
@@ -1395,13 +1558,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500 dark:text-neutral-400">{t.productAmount}</span>
                   <span className="text-neutral-800 dark:text-neutral-200">
-                    {isEarlyBirdActive(courseData) && courseData.original_price 
-                      ? courseData.original_price.toFixed(2) 
-                      : getActivePrice(courseData)?.toFixed(2) || "0.00"
-                    }{t.currency}
+                    {isCartMode ? (
+                      `${cartTotal.toFixed(2)}${t.currency}`
+                    ) : (
+                      isEarlyBirdActive(courseData) && courseData.original_price 
+                        ? `${courseData.original_price.toFixed(2)}${t.currency}`
+                        : `${(getActivePrice(courseData)?.toFixed(2) || "0.00")}${t.currency}`
+                    )}
                   </span>
                 </div>
-                {isEarlyBirdActive(courseData) && courseData.original_price && (
+                {!isCartMode && isEarlyBirdActive(courseData) && courseData.original_price && (
                   <div className="flex justify-between text-sm">
                     <span className="text-amber-600 dark:text-amber-500">{t.earlyBirdPrice}</span>
                     <span className="text-amber-600 dark:text-amber-500">
@@ -1418,7 +1584,11 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                 <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2 mt-2 flex justify-between font-medium">
                   <span className="text-neutral-800 dark:text-neutral-200">{t.total}</span>
                   <span className="text-neutral-800 dark:text-neutral-200">
-                    {(getActivePrice(courseData) - totalDiscount).toFixed(2)}{t.currency}
+                    {isCartMode ? (
+                      `${finalCartTotal.toFixed(2)}${t.currency}`
+                    ) : (
+                      `${(getActivePrice(courseData) - totalDiscount).toFixed(2)}${t.currency}`
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-end text-xs text-neutral-500 dark:text-neutral-400 mt-1">
@@ -1447,7 +1617,11 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                 </span>
               ) : (
                 <span className="flex items-center text-sm">
-                  {(getActivePrice(courseData) - totalDiscount).toFixed(2)}{t.currency} {t.proceedToPayment}
+                  {isCartMode ? (
+                    `${finalCartTotal.toFixed(2)}${t.currency}`
+                  ) : (
+                    `${(getActivePrice(courseData) - totalDiscount).toFixed(2)}${t.currency}`
+                  )} {t.proceedToPayment}
                   <ExternalLink size={14} className="ml-2" />
                 </span>
               )}

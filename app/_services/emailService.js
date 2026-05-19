@@ -31,6 +31,8 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const isLive = courseType === 'live';
     const isCertificate = courseType === 'certificate';
     const isProduct = courseType === 'product'; // Koleksiyon dijital ürünü
+    const isCart = courseType === 'cart'; // Sepet alımı
+    const isPackage = courseType === 'package'; // Eğitim paketi
     
     // Determine if this is an event certificate (from orderInfo.itemType)
     const isEventCertificate = orderInfo.itemType === 'event';
@@ -52,6 +54,14 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       subject = isTurkish
         ? `${courseInfo.title} - Dijital Ürün Satın Alma Onayı`
         : `${courseInfo.title} - Digital Product Purchase Confirmation`;
+    } else if (isCart) {
+      subject = isTurkish
+        ? `Siparişiniz Onaylandı! - Satın Aldığınız Ürünler Hazır`
+        : `Order Confirmed! - Your Purchased Items are Ready`;
+    } else if (isPackage) {
+      subject = isTurkish
+        ? `${courseInfo.title} - Eğitim Paketi Satın Alma Onayı`
+        : `${courseInfo.title} - Training Package Purchase Confirmation`;
     } else {
       subject = isTurkish 
         ? `${courseInfo.title} - ${isLive ? 'Canlı Eğitim Onayı' : 'Kurs Satın Alma Onayı'}`
@@ -87,6 +97,20 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       courseReady = isTurkish
         ? 'Dijital ürününüz hesabınıza tanımlandı. Hemen erişebilirsiniz.'
         : 'Your digital product has been added to your account. You can access it immediately.';
+    } else if (isCart) {
+      thankYou = isTurkish
+        ? 'MyUNI\'yi tercih ettiğiniz için teşekkürler.'
+        : 'Thank you for choosing MyUNI.';
+      courseReady = isTurkish
+        ? 'Sepetinizdeki ürünler başarıyla hesabınıza tanımlanmıştır.'
+        : 'The items in your cart have been successfully defined to your account.';
+    } else if (isPackage) {
+      thankYou = isTurkish
+        ? 'MyUNI Eğitim Paketlerini tercih ettiğiniz için teşekkürler.'
+        : 'Thank you for choosing MyUNI Training Packages.';
+      courseReady = isTurkish
+        ? 'Eğitim paketiniz hesabınıza tanımlandı. Paket dahilindeki tüm kurslara hemen başlayabilirsiniz.'
+        : 'Your training package has been defined to your account. You can start all courses in the package immediately.';
     } else {
       thankYou = isTurkish
         ? 'MyUNI\'yi tercih ettiğiniz için teşekkürler.'
@@ -103,11 +127,11 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
     const courseUrl = isCertificate && orderInfo.certificateUrl 
       ? orderInfo.certificateUrl 
-      : isProduct
-        ? `${baseUrl}/${locale}/dashboard?tab=collection`
+      : (isProduct || isCart)
+        ? `${baseUrl}/${locale}/dashboard`
         : `${baseUrl}/${locale}/dashboard`;
-    const dashboardUrl = isProduct
-      ? `${baseUrl}/${locale}/dashboard?tab=collection`
+    const dashboardUrl = (isProduct || isCart)
+      ? `${baseUrl}/${locale}/dashboard`
       : `${baseUrl}/${locale}/dashboard`;
     
     // Content type label for email
@@ -115,7 +139,11 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       ? (isTurkish ? 'Etkinlik' : 'Event')
       : isProduct
         ? (isTurkish ? 'Ürün' : 'Product')
-        : (isTurkish ? 'Kurs' : 'Course');
+        : isCart
+          ? (isTurkish ? 'Sepet' : 'Cart')
+          : isPackage
+            ? (isTurkish ? 'Paket' : 'Package')
+            : (isTurkish ? 'Kurs' : 'Course');
     
     const htmlContent = `
 <!DOCTYPE html>
@@ -329,9 +357,36 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         ${courseReady}
       </div>
       
+      ${isCart && courseInfo.items ? `
+      <div style="margin: 25px 0; padding: 20px; background-color: #fcfcfc; border: 1px solid #eeeeee; border-radius: 8px; text-align: left;">
+        <h3 style="font-size: 15px; font-weight: 600; color: #000000; margin-bottom: 12px; border-bottom: 1px solid #eeeeee; padding-bottom: 8px;">
+          ${isTurkish ? '--- SATIN ALINAN ÜRÜNLER ---' : '--- PURCHASED ITEMS ---'}
+        </h3>
+        <ul style="list-style: none; padding-left: 0; margin: 0;">
+          ${courseInfo.items.map(item => {
+            const isItemPackage = item.type === 'package' || 
+              (item.title && (item.title.toLowerCase().includes('paket') || item.title.toLowerCase().includes('package')));
+            const isItemProduct = item.type === 'product';
+            return `
+            <li style="font-size: 14px; color: #000000; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="text-align: left;">• <strong>${item.title}</strong></span>
+              <span style="font-size: 12px; color: #666666; background-color: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-weight: 500; margin-left: 10px; flex-shrink: 0;">
+                ${isItemProduct 
+                  ? (isTurkish ? 'Dijital Ürün' : 'Product') 
+                  : isItemPackage
+                    ? (isTurkish ? 'Eğitim Paketi' : 'Training Package')
+                    : (isTurkish ? 'Kurs' : 'Course')}
+              </span>
+            </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+      ` : `
       <div class="course-title">
         ${courseInfo.title}
       </div>
+      `}
       
       ${isCertificate ? `
       <div class="certificate-section">
@@ -351,7 +406,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       <div class="details-section">
         <div class="detail-row">
           <div class="detail-label">${contentTypeLabel}:</div>
-          <div class="detail-value">${courseInfo.title}</div>
+          <div class="detail-value">${isCart ? (isTurkish ? 'Sepet Alımı' : 'Cart Purchase') : courseInfo.title}</div>
         </div>
         <div class="detail-row">
           <div class="detail-label">${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}:</div>
@@ -367,7 +422,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         </div>
         ${!isCertificate ? `
         <div class="detail-row">
-          <div class="detail-label">${isTurkish ? 'Tutar' : 'Amount'}:</div>
+          <div class="detail-label">${isCart ? (isTurkish ? 'Toplam Tutar' : 'Total Amount') : (isTurkish ? 'Tutar' : 'Amount')}:</div>
           <div class="detail-value">${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${orderInfo.amount} ${isTurkish ? '₺' : '$'}`}</div>
         </div>
         ` : ''}
@@ -394,6 +449,15 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           ${isEventCertificate ? `
           <li>${isTurkish ? 'Etkinlik katılımınızı belgeleyen resmi bir dokümandır' : 'It serves as official documentation of your event participation'}</li>
           ` : ''}
+        </ol>
+      </div>
+      ` : isCart ? `
+      <div class="steps">
+        <h3>${isTurkish ? 'Nasıl Başlarım?' : 'How to Start?'}</h3>
+        <ol>
+          <li>${isTurkish ? 'Hesabınıza giriş yapın.' : 'Login to your account.'}</li>
+          <li>${isTurkish ? 'Eğitimlerinize Kontrol Panelinizdeki "Kurslarım" bölümünden, dijital ürünlerinize ise "Koleksiyonum" alanından dilediğiniz an erişebilirsiniz.' : 'You can access your training courses from the "My Courses" section in your Dashboard, and your digital products from the "My Collection" area anytime.'}</li>
+          <li>${isTurkish ? 'Öğrenmeye ve incelemeye başlayın!' : 'Start learning and exploring!'}</li>
         </ol>
       </div>
       ` : isProduct ? `
@@ -448,19 +512,35 @@ ${thankYou}
 ${courseReady}
 
 --- ${isCertificate ? (isTurkish ? 'SERTİFİKA DETAYLARI' : 'CERTIFICATE DETAILS') : (isTurkish ? 'SİPARİŞ DETAYLARI' : 'ORDER DETAILS')} ---
-${contentTypeLabel}: ${courseInfo.title}
+${isCart ? (isTurkish ? 'İçerik Türü: Sepet Alımı' : 'Content Type: Cart Purchase') : `${contentTypeLabel}: ${courseInfo.title}`}
+${isCart && courseInfo.items ? `
+--- ${isTurkish ? 'SATIN ALINAN ÜRÜNLER' : 'PURCHASED ITEMS'} ---
+${courseInfo.items.map((item, idx) => {
+  const isItemPackage = item.type === 'package' || 
+    (item.title && (item.title.toLowerCase().includes('paket') || item.title.toLowerCase().includes('package')));
+  const isItemProduct = item.type === 'product';
+  const typeLabel = isItemProduct 
+    ? (isTurkish ? 'Dijital Ürün' : 'Product') 
+    : isItemPackage 
+      ? (isTurkish ? 'Eğitim Paketi' : 'Training Package') 
+      : (isTurkish ? 'Kurs' : 'Course');
+  return `${idx + 1}. ${item.title} (${typeLabel})`;
+}).join('\n')}
+` : ''}
 ${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}: ${orderInfo.orderId}
 ${isTurkish ? 'Tarih' : 'Date'}: ${new Date().toLocaleDateString(isTurkish ? 'tr-TR' : 'en-US')}
 ${isTurkish ? 'E-posta' : 'Email'}: ${userInfo.email}
-${!isCertificate ? `${isTurkish ? 'Tutar' : 'Amount'}: ${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : orderInfo.amount}` : ''}
+${!isCertificate ? `${isCart ? (isTurkish ? 'Toplam Tutar' : 'Total Amount') : (isTurkish ? 'Tutar' : 'Amount')}: ${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${orderInfo.amount} ${isTurkish ? '₺' : '$'}`}` : ''}
 
 ${isCertificate 
   ? `${isTurkish ? 'Sertifikanızı görüntülemek için' : 'View your certificate'}: ${courseUrl}`
-  : isProduct
-    ? `${isTurkish ? 'Ürününüze erişmek için' : 'Access your product'}: ${courseUrl}`
-    : `${isTurkish ? 'Kursunuza erişmek için' : 'Access your course'}: ${courseUrl}`
+  : isCart
+    ? `${isTurkish ? 'İçeriklerinize erişmek için' : 'Access your contents'}: ${courseUrl}`
+    : isProduct
+      ? `${isTurkish ? 'Ürününüze erişmek için' : 'Access your product'}: ${courseUrl}`
+      : `${isTurkish ? 'Kursunuza erişmek için' : 'Access your course'}: ${courseUrl}`
 }
-${isTurkish ? (isProduct ? 'Koleksiyonum sayfası' : 'Dashboard sayfası') : (isProduct ? 'My Collection page' : 'Dashboard page')}: ${dashboardUrl}
+${isTurkish ? (isProduct || isCart ? 'Kontrol Paneli sayfası' : 'Dashboard sayfası') : (isProduct || isCart ? 'Dashboard page' : 'Dashboard page')}: ${dashboardUrl}
 
 ${isTurkish ? 'İletişim' : 'Contact'}: info@myunilab.net
 

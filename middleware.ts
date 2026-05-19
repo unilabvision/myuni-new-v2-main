@@ -14,6 +14,8 @@ const isPublicRoute = createRouteMatcher([
   '/tr/kariyer(.*)',
   '/tr/collection(.*)',
   '/en/collection(.*)',
+  '/tr/cart(.*)',
+  '/en/cart(.*)',
   '/tr/login(.*)', // Auth routes
   '/en/login(.*)', // Auth routes
   '/tr/sign-up(.*)', // Auth routes
@@ -145,6 +147,8 @@ const isValidRoute = createRouteMatcher([
   '/en/about(.*)',
   '/tr/collection(.*)',
   '/en/collection(.*)',
+  '/tr/cart(.*)',
+  '/en/cart(.*)',
   '/tr/kurs(.*)',
   '/tr/etkinlik(.*)',
   '/en/event(.*)',

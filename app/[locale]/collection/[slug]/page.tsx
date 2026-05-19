@@ -8,6 +8,7 @@ import { ArrowLeft, BookOpen, FileText, Tag, ShoppingBag, Eye, Share2, Info } fr
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
+import AddToCartButton from '@/app/components/cart/AddToCartButton';
 
 // Product interface
 interface DigitalProduct {
@@ -240,8 +241,8 @@ export default function CollectionDetailPage({
                 </p>
 
                   {/* Fiyat + Butonlar */}
-                  <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 dark:border-neutral-700 pt-8 mt-auto">
-                    <div className="flex flex-col mr-auto">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-6 border-t border-gray-100 dark:border-neutral-700 pt-8 mt-auto w-full">
+                    <div className="flex flex-col">
                       {product.original_price && product.original_price > product.price && !product.is_free && (
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-gray-400 dark:text-gray-500 line-through text-lg font-medium">
@@ -257,34 +258,44 @@ export default function CollectionDetailPage({
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleShare}
-                      className="flex items-center justify-center bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 px-6 py-3 rounded-xl font-medium transition-colors"
-                    >
-                      <Share2 className="w-5 h-5 mr-2" />
-                      {copiedMobile ? t.copied : t.share}
-                    </button>
-
-                    {/* Kontrol bitene kadar skeleton göster */}
-                    {checkingPurchase ? (
-                      <div className="w-36 h-12 bg-gray-200 dark:bg-neutral-700 rounded-xl animate-pulse" />
-                    ) : (hasPurchased || product.is_free) ? (
-                      <button
-                        onClick={handleView}
-                        className="flex items-center justify-center bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:shadow-lg"
-                      >
-                        <Eye className="w-5 h-5 mr-2" />
-                        {locale === 'tr' ? 'Ürünü İncele' : 'View Product'}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleBuy}
-                        className="flex items-center justify-center bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:shadow-lg"
-                      >
-                        <ShoppingBag className="w-5 h-5 mr-2" />
-                        {t.buyNow}
-                      </button>
-                    )}
+                    <div className="flex-1 flex flex-col items-stretch gap-2.5 w-full max-w-[360px] sm:ml-auto">
+                      {/* Kontrol bitene kadar skeleton göster */}
+                      {checkingPurchase ? (
+                        <div className="w-full h-11 bg-gray-200 dark:bg-neutral-700 rounded-xl animate-pulse" />
+                      ) : (hasPurchased || product.is_free) ? (
+                        <button
+                          onClick={handleView}
+                          className="w-full flex items-center justify-center bg-[#990000] hover:bg-[#b30000] text-white py-3 rounded-xl font-medium transition-all shadow-sm text-center"
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          {locale === 'tr' ? 'Ürünü İncele' : 'View Product'}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleBuy}
+                            className="w-full flex items-center justify-center bg-[#990000] hover:bg-[#b30000] text-white py-3 rounded-xl font-medium transition-all shadow-sm text-center"
+                          >
+                            <ShoppingBag className="w-4 h-4 mr-2" />
+                            {t.buyNow}
+                          </button>
+                          <AddToCartButton 
+                            item={{
+                              id: product.id,
+                              title: product.title,
+                              price: product.price,
+                              originalPrice: product.original_price || undefined,
+                              thumbnailUrl: product.thumbnail_url || undefined,
+                              type: 'product',
+                              slug: product.slug
+                            }} 
+                            locale={locale}
+                            variant="secondary"
+                            className="w-full py-3 rounded-xl font-medium shadow-sm"
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
               </div>
             </div>

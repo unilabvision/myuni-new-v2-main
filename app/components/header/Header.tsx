@@ -12,6 +12,7 @@ import ThemeToggle from './ThemeToggle';
 import SearchBar from './SearchBar';
 import LanguageSwitcher from '../LanguageSwitcher';
 import { getUnilabBlogPostBySlug, getUnilabBlogPostAlternateSlug } from '@/app/services/unilabBlogService';
+import CartIconButton from '../cart/CartIconButton';
 
 interface HeaderProps {
   primary?: string;
@@ -132,6 +133,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
               isDarkMode={logoSrc === '/myuni-logo-dark.png'}
               setIsDarkMode={updateTheme}
             />
+            <CartIconButton locale={locale} />
             
             {/* Auth Section */}
             {isLoaded ? (
@@ -187,6 +189,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
               isDarkMode={logoSrc === '/myuni-logo-dark.png'}
               setIsDarkMode={updateTheme}
             />
+            <CartIconButton locale={locale} />
             
             {/* Mobile Auth */}
             {isLoaded ? (

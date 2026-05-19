@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation';
 import Header from "./header/Header";
 import Footer from "./Footer";
 import BackToTop from "./BackToTop";
+import { CartProvider } from '../context/CartContext';
+import CartDrawer from './cart/CartDrawer';
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
@@ -23,13 +25,17 @@ export default function ConditionalLayout({ children, locale }: ConditionalLayou
   const shouldShowFooter = !isAdminPage && !isWatchPage;
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {!isAdminPage && <Header locale={locale} />}
-      <div className={`flex-grow ${isAdminPage ? '' : 'mt-[75px]'}`}>
-        {children}
+    <CartProvider>
+      <div className="flex flex-col min-h-screen">
+        {!isAdminPage && <Header locale={locale} />}
+        <div className={`flex-grow ${isAdminPage ? '' : 'mt-[75px]'}`}>
+          {children}
+        </div>
+        {shouldShowFooter && <Footer locale={locale} />}
+        {!isAdminPage && <BackToTop />}
+        {/* Global Cart Drawer */}
+        {!isAdminPage && <CartDrawer locale={locale} />}
       </div>
-      {shouldShowFooter && <Footer locale={locale} />}
-      {!isAdminPage && <BackToTop />}
-    </div>
+    </CartProvider>
   );
 }

@@ -193,7 +193,10 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
       }
 
       if (!sections || sections.length === 0) {
-        throw new Error('No sections found for this course');
+        console.log('No sections found for this course, displaying banner instead.');
+        setFirstVideo(null);
+        setError(null);
+        return;
       }
 
       // Then get the first lesson of the first section
@@ -211,7 +214,10 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
       }
 
       if (!lessons || lessons.length === 0) {
-        throw new Error('No lessons found for this course');
+        console.log('No lessons found for this course, displaying banner instead.');
+        setFirstVideo(null);
+        setError(null);
+        return;
       }
 
       // Finally get the first video of the first lesson
@@ -231,7 +237,9 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
         setFirstVideo(videos[0]);
         setError(null);
       } else {
-        throw new Error('No video content found for this course');
+        console.log('No preview video found for this course, displaying banner instead.');
+        setFirstVideo(null);
+        setError(null);
       }
     } catch (err) {
       console.error('First video fetch with course ID error:', err);
@@ -566,8 +574,8 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
     }
   };
 
-  // For non-online courses, just show the banner
-  if (courseDataLoaded && !isOnlineCourse) {
+  // For non-online courses OR when there's no preview video found (but no hard fetch error), just show the banner cleanly
+  if (courseDataLoaded && (!isOnlineCourse || (!firstVideo && !error))) {
     return (
       <div className="w-full">
         <div className="relative bg-neutral-100 dark:bg-neutral-800 rounded-sm overflow-hidden aspect-video border border-neutral-200 dark:border-neutral-700">

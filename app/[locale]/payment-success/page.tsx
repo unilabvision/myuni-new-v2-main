@@ -5,8 +5,9 @@ import React, { useEffect, useState, Suspense, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
-import { CheckCircle, ArrowRight, Play, BookOpen, ShoppingBag } from 'lucide-react';
+import { CheckCircle, ArrowRight, Play, BookOpen, ShoppingBag, Folder } from 'lucide-react';
 import supabase from '../../_services/supabaseClient';
+import { useCart } from '../../context/CartContext';
 
 interface PaymentSuccessPageProps {
   params: Promise<{
@@ -19,13 +20,16 @@ const texts = {
     congratulations: "Tebrikler! Satın Alma İşlemi Başarılı!",
     courseAdded: "kursunuz hesabınıza tanımlanmıştır.",
     productAdded: "Ürününüz hesabınıza tanımlanmıştır.",
+    cartAdded: "Sepetinizdeki ürünler başarıyla hesabınıza tanımlanmıştır.",
     orderSummary: "Sipariş Özeti",
     freeDiscount: "%100 İndirim Uygulandı",
     startNow: "Kursunuza hemen başlayabilir veya dilediğiniz zaman hesabınızdan erişebilirsiniz.",
     productStartNow: "Ürününüze hemen erişebilir veya dilediğiniz zaman koleksiyonunuzdan ulaşabilirsiniz.",
+    cartStartNow: "Satın aldığınız eğitimlere Kontrol Panelinizden, dijital ürünlerinize ise Koleksiyonunuzdan hemen erişebilirsiniz.",
     support: "Sorularınız için destek ekibimizle iletişime geçebilirsiniz.",
     goToCourse: "Kursa Git",
     goToProduct: "Ürünü İncele",
+    goToDashboard: "Kontrol Paneline Git",
     myCourses: "Kurslarım",
     myCollection: "Koleksiyonum",
     needHelp: "Desteğe ihtiyacınız varsa",
@@ -42,18 +46,22 @@ const texts = {
     errorFetchingCourse: "İçerik bilgileri alınırken hata oluştu",
     course: "Kurs",
     product: "Ürün",
+    purchasedItems: "Satın Alınan Ürünler",
   },
   en: {
     congratulations: "Congratulations! Purchase Successful",
     courseAdded: "course has been added to your account.",
     productAdded: "product has been added to your account.",
+    cartAdded: "Items in your cart have been successfully defined to your account.",
     orderSummary: "Order Summary",
     freeDiscount: "100% Discount Applied",
     startNow: "You can start your course immediately or access it from your account anytime.",
     productStartNow: "You can access your product immediately or find it in your collection anytime.",
+    cartStartNow: "You can access your purchased courses from your Dashboard, and digital products from your Collection.",
     support: "You can contact our support team for any questions.",
     goToCourse: "Go to Course",
     goToProduct: "View Product",
+    goToDashboard: "Go to Dashboard",
     myCourses: "My Courses",
     myCollection: "My Collection",
     needHelp: "If you need support",
@@ -70,6 +78,7 @@ const texts = {
     errorFetchingCourse: "Error fetching content information",
     course: "Course",
     product: "Product",
+    purchasedItems: "Purchased Items",
   }
 };
 
@@ -85,6 +94,12 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isLoaded } = useUser();
+  const { clearCart } = useCart();
+
+  // Ödeme başarılı olduğu için sepeti temizle
+  useEffect(() => {
+    clearCart();
+  }, [clearCart]);
 
   const orderIdParam = searchParams.get('order_id');
   const courseId = searchParams.get('courseId');
@@ -93,22 +108,27 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const isFreePurchase = searchParams.get('free') === 'true';
   const orderId = searchParams.get('orderId');
   const paymentId = searchParams.get('paymentId');
-  const itemType = searchParams.get('type') || 'course'; // 'course' veya 'product'
+  const itemType = searchParams.get('type') || 'course';
   const isProduct = itemType === 'product';
+  
+  // Cart Mode fields
+  const isCartMode = searchParams.get('cartMode') === 'true';
+  const rawNames = searchParams.get('names');
+  const cartItemNames = rawNames ? decodeUrlString(rawNames).split(', ') : [];
 
   const [itemSlug, setItemSlug] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState<string | null>(null);
   const [loadingItem, setLoadingItem] = useState(true);
-  const [resolvingOrder, setResolvingOrder] = useState(!!orderIdParam && !courseId);
+  const [resolvingOrder, setResolvingOrder] = useState(!!orderIdParam && !courseId && !isCartMode);
 
   const resolvedParams = use(params);
   const { locale } = resolvedParams;
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
-  // Shopier legacy: order_id ile geldiyse çöz
+  // Shopier legacy: order_id ile geldiyse çöz (Sadece tekil kurs ödemeleri için geçerli)
   useEffect(() => {
-    if (!orderIdParam || courseId) {
-      if (orderIdParam && courseId) setResolvingOrder(false);
+    if (isCartMode || !orderIdParam || courseId) {
+      if ((orderIdParam && courseId) || isCartMode) setResolvingOrder(false);
       return;
     }
     setResolvingOrder(true);
@@ -134,18 +154,17 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
       }
     };
     resolveOrderAndRedirect();
-  }, [orderIdParam, courseId]);
+  }, [orderIdParam, courseId, isCartMode]);
 
-  // Kurs veya Ürün bilgilerini çek
+  // Kurs veya Ürün bilgilerini çek (Sepet modunda değilsek)
   useEffect(() => {
     const fetchItemData = async () => {
-      if (!courseId) {
+      if (isCartMode || !courseId) {
         setLoadingItem(false);
         return;
       }
       try {
         if (isProduct) {
-          // Ürün bilgilerini myuni_products'tan çek
           const { data, error } = await supabase
             .from('myuni_products')
             .select('slug, title')
@@ -160,7 +179,6 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
           setItemSlug(data.slug);
           setItemTitle(data.title);
         } else {
-          // Kurs bilgilerini myuni_courses'tan çek
           const { data, error } = await supabase
             .from('myuni_courses')
             .select('slug, title')
@@ -182,18 +200,18 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
       }
     };
     fetchItemData();
-  }, [courseId, isProduct]);
+  }, [courseId, isProduct, isCartMode]);
 
   useEffect(() => {
     if (isLoaded && !user) {
       router.push(`/${locale}/sign-in`);
     }
-    if (!courseId && !orderIdParam) {
+    if (!isCartMode && !courseId && !orderIdParam) {
       router.push(`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`);
     }
-  }, [isLoaded, user, courseId, orderIdParam, router, locale]);
+  }, [isLoaded, user, courseId, orderIdParam, isCartMode, router, locale]);
 
-  if (!isLoaded || loadingItem || resolvingOrder || (!courseId && !orderIdParam)) {
+  if (!isLoaded || (loadingItem && !isCartMode) || resolvingOrder || (!isCartMode && !courseId && !orderIdParam)) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
         <div className="p-8 max-w-md w-full mx-auto">
@@ -206,8 +224,8 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
     );
   }
 
-  // Slug bulunamazsa hata
-  if (!itemSlug) {
+  // Sepet modu değilse ve slug bulunamazsa hata
+  if (!isCartMode && !itemSlug) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
         <div className="p-8 max-w-md w-full mx-auto text-center">
@@ -252,7 +270,11 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
             {t.congratulations}
           </h1>
           <p className="text-neutral-600 dark:text-neutral-400 mb-8">
-            {isProduct ? t.productAdded : (
+            {isCartMode ? (
+              t.cartAdded
+            ) : isProduct ? (
+              t.productAdded
+            ) : (
               <><span className="font-medium">{displayName}</span>{' '}{t.courseAdded}</>
             )}
           </p>
@@ -261,14 +283,27 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
           <div className="bg-neutral-50 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-lg p-6 mb-8">
             <h3 className="font-medium text-neutral-700 dark:text-neutral-300 mb-4">{t.orderSummary}</h3>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-600 dark:text-neutral-400">
-                  {isProduct ? t.product : t.course}:
-                </span>
-                <span className="text-neutral-800 dark:text-neutral-200 font-medium">{displayName}</span>
-              </div>
-              {orderId && (
+              {isCartMode ? (
+                <div>
+                  <span className="text-neutral-600 dark:text-neutral-400 block mb-2">{t.purchasedItems}:</span>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {cartItemNames.map((name, i) => (
+                      <li key={i} className="text-neutral-800 dark:text-neutral-200 font-medium text-sm">
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
                 <div className="flex items-center justify-between">
+                  <span className="text-neutral-600 dark:text-neutral-400">
+                    {isProduct ? t.product : t.course}:
+                  </span>
+                  <span className="text-neutral-800 dark:text-neutral-200 font-medium">{displayName}</span>
+                </div>
+              )}
+              {orderId && (
+                <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-neutral-600 mt-2">
                   <span className="text-neutral-600 dark:text-neutral-400">Sipariş No:</span>
                   <span className="text-neutral-800 dark:text-neutral-200 font-mono text-sm">{orderId}</span>
                 </div>
@@ -292,13 +327,16 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
           {/* Info */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
             <div className="flex items-start space-x-3">
-              {isProduct
-                ? <ShoppingBag className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                : <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              }
+              {isCartMode ? (
+                <Folder className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              ) : isProduct ? (
+                <ShoppingBag className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              ) : (
+                <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              )}
               <div className="text-left">
                 <p className="text-blue-800 dark:text-blue-200 text-sm leading-relaxed mb-2">
-                  {isProduct ? t.productStartNow : t.startNow}
+                  {isCartMode ? t.cartStartNow : (isProduct ? t.productStartNow : t.startNow)}
                 </p>
                 <p className="text-blue-700 dark:text-blue-300 text-sm">{t.support}</p>
               </div>
@@ -307,10 +345,19 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 mb-8">
-            {isProduct ? (
+            {isCartMode ? (
+              <Link
+                href={`/${locale}/dashboard`}
+                className="bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-8 py-3 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center font-medium justify-center"
+              >
+                <Folder size={16} className="mr-2" />
+                {t.goToDashboard}
+                <ArrowRight size={16} className="ml-2" />
+              </Link>
+            ) : isProduct ? (
               <Link
                 href={`/${locale}/collection/${itemSlug}/view`}
-                className="bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-8 py-3 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center font-medium"
+                className="bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-8 py-3 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center font-medium justify-center"
               >
                 <ShoppingBag size={16} className="mr-2" />
                 {t.goToProduct}
@@ -319,20 +366,13 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
             ) : (
               <Link
                 href={`/${locale}/watch/course/${itemSlug}`}
-                className="bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-8 py-3 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center font-medium"
+                className="bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-8 py-3 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center font-medium justify-center"
               >
                 <Play size={16} className="mr-2" fill="currentColor" />
                 {t.goToCourse}
                 <ArrowRight size={16} className="ml-2" />
               </Link>
             )}
-
-            <Link
-              href={isProduct ? `/${locale}/collection` : `/${locale}/dashboard`}
-              className="bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 px-8 py-3 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors border border-neutral-300 dark:border-neutral-600 flex items-center"
-            >
-              {isProduct ? t.myCollection : t.myCourses}
-            </Link>
           </div>
 
           {/* Thank You */}
@@ -356,14 +396,14 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
           <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6">
             <h4 className="font-medium text-neutral-800 dark:text-neutral-200 mb-3">
-              {isProduct ? t.productAccess : t.courseAccess}
+              {isCartMode ? "📚 İçeriklere Erişim" : (isProduct ? t.productAccess : t.courseAccess)}
             </h4>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              {isProduct ? t.productAccessDesc : t.courseAccessDesc}
+              {isCartMode ? (locale === 'en' ? "You can easily access and review all your purchased training courses from the 'My Courses' section in your Dashboard, and your digital products from the 'My Collection' area anytime." : "Satın aldığınız tüm eğitimlere Kontrol Panelinizde yer alan “Kurslarım” bölümünden, dijital ürünlerinize ise “Koleksiyonum” alanından dilediğiniz zaman kolayca erişebilir ve inceleyebilirsiniz.") : (isProduct ? t.productAccessDesc : t.courseAccessDesc)}
             </p>
           </div>
 
-          {!isProduct && (
+          {(!isProduct || isCartMode) && (
             <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6">
               <h4 className="font-medium text-neutral-800 dark:text-neutral-200 mb-3">{t.certificate}</h4>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{t.certificateDesc}</p>
