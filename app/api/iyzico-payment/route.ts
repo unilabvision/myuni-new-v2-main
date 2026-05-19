@@ -265,7 +265,7 @@ export async function POST(request: Request) {
                 name: courseName,
                 category1: "Eğitim",
                 itemType: Iyzipay.BASKET_ITEM_TYPE.VIRTUAL,
-                price: amount.toFixed(2)
+                price: (amount + (body.totalDiscount || 0)).toFixed(2)
             }
         ]
     };
