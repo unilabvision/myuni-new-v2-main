@@ -75,7 +75,7 @@ export default function CartPage({ params }: CartPageProps) {
 
   const handleCheckout = () => {
     if (!isSignedIn) {
-      router.push(`/${locale}/sign-in?redirect_url=/${locale}/cart`);
+      router.push(`/${locale}/login?redirect_url=/${locale}/cart`);
       return;
     }
     // Pass cart items via query param (base64 encoded IDs) to checkout
@@ -296,7 +296,7 @@ export default function CartPage({ params }: CartPageProps) {
                     {t.signInRequired}
                   </p>
                   <Link
-                    href={`/${locale}/sign-in?redirect_url=/${locale}/cart`}
+                    href={`/${locale}/login?redirect_url=/${locale}/cart`}
                     className="flex items-center justify-center gap-2 w-full py-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl text-sm font-semibold hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-all duration-200"
                   >
                     {t.signIn}

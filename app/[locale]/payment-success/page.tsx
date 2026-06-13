@@ -204,7 +204,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
 
   useEffect(() => {
     if (isLoaded && !user) {
-      router.push(`/${locale}/sign-in`);
+      router.push(`/${locale}/login`);
     }
     if (!isCartMode && !courseId && !orderIdParam) {
       router.push(`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`);

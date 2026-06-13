@@ -110,7 +110,7 @@ export default function EnrollmentButton({
       
       // Mevcut sayfayı redirect parametresi olarak ekle
       const currentPath = window.location.pathname;
-      const redirectUrl = `/${locale}/sign-in?redirect=${encodeURIComponent(currentPath)}`;
+      const redirectUrl = `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
       
       console.log('Redirecting to:', redirectUrl);
       router.push(redirectUrl);
@@ -334,7 +334,7 @@ export default function EnrollmentButton({
   // Login için redirect URL oluştur
   const createSignInUrl = () => {
     const currentPath = window.location.pathname;
-    return `/${locale}/sign-in?redirect=${encodeURIComponent(currentPath)}`;
+    return `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
   };
 
   // Loading durumu

@@ -462,7 +462,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
   useEffect(() => {
     if (isLoaded && !user) {
-      router.push(`/${locale}/sign-in`);
+      router.push(`/${locale}/login`);
       return;
     }
 
@@ -916,13 +916,13 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   
   const proceedToPayment = async () => {
     if (!user) {
-      router.push(`/${locale}/sign-in`);
+      router.push(`/${locale}/login`);
       return;
     }
 
     // Cart mode: use cart items; single mode: require courseData
     if (!isCartMode && !courseData) {
-      router.push(`/${locale}/sign-in`);
+      router.push(`/${locale}/login`);
       return;
     }
     
