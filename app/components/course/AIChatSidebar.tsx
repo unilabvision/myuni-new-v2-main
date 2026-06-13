@@ -328,7 +328,7 @@ export default function AIChatSidebar({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP hatası: ${response.status}`);
+        throw new Error(errorData.message || errorData.error || `HTTP hatası: ${response.status}`);
       }
 
       const data: ChatResponse = await response.json();
@@ -368,9 +368,8 @@ export default function AIChatSidebar({
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           errorMessage = 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin.';
-        } else if (error.message.includes('fetch')) {
-          errorMessage = 'Bağlantı sorunu yaşıyorum. İnternet bağlantınızı kontrol edin.';
         } else {
+          errorMessage = error.message;
           setError(error.message);
         }
       }

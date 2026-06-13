@@ -104,6 +104,8 @@ YANIT KURALLARI:
 - Türkçe yanıtla
 - Açık ve anlaşılır ol
 - Maksimum 4-5 cümle kullan (kod örnekleri hariç)
+- Kesinlikle yanıtını yarım bırakma, başladığın tüm cümleleri tam olarak bitir.
+- Konuyu çok uzatmadan, kısa ve öz bir paragraf halinde özetle.
 - Teknik terimleri açıkla
 - Pratik örnekler ver
 - Hiçbir markdown formatı kullanma
@@ -112,7 +114,7 @@ YANIT KURALLARI:
 - Liste yapmak yerine virgülle ayır
 - Kod için sadece üç backtick kullan: \`\`\`dil kodu \`\`\`
 
-ÖNEMLİ: Yanıtlarında hiç formatting işareti kullanma. Sadece düz metin ve kod blokları.`;
+ÖNEMLİ: Yanıtlarında hiç formatting işareti kullanma. Sadece düz metin ve kod blokları. Cümlelerini asla yarım bırakma.`;
 
   // Ders bağlamı ekle
   if (lessonData) {
@@ -164,32 +166,8 @@ function validateResponse(text: string): { isValid: boolean; cleanedText: string
   let cleaned = text.trim();
 
   // Çok kısa yanıtları reddet
-  if (cleaned.length < 20) {
+  if (cleaned.length < 10) {
     return { isValid: false, cleanedText: cleaned, error: 'Yanıt çok kısa' };
-  }
-
-  // Çok uzun yanıtları kısalt
-  if (cleaned.length > 1000) {
-    // Kod bloğu var mı kontrol et
-    const hasCodeBlocks = /```[\s\S]*?```/.test(cleaned);
-    const maxLength = hasCodeBlocks ? 1200 : 800;
-    
-    if (cleaned.length > maxLength) {
-      // Cümle sonlarından kes
-      const sentences = cleaned.split(/[.!?]+/);
-      let truncated = '';
-      
-      for (const sentence of sentences) {
-        const newText = truncated + sentence + '.';
-        if (newText.length <= maxLength - 100) {
-          truncated = newText;
-        } else {
-          break;
-        }
-      }
-      
-      cleaned = truncated || cleaned.slice(0, maxLength - 50) + '...';
-    }
   }
 
   return { isValid: true, cleanedText: cleaned };
@@ -349,12 +327,11 @@ export async function POST(request: NextRequest) {
 
     // Gelişmiş Gemini model yapılandırması
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash-exp", // En güvenilir model
+      model: "gemini-2.5-flash", // Güncel ve stabil model
       generationConfig: {
         temperature: 0.2, // Çok düşük - tutarlılık için
         topK: 15,
         topP: 0.7,
-        maxOutputTokens: 500,
         candidateCount: 1,
       },
       safetySettings: [
@@ -454,8 +431,11 @@ export async function POST(request: NextRequest) {
       } else if (error.message.includes('timeout') || error.message.includes('TIMEOUT')) {
         errorMessage = 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin.';
         statusCode = 408;
+      } else if (error.message.includes('404') || error.message.includes('not found')) {
+        errorMessage = 'Yapay zeka modeli bulunamadı (Yapılandırma hatası). Lütfen sistem yöneticinize bildirin.';
+        statusCode = 404;
       } else if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorMessage = 'Bağlantı sorunu yaşıyorum. İnternet bağlantınızı kontrol edin.';
+        errorMessage = 'Yapay zeka sunucularına bağlanılamadı. Lütfen birkaç saniye sonra tekrar deneyin.';
         statusCode = 503;
       } else if (processingTime > 25000) {
         errorMessage = 'İşlem çok uzun sürdü. Lütfen daha kısa bir soru sorun.';
