@@ -370,7 +370,7 @@ export default function AIChatSidebar({
           errorMessage = 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin.';
         } else {
           errorMessage = error.message;
-          setError(error.message);
+          // setError(error.message); // Yalnızca chat mesajı olarak gösterilmesi için kapatıldı
         }
       }
       

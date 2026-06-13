@@ -38,14 +38,9 @@ interface ChatResponse {
   error?: string;
 }
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Supabase ve Gemini istemcileri (lazy initialization için)
+let supabase: ReturnType<typeof createClient> | null = null;
+let genAI: GoogleGenerativeAI | null = null;
 
 // Gelişmiş yanıt temizleme fonksiyonu
 function cleanAIResponse(text: string): string {
@@ -231,6 +226,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Lazy initialization
+    if (!genAI) {
+      genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    }
+
+    if (!supabase) {
+      supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+    }
+
     // Request body parse etme
     let body: ChatRequest;
     try {
@@ -300,7 +307,7 @@ export async function POST(request: NextRequest) {
     
     if (lessonId && typeof lessonId === 'string') {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
           .from('myuni_course_lessons')
           .select('title, description, lesson_type, duration_minutes')
           .eq('id', lessonId)
@@ -326,8 +333,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Gelişmiş Gemini model yapılandırması
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash", // Güncel ve stabil model
+    const model = genAI!.getGenerativeModel({ 
+      model: "gemini-2.0-flash", // Güncel ve stabil model
       generationConfig: {
         temperature: 0.2, // Çok düşük - tutarlılık için
         topK: 15,

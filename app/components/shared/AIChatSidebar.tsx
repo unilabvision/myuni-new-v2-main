@@ -393,7 +393,8 @@ export default function AIChatSidebar({
         } else if (error.message.includes('fetch')) {
           errorMessage = 'Bağlantı sorunu yaşıyorum. İnternet bağlantınızı kontrol edin.';
         } else {
-          setError(error.message);
+          errorMessage = error.message;
+          // setError(error.message); // Yalnızca chat mesajı olarak gösterilmesi için kapatıldı
         }
       }
       
