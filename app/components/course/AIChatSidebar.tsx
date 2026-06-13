@@ -328,7 +328,18 @@ export default function AIChatSidebar({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || `HTTP hatası: ${response.status}`);
+        const errMessage = errorData.message || errorData.error || `HTTP hatası: ${response.status}`;
+        
+        // Throw yerine direkt state'i güncelliyoruz ki Next.js dev overlay kırmızı ekran çıkmasın
+        const errorAiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: errMessage,
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, errorAiMessage]);
+        setIsLoading(false);
+        return;
       }
 
       const data: ChatResponse = await response.json();

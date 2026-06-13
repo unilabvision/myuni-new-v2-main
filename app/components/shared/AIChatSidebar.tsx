@@ -350,7 +350,17 @@ export default function AIChatSidebar({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error: ${response.status}`);
+        const errMessage = errorData.error || errorData.message || `HTTP error: ${response.status}`;
+        
+        const errorAiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: errMessage,
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, errorAiMessage]);
+        setIsLoading(false);
+        return;
       }
 
       const data: ChatResponse = await response.json();

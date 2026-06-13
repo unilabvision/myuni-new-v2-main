@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
 
     // Gelişmiş Gemini model yapılandırması
     const model = genAI!.getGenerativeModel({ 
-      model: "gemini-2.0-flash", // Güncel ve stabil model
+      model: "gemini-2.5-flash", // Güncel ve stabil model
       generationConfig: {
         temperature: 0.2, // Çok düşük - tutarlılık için
         topK: 15,
@@ -367,11 +367,12 @@ export async function POST(request: NextRequest) {
     console.log('Prompt hazırlandı:', { 
       promptLength: enhancedPrompt.length,
       hasLessonContext: !!lessonData?.description,
-      model: 'gemini-2.0-flash-exp'
+      model: 'gemini-2.5-flash'
     });
 
     // AI yanıtı oluştur - retry ile
-    const rawResponse = await generateResponseWithRetry(model, enhancedPrompt, 3);
+    // Ücretsiz limitleri çabuk tüketmemek için retry sayısını 1'e düşürdük
+    const rawResponse = await generateResponseWithRetry(model, enhancedPrompt, 1);
     
     console.log('Ham AI yanıtı alındı:', { 
       length: rawResponse.length,
