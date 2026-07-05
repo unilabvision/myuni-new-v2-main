@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Calendar, MapPin, Users, Clock, AlertCircle, GraduationCap, BookOpen, Target, Award, Star } from 'lucide-react';
-import { getCourseBySlug, mapLevelToLocale } from '../../../../../lib/courseService';
+import { getCourseBySlug, getCourseTiers, mapLevelToLocale } from '../../../../../lib/courseService';
 import CourseHeroSection from './components/CourseHeroSection';
 import CourseMainContent from './components/CourseMainContent';
 import CourseSidebar from './components/CourseSidebar';
@@ -16,6 +16,7 @@ import CourseTestimonials from './components/CourseTestimonials';
 import CourseLoadingSkeleton from './components/CourseLoadingSkeleton';
 import CourseErrorState from './components/CourseErrorState';
 import { texts } from './data/courseTexts';
+import type { CourseTier } from '@/lib/types/tier';
 
 // Unified interfaces that match what components expect
 interface Lesson {
@@ -199,9 +200,10 @@ interface CourseDetailPageProps {
     locale: string;
     courseType: string;
   }>;
+  initialTiers?: CourseTier[];
 }
 
-export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+export default function CourseDetailPage({ params, initialTiers = [] }: CourseDetailPageProps) {
   const [courseDetail, setCourseDetails] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -710,6 +712,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               slug={slug}
               locale={locale}
               sections={courseDetail.sections}
+              initialTiers={initialTiers}
             />
           </div>
         </div>
@@ -830,12 +833,19 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
               slug={slug}
               locale={locale}
               sections={courseDetail.sections}
+              initialTiers={initialTiers}
             />
           </div>
         </div>
 
         {/* Mobile Main Content - Below sidebar content */}
-        <div className="block lg:hidden space-y-8 sm:space-y-12 mt-8 pb-24">
+        <div
+          className={`block lg:hidden space-y-8 sm:space-y-12 mt-8 ${
+            initialTiers.length > 0
+              ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
+              : 'pb-8'
+          }`}
+        >
           {/* Course Info */}
           <CourseMainContent
             courseSlug={slug}

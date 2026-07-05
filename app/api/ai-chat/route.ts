@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
           console.log('Ders verisi başarıyla alındı:', { 
             title: data.title, 
             hasDescription: !!data.description,
-            descriptionLength: data.description?.length || 0
+            descriptionLength: (data.description as string)?.length || 0
           });
         } else {
           console.log('Ders bulunamadı');

@@ -93,6 +93,14 @@ export async function POST(request: Request) {
                             if (!firstEnrollmentId) {
                                 firstEnrollmentId = orderId;
                             }
+                        } else if (item.type === 'tier') {
+                            const { enrollUserInTier } = await import('../../../lib/enrollmentService');
+                            if (item.courseId && item.tierId) {
+                                const result = await enrollUserInTier(userId, item.courseId, item.tierId);
+                                if (result.enrollmentId && !firstEnrollmentId) {
+                                    firstEnrollmentId = result.enrollmentId;
+                                }
+                            }
                         } else {
                             // course
                             const { data: existingEnrollment } = await supabase
@@ -166,6 +174,13 @@ export async function POST(request: Request) {
                             await enrollUserInPackage(userId, order.courseid, orderId);
                         }
                         firstEnrollmentId = orderId;
+                    } else if (itemType === 'tier') {
+                        const tierId = order.custom_data?.tierId;
+                        const { enrollUserInTier } = await import('../../../lib/enrollmentService');
+                        if (tierId) {
+                            const result = await enrollUserInTier(userId, order.courseid, tierId);
+                            firstEnrollmentId = result.enrollmentId;
+                        }
                     } else {
                         const { data: existingEnrollment } = await supabase
                             .from('myuni_enrollments')

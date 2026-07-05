@@ -7,8 +7,10 @@ interface CartItemInput {
   title: string;
   price: number;
   originalPrice?: number;
-  type: 'course' | 'product' | 'package';
+  type: 'course' | 'product' | 'package' | 'tier';
   slug: string;
+  courseId?: string;
+  tierId?: string;
 }
 
 interface PaymentRequestBody {
@@ -29,10 +31,24 @@ interface PaymentRequestBody {
   locale?: string;
   clerkUserId?: string;
   userId?: string;
-  itemType?: 'course' | 'product' | 'package' | 'cart';
+  tierId?: string;
+  itemType?: 'course' | 'product' | 'package' | 'tier' | 'cart';
   // Cart Mode fields
   cartMode?: boolean;
   cartItems?: CartItemInput[];
+}
+
+function getTierActivePrice(tier: {
+  price: number;
+  early_bird_price?: number | null;
+  early_bird_deadline?: string | null;
+}): number {
+  if (tier.early_bird_price != null && tier.early_bird_deadline) {
+    const now = new Date();
+    const deadline = new Date(tier.early_bird_deadline);
+    if (now < deadline) return Number(tier.early_bird_price);
+  }
+  return Number(tier.price) || 0;
 }
 
 // Ücretsiz kayıt e-postası gönderme
@@ -81,6 +97,7 @@ async function saveOrderToDatabase(orderData: any) {
           userCity: orderData.userCity,
           userNotes: orderData.userNotes,
           itemType: orderData.itemType || 'course',
+          tierId: orderData.tierId || null,
           cartMode: orderData.cartMode || false,
           cartItems: orderData.cartItems || [],
         },
@@ -187,6 +204,28 @@ export async function POST(request: Request) {
             });
             originalTotalAmount += pData.price;
           }
+        } else if (item.type === 'tier') {
+          const { data: tierData } = await supabase
+            .from('myuni_course_tiers')
+            .select('id, title, price, early_bird_price, early_bird_deadline, course_id, myuni_courses(slug, title)')
+            .eq('id', item.id)
+            .eq('is_active', true)
+            .single();
+
+          if (tierData) {
+            const activePrice = getTierActivePrice(tierData);
+            const courseInfo = tierData.myuni_courses as { slug?: string; title?: string } | null;
+            validatedItems.push({
+              id: tierData.id,
+              title: item.title || `${courseInfo?.title || 'Kurs'} — ${tierData.title}`,
+              price: activePrice,
+              type: 'tier',
+              slug: courseInfo?.slug || item.slug,
+              courseId: tierData.course_id,
+              tierId: tierData.id,
+            });
+            originalTotalAmount += activePrice;
+          }
         } else {
           // course
           const { data: cData } = await supabase
@@ -235,6 +274,7 @@ export async function POST(request: Request) {
 
       const isProduct = body.itemType === 'product';
       const isPackage = body.itemType === 'package';
+      const isTier = body.itemType === 'tier';
       if (isProduct) {
         const { data: productData } = await supabase
           .from('myuni_products')
@@ -273,6 +313,43 @@ export async function POST(request: Request) {
           slug: packageData.slug
         });
         originalTotalAmount = packageData.price;
+      } else if (isTier) {
+        if (!body.tierId) {
+          return NextResponse.json({ success: false, message: 'Paket ID belirtilmelidir' }, { status: 400 });
+        }
+
+        const { data: tierData } = await supabase
+          .from('myuni_course_tiers')
+          .select('*, myuni_courses(id, title, slug, course_type, description, is_active)')
+          .eq('id', body.tierId)
+          .eq('course_id', body.courseId)
+          .eq('is_active', true)
+          .single();
+
+        if (!tierData) {
+          return NextResponse.json({ success: false, message: 'Paket bulunamadı veya aktif değil' }, { status: 404 });
+        }
+
+        const courseInfoRaw = tierData.myuni_courses;
+        const courseInfo = Array.isArray(courseInfoRaw) ? courseInfoRaw[0] : courseInfoRaw;
+        if (!courseInfo) {
+          return NextResponse.json({ success: false, message: 'Paketin bağlı kursu bulunamadı' }, { status: 404 });
+        }
+
+        const activePrice = getTierActivePrice(tierData);
+
+        validatedItems.push({
+          id: tierData.id,
+          title: `${courseInfo.title} — ${tierData.title}`,
+          price: activePrice,
+          type: 'tier',
+          slug: courseInfo.slug,
+          courseId: body.courseId,
+          tierId: tierData.id,
+          course_type: courseInfo.course_type,
+          fullData: courseInfo,
+        });
+        originalTotalAmount = activePrice;
       } else {
         const { data: courseData } = await supabase
           .from('myuni_courses')
@@ -312,11 +389,13 @@ export async function POST(request: Request) {
 
     const orderId = `MYU-IYZ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const isTierPurchase = !isCartMode && body.itemType === 'tier';
 
     // Sipariş bilgilerini kaydet
     const orderData = {
       orderId,
-      courseId: isCartMode ? 'CART' : validatedItems[0].id,
+      courseId: isCartMode ? 'CART' : (isTierPurchase ? body.courseId : validatedItems[0].id),
+      tierId: isTierPurchase ? body.tierId : (validatedItems[0]?.type === 'tier' ? validatedItems[0].tierId : undefined),
       userEmail: buyerEmail,
       courseName: orderName,
       amount: finalAmount,
@@ -377,6 +456,11 @@ export async function POST(request: Request) {
             const alreadyEnrolled = await checkUserPackageEnrollment(userIdForEnrollment, item.id);
             if (!alreadyEnrolled) {
               await enrollUserInPackage(userIdForEnrollment, item.id, orderId);
+            }
+          } else if (item.type === 'tier') {
+            const { enrollUserInTier } = await import('../../../lib/enrollmentService');
+            if (item.courseId && item.tierId) {
+              await enrollUserInTier(userIdForEnrollment, item.courseId, item.tierId);
             }
           } else {
             // course

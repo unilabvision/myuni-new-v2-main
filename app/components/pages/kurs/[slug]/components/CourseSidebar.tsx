@@ -7,6 +7,9 @@ import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
 import supabase from '../../../../../_services/supabaseClient';
 import AddToCartButton from '../../../../cart/AddToCartButton';
+import CourseTierSelector from './CourseTierSelector';
+import { getCourseTiers } from '@/lib/courseService';
+import type { CourseTier } from '@/lib/types/tier';
 
 interface Course {
   id: string;
@@ -52,6 +55,7 @@ interface CourseSidebarProps {
   slug?: string;
   locale?: string;
   sections?: Section[];
+  initialTiers?: CourseTier[];
 }
 
 interface SimilarCourse {
@@ -71,7 +75,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   course = {} as Course, 
   slug = 'course-slug', 
   locale = 'tr', 
-  sections = []
+  sections = [],
+  initialTiers = [],
 }) => {
   const router = useRouter();
   const { user, isSignedIn } = useUser();
@@ -82,8 +87,10 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   const [latestCourses, setLatestCourses] = useState<SimilarCourse[]>([]);
   const [loadingLatestCourses, setLoadingLatestCourses] = useState(true);
   const [countdown, setCountdown] = useState<{days: number; hours: number; minutes: number; seconds: number; total: number} | null>(null);
-  
-  // Ref parametresini yakala
+  const [courseTiers, setCourseTiers] = useState<CourseTier[]>(initialTiers);
+  const [enrolledTierIds, setEnrolledTierIds] = useState<string[]>([]);
+  const [loadingTiers, setLoadingTiers] = useState(initialTiers.length === 0);
+  const hasTierPackages = courseTiers.length > 0;
   const [refCode, setRefCode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -362,6 +369,42 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   const checkEnrollmentStatus = useCallback(async () => {
     try {
       setCheckingEnrollment(true);
+
+      if (hasTierPackages) {
+        const { data: fullEnrollment } = await supabase
+          .from('myuni_enrollments')
+          .select('id')
+          .eq('user_id', user?.id)
+          .eq('course_id', course.id)
+          .eq('is_active', true)
+          .is('tier_id', null)
+          .maybeSingle();
+
+        if (fullEnrollment) {
+          setIsEnrolled(true);
+          setEnrolledTierIds(courseTiers.map((t) => t.id));
+          return;
+        }
+
+        const { data: tierEnrollments, error: tierError } = await supabase
+          .from('myuni_enrollments')
+          .select('tier_id')
+          .eq('user_id', user?.id)
+          .eq('course_id', course.id)
+          .eq('is_active', true)
+          .not('tier_id', 'is', null);
+
+        if (tierError && tierError.code !== 'PGRST116') {
+          console.error('Tier enrollment check error:', tierError);
+        }
+
+        const ids = (tierEnrollments || [])
+          .map((row) => row.tier_id)
+          .filter(Boolean) as string[];
+        setEnrolledTierIds(ids);
+        setIsEnrolled(ids.length > 0);
+        return;
+      }
       
       const { data: enrollmentData, error } = await supabase
         .from('myuni_enrollments')
@@ -382,15 +425,45 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
     } finally {
       setCheckingEnrollment(false);
     }
-  }, [user?.id, course.id]);
+  }, [user?.id, course.id, hasTierPackages, courseTiers]);
+
+  const fetchCourseTiers = useCallback(async () => {
+    if (!course.id) {
+      setLoadingTiers(false);
+      return;
+    }
+    try {
+      if (courseTiers.length === 0) setLoadingTiers(true);
+      const tiers = await getCourseTiers(course.id);
+      if (tiers.length > 0) {
+        setCourseTiers(tiers);
+      }
+    } catch (error) {
+      console.error('Error fetching course tiers:', error);
+    } finally {
+      setLoadingTiers(false);
+    }
+  }, [course.id, courseTiers.length]);
+
+  useEffect(() => {
+    if (initialTiers.length > 0) {
+      setCourseTiers(initialTiers);
+      setLoadingTiers(false);
+    }
+  }, [initialTiers]);
+
+  useEffect(() => {
+    fetchCourseTiers();
+  }, [fetchCourseTiers]);
 
   useEffect(() => {
     if (isSignedIn && user && course.id) {
       checkEnrollmentStatus();
     } else {
       setCheckingEnrollment(false);
+      setEnrolledTierIds([]);
     }
-  }, [isSignedIn, user, course.id, checkEnrollmentStatus]);
+  }, [isSignedIn, user, course.id, checkEnrollmentStatus, hasTierPackages, loadingTiers]);
 
   // Son kursları yükle
   useEffect(() => {
@@ -652,14 +725,45 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
 
   return (
     <>
-      {/* Mobil cihazlar için altta sabit buton - Her zaman görünür */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 lg:hidden z-50 shadow-lg">
-        <MobileEnrollmentButton />
-      </div>
+      {/* Mobil cihazlar için altta sabit buton - tier yoksa göster */}
+      {!hasTierPackages && !loadingTiers && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 lg:hidden z-50 shadow-lg">
+          <MobileEnrollmentButton />
+        </div>
+      )}
       
       <div className="sticky top-24 space-y-6">
         {/* Ana Purchase Card */}
         <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 p-4 md:p-6 rounded-sm">
+          {loadingTiers ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-5 h-5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : hasTierPackages ? (
+            <CourseTierSelector
+              course={{
+                id: course.id,
+                title: course.title,
+                slug: course.slug,
+                thumbnail_url: course.thumbnail_url,
+                is_registration_open: course.is_registration_open,
+                level: course.level,
+                duration: getTotalDuration(),
+              }}
+              coursePricing={{
+                activePrice,
+                displayOriginalPrice: displayOriginalPrice ?? null,
+                isEarlyBird,
+                discountPercentage,
+                countdown,
+              }}
+              tiers={courseTiers}
+              enrolledTierIds={enrolledTierIds}
+              locale={locale}
+              checkingEnrollment={checkingEnrollment}
+            />
+          ) : (
+            <>
           {/* Fiyat */}
           <div className="mb-6">
             <div className="flex items-baseline space-x-3 mb-2">
@@ -845,6 +949,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
           <div className="hidden lg:block">
             <EnrollmentButton />
           </div>
+            </>
+          )}
         </div>
 
         {/* Son Kurslar */}

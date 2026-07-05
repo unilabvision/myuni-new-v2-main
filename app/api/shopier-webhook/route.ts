@@ -85,13 +85,19 @@ function extractProductIdFromUrl(url: string): string | null {
   }
 }
 
-async function enrollUserToCourse(userId: string, courseId: string) {
+async function enrollUserToCourse(userId: string, courseId: string, tierId?: string | null) {
+  if (tierId) {
+    const { enrollUserInTier } = await import('../../../lib/enrollmentService');
+    return enrollUserInTier(userId, courseId, tierId);
+  }
+
   const { data: existing } = await supabase
     .from('myuni_enrollments')
     .select('id, is_active')
     .eq('user_id', userId)
     .eq('course_id', courseId)
-    .single();
+    .is('tier_id', null)
+    .maybeSingle();
 
   if (existing?.is_active) {
     return { success: true, enrollmentId: existing.id, alreadyEnrolled: true };
@@ -168,13 +174,15 @@ export async function POST(request: Request) {
     // Idempotency: aynı sipariş tekrar gelirse tekrar insert etme, varsa sadece enrollment tamamla
     const { data: existingOrder } = await supabase
       .from('orders')
-      .select('orderid, courseid, status, enrolled')
+      .select('orderid, courseid, status, enrolled, custom_data')
       .eq('orderid', orderId)
       .maybeSingle();
 
     if (existingOrder) {
       const courseIdForEnroll = existingOrder.courseid;
       const alreadyEnrolled = existingOrder.enrolled === true;
+      const existingTierId =
+        (existingOrder.custom_data as { tierId?: string } | null)?.tierId ?? null;
       let clerkUserId: string | null = null;
       try {
         const clerk = await clerkClient();
@@ -184,7 +192,7 @@ export async function POST(request: Request) {
         // Clerk hatası idempotent yanıtı bozmasın
       }
       if (clerkUserId && !alreadyEnrolled && (status === 'success' || status === 'completed')) {
-        const enrollResult = await enrollUserToCourse(clerkUserId, courseIdForEnroll);
+        const enrollResult = await enrollUserToCourse(clerkUserId, courseIdForEnroll, existingTierId);
         if (enrollResult.success && enrollResult.enrollmentId) {
           await supabase
             .from('orders')
@@ -199,16 +207,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, orderId, courseId: courseIdForEnroll, duplicate: true });
     }
 
-    const { data: courseData, error: courseError } = await supabase
-      .from('myuni_courses')
-      .select('id, title, slug, course_type')
+    const { data: tierData, error: tierError } = await supabase
+      .from('myuni_course_tiers')
+      .select(`
+        id,
+        title,
+        course_id,
+        myuni_courses (
+          id,
+          title,
+          slug,
+          course_type
+        )
+      `)
       .eq('shopier_product_id', productKey)
       .eq('is_active', true)
       .limit(1)
       .maybeSingle();
 
-    if (courseError || !courseData) {
-      console.error('[shopier-webhook] No course found for shopier_product_id:', productKey);
+    let courseData: { id: string; title: string; slug: string; course_type?: string } | null = null;
+    let tierId: string | null = null;
+
+    if (!tierError && tierData) {
+      const parentCourseRaw = tierData.myuni_courses;
+      const parentCourse = Array.isArray(parentCourseRaw) ? parentCourseRaw[0] : parentCourseRaw;
+      if (parentCourse) {
+        courseData = {
+          id: parentCourse.id,
+          title: `${parentCourse.title} — ${tierData.title}`,
+          slug: parentCourse.slug,
+          course_type: parentCourse.course_type,
+        };
+        tierId = tierData.id;
+      }
+    } else {
+      const { data: courseRow, error: courseError } = await supabase
+        .from('myuni_courses')
+        .select('id, title, slug, course_type')
+        .eq('shopier_product_id', productKey)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (courseError || !courseRow) {
+        console.error('[shopier-webhook] No course/tier found for shopier_product_id:', productKey);
+        return NextResponse.json(
+          { success: false, message: 'No course mapped for this product' },
+          { status: 404 }
+        );
+      }
+      courseData = courseRow;
+    }
+
+    if (!courseData) {
       return NextResponse.json(
         { success: false, message: 'No course mapped for this product' },
         { status: 404 }
@@ -250,6 +301,8 @@ export async function POST(request: Request) {
         locale: 'tr',
         userName: buyerName,
         source: 'shopier_webhook',
+        itemType: tierId ? 'tier' : 'course',
+        tierId: tierId ?? undefined,
       },
       ip_address: ipAddress,
       user_agent: userAgent,
@@ -278,7 +331,7 @@ export async function POST(request: Request) {
 
     // Sadece Clerk kullanıcısı varsa sitede enrollment yapıyoruz (user_id Clerk ID olmalı)
     if (clerkUserId && (status === 'success' || status === 'completed')) {
-      const enrollResult = await enrollUserToCourse(clerkUserId, courseData.id);
+      const enrollResult = await enrollUserToCourse(clerkUserId, courseData.id, tierId);
       if (enrollResult.success && enrollResult.enrollmentId) {
         await supabase
           .from('orders')

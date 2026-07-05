@@ -611,6 +611,99 @@ export async function getLiveSessions(courseId: string) {
   }
 }
 
+/** Kursa ait satış paketlerini (tier) getirir */
+export async function getCourseTiers(courseId: string) {
+  try {
+    const { data: tiers, error } = await supabase
+      .from('myuni_course_tiers')
+      .select('*')
+      .eq('course_id', courseId)
+      .eq('is_active', true)
+      .order('order_index', { ascending: true });
+
+    if (error) throw error;
+    if (!tiers?.length) return [];
+
+    const tierIds = tiers.map((t) => t.id);
+    let tierSessions: Array<{
+      id: string;
+      tier_id: string;
+      session_id: string;
+      order_index: number;
+      myuni_live_sessions: unknown;
+    }> = [];
+
+    if (tierIds.length > 0) {
+      const { data, error: sessionsError } = await supabase
+        .from('myuni_tier_sessions')
+        .select(`
+          id,
+          tier_id,
+          session_id,
+          order_index,
+          myuni_live_sessions (
+            id,
+            title,
+            session_number,
+            start_time,
+            end_time
+          )
+        `)
+        .in('tier_id', tierIds)
+        .order('order_index', { ascending: true });
+
+      if (sessionsError) {
+        console.warn('Tier sessions fetch skipped:', sessionsError.message);
+      } else {
+        tierSessions = data || [];
+      }
+    }
+
+    return tiers.map((tier) => ({
+      ...tier,
+      price: Number(tier.price) || 0,
+      original_price: tier.original_price != null ? Number(tier.original_price) : null,
+      early_bird_price: tier.early_bird_price != null ? Number(tier.early_bird_price) : null,
+      sessions: tierSessions
+        .filter((ts) => ts.tier_id === tier.id)
+        .map((ts) => ({
+          id: ts.id,
+          tier_id: ts.tier_id,
+          session_id: ts.session_id,
+          order_index: ts.order_index,
+          session: ts.myuni_live_sessions,
+        })),
+    }));
+  } catch (error) {
+    console.error('Error fetching course tiers:', error);
+    return [];
+  }
+}
+
+/** Tek bir tier kaydını ID ile getirir */
+export async function getCourseTierById(tierId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('myuni_course_tiers')
+      .select('*')
+      .eq('id', tierId)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data) return null;
+
+    return {
+      ...data,
+      price: Number(data.price) || 0,
+      original_price: data.original_price != null ? Number(data.original_price) : null,
+      early_bird_price: data.early_bird_price != null ? Number(data.early_bird_price) : null,
+    };
+  } catch (error) {
+    console.error('Error fetching course tier:', error);
+    return null;
+  }
+}
+
 // Live course registration
 export async function registerForLiveCourse(userId: string, courseId: string) {
   try {

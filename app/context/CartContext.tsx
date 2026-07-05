@@ -9,14 +9,19 @@ export interface CartItem {
   originalPrice?: number;
   thumbnailUrl?: string;
   slug: string;
-  type: 'course' | 'product' | 'package';
+  type: 'course' | 'product' | 'package' | 'tier';
   earlyBirdPrice?: number | null;
   earlyBirdDeadline?: string | null;
+  /** tier satışında ana kurs ID */
+  courseId?: string;
+  /** tier satışında paket ID */
+  tierId?: string;
 }
 
 interface CartContextValue {
   items: CartItem[];
   addItem: (item: CartItem) => void;
+  addItems: (items: CartItem[]) => void;
   removeItem: (id: string) => void;
   clearCart: () => void;
   isInCart: (id: string) => boolean;
@@ -70,10 +75,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((item: CartItem) => {
     setItems(prev => {
-      if (prev.some(i => i.id === item.id)) return prev; // already in cart
+      if (prev.some(i => i.id === item.id)) return prev;
       return [...prev, item];
     });
-    setIsDrawerOpen(true); // open drawer when item added
+    setIsDrawerOpen(true);
+  }, []);
+
+  const addItems = useCallback((newItems: CartItem[]) => {
+    if (newItems.length === 0) return;
+    setItems(prev => {
+      const existing = new Set(prev.map((i) => i.id));
+      const toAdd = newItems.filter((i) => !existing.has(i.id));
+      if (toAdd.length === 0) return prev;
+      return [...prev, ...toAdd];
+    });
+    setIsDrawerOpen(true);
   }, []);
 
   const removeItem = useCallback((id: string) => {
@@ -99,6 +115,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     <CartContext.Provider value={{
       items,
       addItem,
+      addItems,
       removeItem,
       clearCart,
       isInCart,

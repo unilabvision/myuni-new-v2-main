@@ -7,12 +7,7 @@ import EventListFilter from '../components/EventListFilter';
 
 // Yeni section'ları import edin
 import WhyChooseSection from '../components/WhyChooseSection';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from '@/lib/supabase';
 
 
 // Type definition for better type safety

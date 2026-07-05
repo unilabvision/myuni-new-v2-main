@@ -1,7 +1,8 @@
 // app/[locale]/kurs/[slug]/page.tsx
 import type { Metadata } from "next";
 import CourseDetailPage from '../../../components/pages/kurs/[slug]/page';
-import { getCourseBySlug, mapLevelToLocale } from '../../../../lib/courseService';
+import { getCourseBySlug, getCourseTiers, mapLevelToLocale } from '../../../../lib/courseService';
+import type { CourseTier } from '@/lib/types/tier';
 
 interface CourseDetailProps {
   params: Promise<{
@@ -209,12 +210,22 @@ export async function generateMetadata({
 
 export default async function Page({ params }: CourseDetailProps) {
   const resolvedParams = await params;
-  
+
+  let initialTiers: CourseTier[] = [];
+  try {
+    const courseData = await getCourseBySlug(resolvedParams.slug, resolvedParams.locale);
+    if (courseData?.id) {
+      initialTiers = await getCourseTiers(String(courseData.id));
+    }
+  } catch (error) {
+    console.error('[course-page] Failed to preload tiers:', error);
+  }
+
   const courseParams = Promise.resolve({
     locale: resolvedParams.locale,
     courseType: resolvedParams.locale === 'tr' ? 'kurs' : 'course',
-    slug: resolvedParams.slug
+    slug: resolvedParams.slug,
   });
 
-  return <CourseDetailPage params={courseParams} />;
+  return <CourseDetailPage params={courseParams} initialTiers={initialTiers} />;
 }

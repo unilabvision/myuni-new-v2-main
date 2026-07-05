@@ -63,25 +63,34 @@ export async function checkUserEnrollmentStatus(userId: string, courseId: string
       .eq('user_id', userId)
       .eq('course_id', courseId)
       .eq('is_active', true)
-      .single();
+      .order('enrolled_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // No enrollment found
         console.log('No enrollment found');
-        return { 
-          isEnrolled: false, 
-          welcomeShown: false 
+        return {
+          isEnrolled: false,
+          welcomeShown: false,
         };
       }
       throw error;
+    }
+
+    if (!data) {
+      console.log('No enrollment found');
+      return {
+        isEnrolled: false,
+        welcomeShown: false,
+      };
     }
 
     console.log('Enrollment status found:', data);
     return {
       isEnrolled: true,
       welcomeShown: data.welcome_shown || false,
-      enrollmentId: data.id
+      enrollmentId: data.id,
     };
 
   } catch (error) {
@@ -332,5 +341,118 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
   } catch (error) {
     console.error('Unexpected error enrolling user in package:', error);
     return false;
+  }
+}
+
+/** Kullanıcının belirli bir kurs tier'ına kayıtlı olup olmadığını kontrol eder */
+export async function checkUserTierEnrollment(
+  userId: string,
+  courseId: string,
+  tierId: string
+): Promise<boolean> {
+  try {
+    if (!userId || !courseId || !tierId) return false;
+
+    const { data, error } = await supabase
+      .from('myuni_enrollments')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('tier_id', tierId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error checking tier enrollment:', error);
+      return false;
+    }
+
+    return !!data;
+  } catch (error) {
+    console.error('Unexpected error checking tier enrollment:', error);
+    return false;
+  }
+}
+
+/** Kullanıcıyı kurs tier'ına kaydeder */
+export async function enrollUserInTier(
+  userId: string,
+  courseId: string,
+  tierId: string
+): Promise<{ success: boolean; enrollmentId?: string; alreadyEnrolled?: boolean }> {
+  try {
+    if (!userId || !courseId || !tierId) {
+      return { success: false };
+    }
+
+    const { data: existing } = await supabase
+      .from('myuni_enrollments')
+      .select('id, is_active')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('tier_id', tierId)
+      .maybeSingle();
+
+    if (existing?.is_active) {
+      return { success: true, enrollmentId: existing.id, alreadyEnrolled: true };
+    }
+
+    if (existing && !existing.is_active) {
+      const { error } = await supabase
+        .from('myuni_enrollments')
+        .update({
+          is_active: true,
+          enrolled_at: new Date().toISOString(),
+          progress_percentage: 0,
+        })
+        .eq('id', existing.id);
+
+      if (error) return { success: false };
+      return { success: true, enrollmentId: existing.id };
+    }
+
+    const { data: newEnrollment, error } = await supabase
+      .from('myuni_enrollments')
+      .insert({
+        user_id: userId,
+        course_id: courseId,
+        tier_id: tierId,
+        enrolled_at: new Date().toISOString(),
+        progress_percentage: 0,
+        is_active: true,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error enrolling user in tier:', error);
+      return { success: false };
+    }
+
+    return { success: true, enrollmentId: newEnrollment.id };
+  } catch (error) {
+    console.error('Unexpected error enrolling user in tier:', error);
+    return { success: false };
+  }
+}
+
+/** Kullanıcının bir kurs için satın aldığı tier ID'lerini döner */
+export async function getUserCourseTierIds(
+  userId: string,
+  courseId: string
+): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('myuni_enrollments')
+      .select('tier_id')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('is_active', true)
+      .not('tier_id', 'is', null);
+
+    if (error) return [];
+    return (data || []).map((row) => row.tier_id).filter(Boolean) as string[];
+  } catch {
+    return [];
   }
 }

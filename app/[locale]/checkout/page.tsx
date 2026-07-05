@@ -235,7 +235,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
   const [courseData, setCourseData] = useState<CourseData | null>(null);
   const [productData, setProductData] = useState<{ id: string; title: string; price: number; thumbnail_url?: string | null; slug: string; description: string } | null>(null);
-  const [itemType, setItemType] = useState<'course' | 'product' | 'package'>('course');
+  const [itemType, setItemType] = useState<'course' | 'product' | 'package' | 'tier'>('course');
+  const [tierId, setTierId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pageLoading, setPageLoading] = useState(true);
@@ -334,9 +335,77 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
       setCourseData(data as CourseData);
 
+      // Tier'lı kurslarda doğrudan full-course checkout'u engelle
+      const { count } = await supabase
+        .from('myuni_course_tiers')
+        .select('id', { count: 'exact', head: true })
+        .eq('course_id', courseId)
+        .eq('is_active', true);
+
+      if (count && count > 0) {
+        const coursePath = locale === 'tr' ? 'kurs' : 'course';
+        router.push(`/${locale}/${coursePath}/${data.slug}`);
+        return;
+      }
+
       // Shopier url check removed to keep user on checkout page for Iyzico
     } catch (fetchError) {
       console.error('Error fetching course:', fetchError);
+      setError(t.error);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [locale, router, t.error]);
+
+  const fetchTierData = useCallback(async (courseId: string, selectedTierId: string) => {
+    try {
+      setPageLoading(true);
+
+      const { data: tier, error: tierError } = await supabase
+        .from('myuni_course_tiers')
+        .select('*')
+        .eq('id', selectedTierId)
+        .eq('course_id', courseId)
+        .eq('is_active', true)
+        .single();
+
+      if (tierError || !tier) {
+        console.error('Tier fetch error:', tierError);
+        const coursePath = locale === 'tr' ? 'kurs' : 'course';
+        router.push(`/${locale}/${coursePath}`);
+        return;
+      }
+
+      const { data: course, error: courseError } = await supabase
+        .from('myuni_courses')
+        .select('id, title, thumbnail_url, slug, is_active')
+        .eq('id', courseId)
+        .eq('is_active', true)
+        .single();
+
+      if (courseError || !course) {
+        console.error('Parent course fetch error:', courseError);
+        const coursePath = locale === 'tr' ? 'kurs' : 'course';
+        router.push(`/${locale}/${coursePath}`);
+        return;
+      }
+
+      setTierId(selectedTierId);
+      setCourseData({
+        id: course.id,
+        title: `${course.title} — ${tier.title}`,
+        description: tier.description || '',
+        price: Number(tier.price) || 0,
+        original_price: tier.original_price != null ? Number(tier.original_price) : undefined,
+        early_bird_price: tier.early_bird_price,
+        early_bird_deadline: tier.early_bird_deadline,
+        thumbnail_url: course.thumbnail_url,
+        slug: course.slug,
+        is_active: true,
+        shopier_product_url: tier.shopier_product_url,
+      } as CourseData);
+    } catch (fetchError) {
+      console.error('Error fetching tier:', fetchError);
       setError(t.error);
     } finally {
       setPageLoading(false);
@@ -546,12 +615,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       setPageLoading(false);
     } else if (courseId) {
       const type = searchParams.get('type');
+      const urlTierId = searchParams.get('tierId');
       if (type === 'product') {
         setItemType('product');
         fetchProductData(courseId);
       } else if (type === 'package') {
         setItemType('package');
         fetchPackageData(courseId);
+      } else if (type === 'tier' && urlTierId) {
+        setItemType('tier');
+        fetchTierData(courseId, urlTierId);
       } else {
         setItemType('course');
         fetchCourseData(courseId);
@@ -576,7 +649,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     
     initializePageData();
     
-  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchDiscountCodes]);
+  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchTierData, fetchDiscountCodes]);
 
   // Early bird countdown timer
   useEffect(() => {
@@ -681,7 +754,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     if (isCartMode) {
       // ---- CART MODE DISCOUNT CALCULATION ----
       const eligibleItems = foundCode.applicableCourses.length > 0
-        ? activeCartItems.filter(ci => foundCode.applicableCourses.includes(ci.id))
+        ? activeCartItems.filter(ci => {
+            const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
+            return foundCode.applicableCourses.includes(productId);
+          })
         : activeCartItems;
 
       if (foundCode.applicableCourses.length > 0 && eligibleItems.length === 0) {
@@ -955,6 +1031,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
             originalPrice: ci.price,
             type: ci.type,
             slug: ci.slug,
+            courseId: ci.courseId,
+            tierId: ci.tierId,
           })),
           // Legacy single-item fields for backward compat (primary item)
           courseId: 'CART',
@@ -983,6 +1061,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
         paymentData = {
           courseId: courseData!.id,
+          tierId: itemType === 'tier' ? tierId : undefined,
           courseName: courseData!.title,
           amount: finalPrice > 0 ? finalPrice : 0,
           email: formData.email,
@@ -1069,6 +1148,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       </div>
     );
   }
+
+  // Tekil checkout'ta courseData garanti; sepet modunda null olabilir
+  const singleCourse = !isCartMode ? courseData : null;
+  const singleItemPrice = singleCourse ? getActivePrice(singleCourse) : 0;
   
   const totalDiscount = calculateTotalDiscount();
   
@@ -1560,18 +1643,20 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                   <span className="text-neutral-800 dark:text-neutral-200">
                     {isCartMode ? (
                       `${cartTotal.toFixed(2)}${t.currency}`
+                    ) : singleCourse ? (
+                      isEarlyBirdActive(singleCourse) && singleCourse.original_price 
+                        ? `${singleCourse.original_price.toFixed(2)}${t.currency}`
+                        : `${(getActivePrice(singleCourse)?.toFixed(2) || "0.00")}${t.currency}`
                     ) : (
-                      isEarlyBirdActive(courseData) && courseData.original_price 
-                        ? `${courseData.original_price.toFixed(2)}${t.currency}`
-                        : `${(getActivePrice(courseData)?.toFixed(2) || "0.00")}${t.currency}`
+                      `0.00${t.currency}`
                     )}
                   </span>
                 </div>
-                {!isCartMode && isEarlyBirdActive(courseData) && courseData.original_price && (
+                {!isCartMode && singleCourse && isEarlyBirdActive(singleCourse) && singleCourse.original_price && (
                   <div className="flex justify-between text-sm">
                     <span className="text-amber-600 dark:text-amber-500">{t.earlyBirdPrice}</span>
                     <span className="text-amber-600 dark:text-amber-500">
-                      -{((courseData.original_price || 0) - (getActivePrice(courseData) || 0)).toFixed(2)}{t.currency}
+                      -{((singleCourse.original_price || 0) - (getActivePrice(singleCourse) || 0)).toFixed(2)}{t.currency}
                     </span>
                   </div>
                 )}
@@ -1587,7 +1672,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                     {isCartMode ? (
                       `${finalCartTotal.toFixed(2)}${t.currency}`
                     ) : (
-                      `${(getActivePrice(courseData) - totalDiscount).toFixed(2)}${t.currency}`
+                      `${(singleItemPrice - totalDiscount).toFixed(2)}${t.currency}`
                     )}
                   </span>
                 </div>
@@ -1620,7 +1705,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                   {isCartMode ? (
                     `${finalCartTotal.toFixed(2)}${t.currency}`
                   ) : (
-                    `${(getActivePrice(courseData) - totalDiscount).toFixed(2)}${t.currency}`
+                    `${(singleItemPrice - totalDiscount).toFixed(2)}${t.currency}`
                   )} {t.proceedToPayment}
                   <ExternalLink size={14} className="ml-2" />
                 </span>
