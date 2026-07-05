@@ -420,11 +420,7 @@ export default function CourseTierSelector({
             Birden fazla paket seçebilir veya tam eğitimi alabilirsiniz.
           </p>
 
-          <div
-            className="space-y-2 max-h-[min(420px,52vh)] sm:max-h-[min(520px,65vh)] lg:max-h-none overflow-y-auto overscroll-contain pr-0.5 -mr-0.5 lg:overflow-visible touch-pan-y"
-            role="listbox"
-            aria-multiselectable="true"
-          >
+          <div className="space-y-2" role="listbox" aria-multiselectable="true">
             {sortedTiers.map((tier) => {
               const isSelected = selectedTierIds.has(tier.id);
               const isEnrolled = enrolledTierIds.includes(tier.id);
@@ -493,13 +489,7 @@ export default function CourseTierSelector({
                         </div>
                       </div>
 
-                      {tier.description && (
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5 line-clamp-2">
-                          {tier.description}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
                         {isFull && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
                             4 paket dahil

@@ -732,7 +732,9 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         </div>
       )}
       
-      <div className="sticky top-24 space-y-6">
+      <div
+        className={`space-y-6 ${hasTierPackages || initialTiers.length > 0 ? '' : 'lg:sticky lg:top-24'}`}
+      >
         {/* Ana Purchase Card */}
         <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 p-4 md:p-6 rounded-sm">
           {loadingTiers ? (
