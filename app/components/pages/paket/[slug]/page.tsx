@@ -659,11 +659,6 @@ export default function PackageDetailPage({ params }: CourseDetailPageProps) {
                   <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                     {formatDate(courseDetail.live_start_date)} - {formatDate(courseDetail.live_end_date)}
                   </p>
-                  {courseDetail.live_start_date && (
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                      Gün içerisinde yapılacaktır.
-                    </p>
-                  )}
                 </div>
               )}
 
