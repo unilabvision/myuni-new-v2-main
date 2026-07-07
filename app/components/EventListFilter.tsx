@@ -8,7 +8,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import ReactMarkdown from 'react-markdown';
-import { getEventsForFilter } from '@/lib/eventService';
 
 interface Event {
   id: string;
@@ -89,8 +88,13 @@ function EventList({ events, locale = 'tr', showFeaturedOnly = false }: EventLis
         setLoading(true);
         setError(null);
         
-        console.log('Fetching events from database...');
-        const dbEvents = await getEventsForFilter(locale);
+        console.log('Fetching events from API...');
+        const res = await fetch(`/api/events?locale=${locale}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to fetch events');
+        }
+        const dbEvents = json.data ?? [];
         
         console.log('Fetched events:', dbEvents.length);
         setFetchedEvents(dbEvents);

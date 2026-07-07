@@ -1,6 +1,9 @@
 // app/[locale]/event/page.tsx
 import type { Metadata } from "next";
 import EventListPage from '../../components/pages/event/EventListPage';
+import { getPublicEventsForSite } from '@/lib/events/getPublicEvents';
+
+export const dynamic = 'force-dynamic';
 
 interface EventPageProps {
   params: Promise<{
@@ -127,11 +130,12 @@ export async function generateMetadata({
 
 export default async function EventPage({ params }: EventPageProps) {
   const resolvedParams = await params;
-  
+  const initialEvents = await getPublicEventsForSite(resolvedParams.locale);
+
   const eventParams = Promise.resolve({
     locale: resolvedParams.locale,
-    eventType: 'event'  // Bu sayfa için sabit 'event' değerini kullan
+    eventType: 'event',
   });
 
-  return <EventListPage params={eventParams} />;
+  return <EventListPage params={eventParams} initialEvents={initialEvents} />;
 }

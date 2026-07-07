@@ -1,6 +1,9 @@
 // app/[locale]/etkinlik/page.tsx
 import type { Metadata } from "next";
-import EventListPage from '../../components/pages/event/EventListPage'; 
+import EventListPage from '../../components/pages/event/EventListPage';
+import { getPublicEventsForSite } from '@/lib/events/getPublicEvents';
+
+export const dynamic = 'force-dynamic';
 
 interface EventsPageProps {
   params: Promise<{
@@ -87,12 +90,12 @@ export async function generateMetadata({
 
 export default async function EventsPage({ params }: EventsPageProps) {
   const resolvedParams = await params;
-  
-  // EventListPage component'ine doğru props'ları geçiriyoruz
+  const initialEvents = await getPublicEventsForSite(resolvedParams.locale);
+
   const eventParams = Promise.resolve({
     locale: resolvedParams.locale,
-    eventType: 'etkinlik'  // Bu sayfa için sabit 'etkinlik' değerini kullan
+    eventType: 'etkinlik',
   });
 
-  return <EventListPage params={eventParams} />;
+  return <EventListPage params={eventParams} initialEvents={initialEvents} />;
 }

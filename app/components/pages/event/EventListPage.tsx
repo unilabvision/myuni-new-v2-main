@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Clock, Users, Calendar, MapPin, Filter, Search, BookOpen, Globe, Video, Building } from 'lucide-react';
-import { getAllEvents, mapEventTypeToLocale } from '../../../../lib/eventService';
+import { mapEventTypeToLocale } from '../../../../lib/eventService';
 import ReactMarkdown from 'react-markdown';
 
 // Event interfaces
@@ -51,6 +51,7 @@ interface EventListPageProps {
     locale: string;
     eventType: string;
   }>;
+  initialEvents?: Event[];
 }
 
 // Language texts
@@ -205,9 +206,9 @@ const texts = {
   }
 };
 
-export default function EventListPage({ params }: EventListPageProps) {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function EventListPage({ params, initialEvents }: EventListPageProps) {
+  const [events, setEvents] = useState<Event[]>(initialEvents ?? []);
+  const [loading, setLoading] = useState(initialEvents === undefined);
   const [error, setError] = useState<string | null>(null);
   const [activeEventTypeFilter, setActiveEventTypeFilter] = useState('all');
   const [activeStatusFilter, setActiveStatusFilter] = useState('all');
@@ -232,10 +233,14 @@ export default function EventListPage({ params }: EventListPageProps) {
     try {
       setLoading(true);
       setError(null);
-      
-      const eventsData = await getAllEvents(locale);
-      // getAllEvents zaten is_active filtreler; kayıt durumu görünürlüğü etkilemez
-      setEvents(eventsData);
+
+      const res = await fetch(`/api/events?locale=${locale}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to load events');
+      }
+
+      setEvents(json.data ?? []);
     } catch (err) {
       console.error("Error fetching events:", err);
       setError('Failed to load events');
@@ -245,9 +250,13 @@ export default function EventListPage({ params }: EventListPageProps) {
   }, [locale]);
 
   useEffect(() => {
+    if (initialEvents !== undefined) {
+      setIsLoaded(true);
+      return;
+    }
     getEvents();
     setIsLoaded(true);
-  }, [getEvents]);
+  }, [getEvents, initialEvents]);
 
   const scrollToAllEvents = () => {
     if (allEventsRef.current) {
