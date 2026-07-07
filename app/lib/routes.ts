@@ -59,9 +59,21 @@ export const pageRoutes = {
     tr: 'egitmen-ol',
     en: 'egitmen-ol'
   },
-   kulup: {
+  kulup: {
     tr: 'kulup',
     en: 'kulup'
+  },
+  stajlar: {
+    tr: 'stajlar',
+    en: 'internships'
+  },
+  eventApplication: {
+    tr: 'etkinlik-basvuru',
+    en: 'event-application'
+  },
+  teamApplication: {
+    tr: 'ekip-basvuru',
+    en: 'team-application'
   }
 };
 

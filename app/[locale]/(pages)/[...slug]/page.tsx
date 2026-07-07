@@ -72,6 +72,20 @@ async function getPageContent(locale: string, pageType: string): Promise<{ title
           ? 'Okul topluluklarınızla birlikte güçlü bir ağ oluşturalım ve ortak projeler geliştirelim.'
           : 'Let\'s build a strong network with your school communities and develop joint projects.'
       };
+    case 'eventApplication':
+      return {
+        title: locale === 'tr' ? 'Etkinlik Başvurusu' : 'Event Application',
+        description: locale === 'tr'
+          ? 'Etkinliklerimiz için başvuru formu.'
+          : 'Application form for our events.'
+      };
+    case 'teamApplication':
+      return {
+        title: locale === 'tr' ? 'Ekip Başvurusu' : 'Team Application',
+        description: locale === 'tr'
+          ? 'MyUNI ekibine katılmak için başvuru formu.'
+          : 'Apply to join the MyUNI team.'
+      };
     case 'newsletter':
       return {
         title: locale === 'tr' ? 'Bülten' : 'Newsletter',

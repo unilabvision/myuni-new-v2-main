@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabase';
 interface DynamicFormProps {
   formName: string;
   locale?: string;
+  opportunitySlug?: string;
+  formConfigId?: string;
 }
 
 interface FieldValidationRules {
@@ -553,7 +555,12 @@ const userInfoTranslations = {
   }
 };
 
-export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProps) {
+export default function DynamicForm({
+  formName,
+  locale = 'tr',
+  opportunitySlug,
+  formConfigId,
+}: DynamicFormProps) {
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
@@ -584,7 +591,23 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
   const loadFormData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const formConfig = await getFormConfig(formName);
+      let formConfig: FormConfig | null = null;
+      let formFields: FormField[] = [];
+
+      if (formConfigId) {
+        const res = await fetch(`/api/internship-form-config?id=${formConfigId}`);
+        const json = await res.json();
+        if (json.success && json.config) {
+          formConfig = json.config as FormConfig;
+          formFields = (json.fields || []) as FormField[];
+        }
+      } else {
+        formConfig = await getFormConfig(formName);
+        if (formConfig) {
+          formFields = await getFormFields(formConfig.id);
+        }
+      }
+
       if (!formConfig) {
         console.error(`No form config found for formName: ${formName}`);
         setConfig(null);
@@ -592,7 +615,6 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
         return;
       }
       setConfig(formConfig);
-      const formFields = await getFormFields(formConfig.id);
       setFields(formFields);
 
       // Initialize form data with default values
@@ -614,18 +636,18 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
     } finally {
       setIsLoading(false);
     }
-  }, [formName]);
+  }, [formName, formConfigId]);
 
   useEffect(() => {
-    if (!formName) {
-      console.error('DynamicForm: formName tanımsız veya boş!');
+    if (!formName && !formConfigId) {
+      console.error('DynamicForm: formName veya formConfigId gerekli');
       setIsLoading(false);
       setConfig(null);
       setFields([]);
       return;
     }
     loadFormData();
-  }, [formName, loadFormData]);
+  }, [formName, formConfigId, loadFormData]);
 
   const handleInputChange = (fieldKey: string, value: FormDataValue) => {
     setFormData(prev => ({ ...prev, [fieldKey]: value }));
@@ -919,14 +941,35 @@ export default function DynamicForm({ formName, locale = 'tr' }: DynamicFormProp
       
       console.log('📤 Application Data being sent:', applicationData);
 
-      // Yeni internship_applications tablosuna kaydet
-      const response = await fetch('/api/internship-application', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(applicationData),
-      });
+      let response: Response;
+
+      if (opportunitySlug) {
+        response = await fetch(`/api/opportunities/${opportunitySlug}/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submission_data: {
+              ...formData,
+              first_name: userInfo.firstName.trim(),
+              last_name: userInfo.lastName.trim(),
+              email: userInfo.email.trim(),
+              school: userInfo.school.trim(),
+              grade: userInfo.grade,
+            },
+            cv_storage_path: cvStoragePath,
+            cv_file_name: cvFileName,
+            user_agent: navigator.userAgent,
+          }),
+        });
+      } else {
+        response = await fetch('/api/internship-application', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(applicationData),
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json();

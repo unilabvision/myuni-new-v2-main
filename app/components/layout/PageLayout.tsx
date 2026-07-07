@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-// import Link from 'next/link'; // Removed to fix build error
 import { ChevronRight, Home } from 'lucide-react';
+import ApplicationFormHero from './ApplicationFormHero';
 
 interface BreadcrumbItem {
   name: string;
@@ -14,7 +14,7 @@ interface PageLayoutProps {
   description?: string;
   locale: string;
   breadcrumbs?: BreadcrumbItem[];
-  variant?: 'default' | 'minimal';
+  variant?: 'default' | 'minimal' | 'application';
   bgImage?: string; // Added to accept the background image prop
 }
 
@@ -53,7 +53,14 @@ export default function PageLayout({
 
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-900">
-      {/* Header Section */}
+      {variant === 'application' ? (
+        <ApplicationFormHero
+          title={title}
+          description={description}
+          locale={locale}
+          breadcrumbs={breadcrumbs}
+        />
+      ) : (
       <div className={`${headerClasses} py-12 lg:py-16`} style={heroStyle}>
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           
@@ -100,9 +107,16 @@ export default function PageLayout({
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content */}
-      <main className="bg-white dark:bg-neutral-900">
+      <main
+        className={
+          variant === 'application'
+            ? 'bg-gradient-to-b from-white to-rose-50/30 dark:from-neutral-900 dark:to-neutral-900 -mt-1'
+            : 'bg-white dark:bg-neutral-900'
+        }
+      >
         {children}
       </main>
 

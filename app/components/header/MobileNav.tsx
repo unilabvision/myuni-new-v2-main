@@ -3,73 +3,21 @@
 import Link from "next/link";
 import MobileSearchBar from './MobileSearchbar';
 import { useUser } from '@clerk/nextjs';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { getNavItems } from './navItems';
+import { useSiteApplicationNavForms } from './useSiteApplicationNavForms';
 
 interface MobileNavProps {
   toggleMobileMenu: () => void;
   locale: string;
 }
 
-interface MenuItem {
-  href: string;
-  label: string;
-  children?: MenuItem[];
-}
-
 export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) {
   const { isSignedIn } = useUser();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-
-  const menuItems: Record<string, MenuItem[]> = {
-    tr: [
-      { href: `/${locale}/#`, label: "Ana Sayfa" },
-      { href: `/${locale}/kurs`, label: "Kurslar" },
-      { href: `/${locale}/etkinlik`, label: "Etkinlikler" },
-      { href: `/${locale}/collection`, label: "Koleksiyon" },
-      {
-        href: `/${locale}/hakkimizda`,
-        label: "Hakkımızda",
-        children: [
-          { href: `/${locale}/hakkimizda/`, label: "Biz Kimiz" },
-          { href: `/${locale}/egitmen-ol`, label: "Eğitmen Ol" },
-          { href: `/${locale}/bultenimiz`, label: "Bültenimiz" },
-          { href: `/${locale}/gizlilik`, label: "Gizlilik Politikası" },
-          { href: `/${locale}/sartlar-ve-kosullar`, label: "Kullanım Koşulları" },
-          { href: `/${locale}/iptal-iade`, label: "İptal ve İade Politikası" },
-          { href: `/${locale}/sss`, label: "Sık Sorulan Sorular" },
-        ]
-      },
-      { href: `/${locale}/blog`, label: "Blog" },
-      { href: `/${locale}/iletisim`, label: "İletişim" },
-    ],
-    en: [
-      { href: `/${locale}/`, label: "Home" },
-      { href: `/${locale}/course`, label: "Courses" },
-      { href: `/${locale}/event`, label: "Events" },
-      { href: `/${locale}/collection`, label: "Collection" },
-      {
-        href: `/${locale}/about`,
-        label: "About Us",
-        children: [
-          { href: `/${locale}/about`, label: "Who We Are" },
-          { href: `/${locale}/egitmen-ol`, label: "Become an Instructor" },
-          { href: `/${locale}/newsletter`, label: "Newsletter" },
-          { href: `/${locale}/privacy`, label: "Privacy Policy" },
-          { href: `/${locale}/terms`, label: "Terms of Use" },
-          { href: `/${locale}/iptal-iade`, label: "Cancellation & Refund" },
-          { href: `/${locale}/sss`, label: "FAQ" },
-        ]
-      },
-      { href: `/${locale}/projects`, label: "Projects" },
-      { href: `/${locale}/blog`, label: "Blog" },
-      { href: `/${locale}/contact`, label: "Contact" },
-    ],
-  };
-
-
-
-  const items = menuItems[locale as keyof typeof menuItems] || menuItems.tr;
+  const siteForms = useSiteApplicationNavForms(locale);
+  const items = useMemo(() => getNavItems(locale, siteForms), [locale, siteForms]);
 
   const handleDropdownToggle = (label: string) => {
     setOpenDropdown(openDropdown === label ? null : label);
@@ -84,8 +32,8 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
         </div>
 
         {/* Menu Items */}
-        {items.map((item, index) => (
-          <div key={index} className="relative">
+        {items.map((item) => (
+          <div key={item.href} className="relative">
             {item.children ? (
               <div>
                 <button
@@ -102,9 +50,9 @@ export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) 
                 {/* Dropdown Menu */}
                 {openDropdown === item.label && (
                   <div className="mt-3 ml-4 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
-                    {item.children.map((child, childIndex) => (
+                    {item.children.map((child) => (
                       <Link
-                        key={childIndex}
+                        key={child.href}
                         href={child.href}
                         className="block text-sm text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200"
                         onClick={toggleMobileMenu}

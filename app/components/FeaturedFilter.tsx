@@ -79,7 +79,6 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
           .from('myuni_courses')
           .select('*, early_bird_price, early_bird_deadline')
           .eq('is_active', true)
-          .eq('is_registration_open', true) // Added this filter
           .order('created_at', { ascending: false })
           .limit(limit);
 

@@ -338,7 +338,6 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
         .from('myuni_courses')
         .select('id, title, price, original_price, early_bird_price, early_bird_deadline, thumbnail_url, slug, level, duration')
         .eq('is_active', true)
-        .eq('is_registration_open', true) // Added this filter
         .neq('id', course.id)
         .order('created_at', { ascending: false })
         .limit(2);

@@ -115,6 +115,7 @@ const texts = {
     minutesShort: "dk",
     registrationOpen: "Kayıt Açık",
     registrationClosed: "Kayıt Kapalı",
+    statusActive: "Yayında",
     daysLeft: "gün kaldı",
     courseTypeLabel: "Eğitim Tipi:",
     levelLabel: "Seviye:",
@@ -164,6 +165,7 @@ const texts = {
     minutesShort: "min",
     registrationOpen: "Registration Open",
     registrationClosed: "Registration Closed",
+    statusActive: "Published",
     daysLeft: "days left",
     courseTypeLabel: "Course Type:",
     levelLabel: "Level:",
@@ -383,11 +385,15 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
   const isRegistrationOpen = (course: Course) => {
     if (course.course_type === 'online') return true;
-    // Veritabanındaki 'is_registration_open' sütunu ile birebir eşzamanlı çalışsın.
     if (typeof course.is_registration_open === 'string') {
-      return course.is_registration_open === 'true';
+      if (course.is_registration_open !== 'true') return false;
+    } else if (course.is_registration_open === false) {
+      return false;
     }
-    return course.is_registration_open !== false; // if undefined or true, it's open.
+    if (course.registration_deadline) {
+      return new Date() < new Date(course.registration_deadline);
+    }
+    return true;
   };
 
   // Early bird helper functions
@@ -468,21 +474,26 @@ export default function CourseListPage({ params }: CourseListPageProps) {
           />
 
           {course.course_type !== 'online' && (
-            <div className="absolute top-3 right-3">
-              {!registrationOpen ? (
-                <div className="bg-neutral-900/80 text-white px-2 py-1 rounded text-xs font-medium">
-                  {t.registrationClosed}
-                </div>
-              ) : daysUntilStart && daysUntilStart <= 7 ? (
-                <div className="bg-red-600 text-white px-2 py-1 rounded text-xs font-medium">
-                  {daysUntilStart} {t.daysLeft}
-                </div>
-              ) : (
-                <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
-                  {t.registrationOpen}
+            <>
+              <div className="absolute top-3 right-3">
+                {daysUntilStart && daysUntilStart <= 7 ? (
+                  <div className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-medium">
+                    {daysUntilStart} {t.daysLeft}
+                  </div>
+                ) : (
+                  <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                    {t.statusActive}
+                  </div>
+                )}
+              </div>
+              {!registrationOpen && (
+                <div className="absolute bottom-3 right-3">
+                  <div className="bg-amber-600/95 text-white px-2 py-1 rounded text-xs font-medium shadow-sm">
+                    {t.registrationClosed}
+                  </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
 

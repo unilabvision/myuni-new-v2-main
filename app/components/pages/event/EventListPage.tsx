@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Clock, Users, Calendar, MapPin, Filter, Search, BookOpen, Globe, Video, Building } from 'lucide-react';
 import { mapEventTypeToLocale } from '../../../../lib/eventService';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import ReactMarkdown from 'react-markdown';
 
 // Event interfaces
@@ -112,6 +113,9 @@ const texts = {
     hoursShort: "saat",
     registrationOpen: "Kayıt Açık",
     registrationClosed: "Kayıt Kapalı",
+    statusUpcoming: "Yaklaşan",
+    statusOngoing: "Devam Ediyor",
+    published: "Yayında",
     eventFull: "Etkinlik Dolu",
     daysLeft: "gün kaldı",
     hoursLeft: "saat kaldı",
@@ -186,6 +190,9 @@ const texts = {
     hoursShort: "hours",
     registrationOpen: "Registration Open",
     registrationClosed: "Registration Closed",
+    statusUpcoming: "Upcoming",
+    statusOngoing: "Ongoing",
+    published: "Published",
     eventFull: "Event Full",
     daysLeft: "days left",
     hoursLeft: "hours left",
@@ -330,12 +337,7 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
     });
   };
 
-  const isRegistrationOpen = (event: Event) => {
-    if (!event.registration_deadline) return event.is_registration_open;
-    const deadline = new Date(event.registration_deadline);
-    const now = new Date();
-    return event.is_registration_open && now < deadline;
-  };
+  const isRegistrationOpen = (event: Event) => isEventRegistrationOpen(event);
 
   const isEventFull = (event: Event) => {
     return event.max_attendees && event.current_attendees >= event.max_attendees;
@@ -431,6 +433,42 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
     const registrationOpen = isRegistrationOpen(event);
     const eventFull = isEventFull(event);
 
+    const renderPrimaryBadge = () => {
+      if (eventFull) {
+        return (
+          <div className="bg-red-600 text-white px-2 py-1 rounded text-xs font-medium">
+            {t.eventFull}
+          </div>
+        );
+      }
+      if (event.status === 'ongoing') {
+        return (
+          <div className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+            {t.statusOngoing}
+          </div>
+        );
+      }
+      if (timeUntilStart && timeUntilStart.value <= 7) {
+        return (
+          <div className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-medium">
+            {timeUntilStart.value} {timeUntilStart.unit === 'days' ? t.daysLeft : t.hoursLeft}
+          </div>
+        );
+      }
+      if (event.status === 'upcoming' || !event.status) {
+        return (
+          <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+            {t.statusUpcoming}
+          </div>
+        );
+      }
+      return (
+        <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+          {t.published}
+        </div>
+      );
+    };
+
     return (
       <Link 
         href={`/${locale}/${locale === 'tr' ? 'etkinlik' : 'event'}/${event.slug}`}
@@ -446,26 +484,18 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
 
-          {/* Status Badge */}
+          {/* Status Badge — kart aktif görünür; kayıt durumu ayrı gösterilir */}
           <div className="absolute top-3 right-3">
-            {eventFull ? (
-              <div className="bg-red-600 text-white px-2 py-1 rounded text-xs font-medium">
-                {t.eventFull}
-              </div>
-            ) : !registrationOpen ? (
-              <div className="bg-neutral-900/80 text-white px-2 py-1 rounded text-xs font-medium">
+            {renderPrimaryBadge()}
+          </div>
+
+          {!registrationOpen && !eventFull && (
+            <div className="absolute bottom-3 right-3">
+              <div className="bg-amber-600/95 text-white px-2 py-1 rounded text-xs font-medium shadow-sm">
                 {t.registrationClosed}
               </div>
-            ) : timeUntilStart && timeUntilStart.value <= 7 ? (
-              <div className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-medium">
-                {timeUntilStart.value} {timeUntilStart.unit === 'days' ? t.daysLeft : t.hoursLeft}
-              </div>
-            ) : (
-              <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
-                {t.registrationOpen}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Event Type Badge */}
           <div className="absolute top-3 left-3">
@@ -708,7 +738,10 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
                         className="flex transition-transform duration-500 ease-out h-full"
                         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
                       >
-                        {featuredEvents.map((event) => (
+                        {featuredEvents.map((event) => {
+                          const featuredRegistrationOpen = isRegistrationOpen(event);
+                          const featuredEventFull = isEventFull(event);
+                          return (
                           <div key={event.id} className="w-full flex-shrink-0 h-full">
                             <Link 
                               href={`/${locale}/${locale === 'tr' ? 'etkinlik' : 'event'}/${event.slug}`}
@@ -729,6 +762,20 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
                                     {mapEventTypeToLocale(event.event_type, locale)}
                                   </div>
                                 </div>
+
+                                <div className="absolute top-3 right-3">
+                                  <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                    {event.status === 'ongoing' ? t.statusOngoing : t.statusUpcoming}
+                                  </div>
+                                </div>
+
+                                {!featuredRegistrationOpen && !featuredEventFull && (
+                                  <div className="absolute bottom-3 right-3">
+                                    <div className="bg-amber-600/95 text-white px-2 py-1 rounded text-xs font-medium">
+                                      {t.registrationClosed}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                               
                               <div className="p-4 lg:p-6 flex-1 flex flex-col min-h-0">
@@ -783,14 +830,15 @@ export default function EventListPage({ params, initialEvents }: EventListPagePr
                                     )}
                                   </div>
                                   <button className="text-[#990000] hover:text-[#cc0000] transition-colors text-xs lg:text-sm font-medium flex items-center flex-shrink-0">
-                                    {t.register}
+                                    {featuredEventFull ? t.eventFull : featuredRegistrationOpen ? t.register : t.exploreMore}
                                     <ArrowRight className="w-3 h-3 ml-1" />
                                   </button>
                                 </div>
                               </div>
                             </Link>
                           </div>
-                        ))}
+                        );
+                        })}
                       </div>
                     </div>
                   </div>

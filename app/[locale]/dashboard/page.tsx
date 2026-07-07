@@ -10,6 +10,7 @@ import { supabase } from '../../../lib/supabase';
 import { getUserEventEnrollments } from '../../../lib/eventEnrollmentService';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
+import DashboardOpportunitiesTab from '../../components/dashboard/DashboardOpportunitiesTab';
 
 // Types
 interface Enrollment {
@@ -148,7 +149,8 @@ const texts = {
       collection: "koleksiyonum",
       certificates: "Sertifikalarım",
       competitions: "Yarışmalarım",
-      discountCodes: "İndirim Kodlarım"
+      discountCodes: "İndirim Kodlarım",
+      opportunities: "Staj & Kariyer"
     },
     competitionCard: {
       viewResult: "Sonucu Gör",
@@ -215,6 +217,7 @@ const texts = {
       certificates: "My Certificates",
       competitions: "My Competitions",
       discountCodes: "My Discount Codes",
+      opportunities: "Internships & Career",
     },
     competitionCard: {
       viewResult: "View Result",
@@ -322,7 +325,7 @@ function DashboardContent({ locale }: { locale: string }) {
   const tabParam = searchParams ? searchParams.get('tab') : null;
 
   useEffect(() => {
-    if (tabParam && ['courses', 'events', 'collection', 'certificates', 'competitions', 'discountCodes'].includes(tabParam)) {
+    if (tabParam && ['courses', 'events', 'collection', 'certificates', 'competitions', 'discountCodes', 'opportunities'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -1929,6 +1932,16 @@ function DashboardContent({ locale }: { locale: string }) {
             >
               {t.tabs.discountCodes}
             </button>
+            <button
+              onClick={() => setActiveTab('opportunities')}
+              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-xs ${
+                activeTab === 'opportunities'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.opportunities}
+            </button>
           </div>
 
           {/* Desktop: Horizontal Flex */}
@@ -1992,6 +2005,16 @@ function DashboardContent({ locale }: { locale: string }) {
               }`}
             >
               {t.tabs.discountCodes}
+            </button>
+            <button
+              onClick={() => setActiveTab('opportunities')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 text-sm lg:text-base ${
+                activeTab === 'opportunities'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.opportunities}
             </button>
           </div>
         </div>
@@ -2372,6 +2395,10 @@ function DashboardContent({ locale }: { locale: string }) {
               </div>
             )}
           </>
+        )}
+
+        {activeTab === 'opportunities' && (
+          <DashboardOpportunitiesTab locale={locale} />
         )}
       </div>
     </div>

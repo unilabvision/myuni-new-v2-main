@@ -6,14 +6,17 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const formName = searchParams.get('form_name') || 'myuni_internship';
+    const configId = searchParams.get('id');
 
-    // Form config'i getir
-    const { data: config, error: configError } = await supabaseAdmin
-      .from('internship_form_configs')
-      .select('*')
-      .eq('form_name', formName)
-      .eq('is_active', true)
-      .single();
+    let configQuery = supabaseAdmin.from('internship_form_configs').select('*').eq('is_active', true);
+
+    if (configId) {
+      configQuery = configQuery.eq('id', configId);
+    } else {
+      configQuery = configQuery.eq('form_name', formName);
+    }
+
+    const { data: config, error: configError } = await configQuery.single();
 
     if (configError || !config) {
       return NextResponse.json(
