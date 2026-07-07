@@ -234,13 +234,8 @@ export default function EventListPage({ params }: EventListPageProps) {
       setError(null);
       
       const eventsData = await getAllEvents(locale);
-      
-      // Filter only active and open for registration events
-      const filteredEventsData = eventsData.filter((event: Event) => 
-        event.is_active && event.is_registration_open
-      );
-      
-      setEvents(filteredEventsData);
+      // getAllEvents zaten is_active filtreler; kayıt durumu görünürlüğü etkilemez
+      setEvents(eventsData);
     } catch (err) {
       console.error("Error fetching events:", err);
       setError('Failed to load events');

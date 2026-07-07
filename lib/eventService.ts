@@ -689,7 +689,6 @@ export async function getEventsForFilter(_locale: string = 'tr') {
       .from('myuni_events')
       .select('*')
       .eq('is_active', true)
-      .eq('is_registration_open', true)
       .order('start_date', { ascending: true });
 
     if (error) {

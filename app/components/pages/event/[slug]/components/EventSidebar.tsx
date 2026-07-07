@@ -10,6 +10,7 @@ import { getAllEvents } from '../../../../../../lib/eventService';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
 import { supabase } from '../../../../../../lib/supabase';
 import EventForm from './EventForm';
+import EventApplicationLink from './EventApplicationLink';
 
 // Event interface matching myuni_events database schema
 interface Event {
@@ -201,12 +202,11 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
       const events = await getAllEvents(locale);
 
-      // Mevcut etkinlik hariç, aktif ve kayıt açık etkinlikleri filtrele
+      // Mevcut etkinlik hariç, sitede aktif etkinlikleri göster (kayıt kapalı olsa da)
       const validEvents = events
         .filter((eventItem: Event) =>
           eventItem.id !== event.id &&
           eventItem.is_active &&
-          eventItem.is_registration_open &&
           eventItem.slug &&
           eventItem.slug.trim() !== ''
         )
@@ -521,6 +521,9 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
               onError={handleRegistrationError}
               onAttendeesChange={handleAttendeesChange}
             />
+            {event.slug && (
+              <EventApplicationLink eventSlug={event.slug} locale={locale} />
+            )}
           </div>
         </div>
 
@@ -634,6 +637,9 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           onError={handleRegistrationError}
           onAttendeesChange={handleAttendeesChange}
         />
+        {event.slug && (
+          <EventApplicationLink eventSlug={event.slug} locale={locale} />
+        )}
         <p className="text-xs text-center text-neutral-500 dark:text-neutral-400 mt-2">
           {isUserRegistered
             ? (locale === 'tr'
