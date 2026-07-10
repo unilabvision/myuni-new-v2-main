@@ -413,7 +413,7 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
             src={getBannerUrl(eventData)}
             alt={eventData.title}
             fill
-            className="object-contain"
+            className="object-cover"
             sizes="(max-width: 640px) 100vw, (max-width: 768px) 90vw, (max-width: 1024px) 80vw, 1200px"
             priority
             quality={90}
