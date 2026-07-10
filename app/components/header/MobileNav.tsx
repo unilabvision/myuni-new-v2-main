@@ -6,17 +6,17 @@ import { useUser } from '@clerk/nextjs';
 import { useState, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { getNavItems } from './navItems';
-import { useSiteApplicationNavForms } from './useSiteApplicationNavForms';
+import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
 
 interface MobileNavProps {
   toggleMobileMenu: () => void;
   locale: string;
+  siteForms: PublicSiteApplicationNavForm[];
 }
 
-export default function MobileNav({ toggleMobileMenu, locale }: MobileNavProps) {
+export default function MobileNav({ toggleMobileMenu, locale, siteForms }: MobileNavProps) {
   const { isSignedIn } = useUser();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const siteForms = useSiteApplicationNavForms(locale);
   const items = useMemo(() => getNavItems(locale, siteForms), [locale, siteForms]);
 
   const handleDropdownToggle = (label: string) => {

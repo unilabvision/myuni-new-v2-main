@@ -689,7 +689,7 @@ export async function getEventsForFilter(_locale: string = 'tr') {
       .from('myuni_events')
       .select('*')
       .eq('is_active', true)
-      .order('start_date', { ascending: true });
+      .order('start_date', { ascending: false });
 
     if (error) {
       console.error('Supabase error fetching events:', error);
@@ -792,7 +792,7 @@ export async function getAllEvents(_locale: string = 'tr') {
       .from('myuni_events')
       .select('*')
       .eq('is_active', true)
-      .order('start_date', { ascending: true });
+      .order('start_date', { ascending: false });
 
     if (error) throw error;
 

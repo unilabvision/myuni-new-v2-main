@@ -6,7 +6,6 @@ import {
   siteApplicationsDb,
   validateAttachmentFile,
 } from '@/lib/siteApplications';
-import { requireCaptchaInProduction, verifyHCaptcha } from '@/lib/siteApplications/captcha';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,10 +28,10 @@ export async function POST(request: NextRequest) {
         .select('id, slug')
         .eq('slug', eventSlug)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (!event) {
-        return NextResponse.json({ error: 'Event not found' }, { status: 400 });
+        return NextResponse.json({ error: 'Event not found' }, { status: 404 });
       }
 
       const { data, error } = await supabase
@@ -40,10 +39,11 @@ export async function POST(request: NextRequest) {
         .select('id, allows_attachment, slug_tr, slug_en')
         .eq('event_id', event.id)
         .eq('is_active', true)
-        .single();
+        .eq('show_on_website', true)
+        .maybeSingle();
 
       if (error || !data) {
-        return NextResponse.json({ error: 'Form not found' }, { status: 400 });
+        return NextResponse.json({ error: 'Form not found' }, { status: 404 });
       }
 
       form = data;
@@ -55,16 +55,17 @@ export async function POST(request: NextRequest) {
         .select('id, allows_attachment')
         .eq(slugColumn, formSlug)
         .eq('is_active', true)
-        .single();
+        .eq('show_on_website', true)
+        .maybeSingle();
 
       if (formError || !data) {
-        return NextResponse.json({ error: 'Form not found' }, { status: 400 });
+        return NextResponse.json({ error: 'Form not found' }, { status: 404 });
       }
       form = data;
     }
 
     if (!form) {
-      return NextResponse.json({ error: 'Form not found' }, { status: 400 });
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
     if (!form.allows_attachment) {
@@ -85,17 +86,6 @@ export async function POST(request: NextRequest) {
     } as File);
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
-    }
-
-    const captchaToken = body.hCaptchaToken as string | undefined;
-    if (!requireCaptchaInProduction(captchaToken)) {
-      return NextResponse.json({ error: 'Captcha required' }, { status: 400 });
-    }
-    if (captchaToken) {
-      const valid = await verifyHCaptcha(captchaToken);
-      if (!valid) {
-        return NextResponse.json({ error: 'Captcha verification failed' }, { status: 400 });
-      }
     }
 
     const draftId = randomUUID();

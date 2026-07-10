@@ -20,6 +20,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/hakkimizda', label: 'Biz Kimiz' },
         { href: '/{locale}/egitmen-ol', label: 'Eğitmen Ol' },
+        { href: '/{locale}/ekip-basvuru', label: 'UNILAB Ekip Başvurusu' },
         { href: '/{locale}/bultenimiz', label: 'Bültenimiz' },
         { href: '/{locale}/gizlilik', label: 'Gizlilik Politikası' },
         {
@@ -49,6 +50,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/about', label: 'Who We Are' },
         { href: '/{locale}/egitmen-ol', label: 'Become an Instructor' },
+        { href: '/{locale}/team-application', label: 'UNILAB Team Application' },
         { href: '/{locale}/newsletter', label: 'Newsletter' },
         { href: '/{locale}/privacy', label: 'Privacy Policy' },
         { href: '/{locale}/terms', label: 'Terms of Use' },
@@ -82,36 +84,23 @@ function injectSiteForms(
   locale: string,
   siteForms: PublicSiteApplicationNavForm[]
 ): NavItem[] {
-  const eventsForms = siteForms.filter((f) => f.navSection === 'events');
   const aboutForms = siteForms.filter((f) => f.navSection === 'about');
 
   return items.map((item) => {
     const navKey = (item as NavItem & { navKey?: string }).navKey;
 
-    if (navKey === 'events' && eventsForms.length > 0) {
-      const eventsListLabel = locale === 'tr' ? 'Tüm Etkinlikler' : 'All Events';
-      return {
-        ...item,
-        children: [
-          { href: item.href, label: eventsListLabel },
-          ...eventsForms.map((form) => ({
-            href: form.url,
-            label: form.eventTitle || form.title,
-          })),
-        ],
-      };
-    }
-
     if (navKey === 'about' && aboutForms.length > 0 && item.children) {
+      const staticHrefs = new Set(item.children.map((child) => child.href));
+      const dynamicTeamForms = aboutForms
+        .filter((form) => !staticHrefs.has(form.url))
+        .map((form) => ({
+          href: form.url,
+          label: form.title,
+        }));
+
       return {
         ...item,
-        children: [
-          ...item.children,
-          ...aboutForms.map((form) => ({
-            href: form.url,
-            label: form.title,
-          })),
-        ],
+        children: [...item.children, ...dynamicTeamForms],
       };
     }
 

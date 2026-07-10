@@ -1,4 +1,5 @@
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
+import { normalizeFieldOptions } from './forms';
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -52,7 +53,7 @@ export function validateSubmissionFields(
     }
 
     if (field.field_type === 'select' && typeof value === 'string') {
-      const allowed = (field.options || []).map((o) => o.value);
+      const allowed = normalizeFieldOptions(field.options).map((o) => o.value);
       if (allowed.length > 0 && !allowed.includes(value)) {
         errors[field.field_key] = 'invalid_option';
         continue;

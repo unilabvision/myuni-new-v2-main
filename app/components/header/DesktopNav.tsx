@@ -4,16 +4,16 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { getNavItems, navLinkClassName } from './navItems';
-import { useSiteApplicationNavForms } from './useSiteApplicationNavForms';
+import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
 
 interface DesktopNavProps {
   locale: string;
+  siteForms: PublicSiteApplicationNavForm[];
 }
 
-export default function DesktopNav({ locale }: DesktopNavProps) {
+export default function DesktopNav({ locale, siteForms }: DesktopNavProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const siteForms = useSiteApplicationNavForms(locale);
   const items = useMemo(() => getNavItems(locale, siteForms), [locale, siteForms]);
 
   useEffect(() => {

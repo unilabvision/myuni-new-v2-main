@@ -10,7 +10,6 @@ import { getAllEvents } from '../../../../../../lib/eventService';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
 import { supabase } from '../../../../../../lib/supabase';
 import EventForm from './EventForm';
-import EventApplicationLink from './EventApplicationLink';
 
 // Event interface matching myuni_events database schema
 interface Event {
@@ -90,6 +89,8 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
   // Mobil sabit buton için state
   const [showMobileSticky, setShowMobileSticky] = useState(true);
+  const [applicationFormUrl, setApplicationFormUrl] = useState<string | undefined>();
+  const [applicationFormChecked, setApplicationFormChecked] = useState(false);
 
   // Scroll pozisyonunu izlemek için effect
   useEffect(() => {
@@ -103,6 +104,41 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!event.slug) {
+      setApplicationFormUrl(undefined);
+      setApplicationFormChecked(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `/api/site-applications/public/events/${encodeURIComponent(event.slug)}?locale=${locale}`
+        );
+        if (!res.ok) {
+          if (!cancelled) setApplicationFormUrl(undefined);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setApplicationFormUrl(data.available && data.url ? data.url : undefined);
+        }
+      } catch {
+        if (!cancelled) setApplicationFormUrl(undefined);
+      } finally {
+        if (!cancelled) setApplicationFormChecked(true);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [event.slug, locale]);
 
   // Katılımcı sayısını dinamik olarak getir
   const updateAttendeeCount = useCallback(async () => {
@@ -404,6 +440,19 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
     setAttendeeCountLocal(newCount);
   };
 
+  const eventFormProps = {
+    event: {
+      ...event,
+      current_attendees: attendeeCountLocal,
+    },
+    locale,
+    applicationFormUrl,
+    applicationFormPending: !applicationFormChecked,
+    onSuccess: handleRegistrationSuccess,
+    onError: handleRegistrationError,
+    onAttendeesChange: handleAttendeesChange,
+  };
+
   return (
     <>
       <div className="sticky top-24 space-y-6">
@@ -509,21 +558,9 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           </div>
 
 
-          {/* EventForm - Mobil görünümde gizlenecek */}
+          {/* EventForm — mobilde alttaki sticky bar'da */}
           <div className="md:block hidden">
-            <EventForm
-              event={{
-                ...event,
-                current_attendees: attendeeCountLocal // Dinamik değeri geç
-              }}
-              locale={locale}
-              onSuccess={handleRegistrationSuccess}
-              onError={handleRegistrationError}
-              onAttendeesChange={handleAttendeesChange}
-            />
-            {event.slug && (
-              <EventApplicationLink eventSlug={event.slug} locale={locale} />
-            )}
+            <EventForm {...eventFormProps} />
           </div>
         </div>
 
@@ -627,19 +664,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
       {/* Mobil ekranlarda en altta sabit duracak kayıt butonu */}
       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 p-4 md:hidden transition-transform duration-300 z-40">
-        <EventForm
-          event={{
-            ...event,
-            current_attendees: attendeeCountLocal
-          }}
-          locale={locale}
-          onSuccess={handleRegistrationSuccess}
-          onError={handleRegistrationError}
-          onAttendeesChange={handleAttendeesChange}
-        />
-        {event.slug && (
-          <EventApplicationLink eventSlug={event.slug} locale={locale} />
-        )}
+        <EventForm {...eventFormProps} />
         <p className="text-xs text-center text-neutral-500 dark:text-neutral-400 mt-2">
           {isUserRegistered
             ? (locale === 'tr'

@@ -30,6 +30,8 @@ interface DynamicSiteApplicationFormProps {
   locale: string;
   formSlug?: string;
   eventSlug?: string;
+  variant?: 'page' | 'sidebar';
+  initialForm?: PublicSiteApplicationForm;
 }
 
 const ui = {
@@ -101,7 +103,17 @@ const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
 const inputClass =
   'w-full rounded-xl border border-neutral-200 dark:border-neutral-600 bg-white/90 dark:bg-neutral-900/80 px-4 py-3 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 transition-all duration-200 focus:ring-2 focus:ring-[#990000]/30 focus:border-[#990000] focus:outline-none hover:border-neutral-300 dark:hover:border-neutral-500';
 
-function FormShell({ children }: { children: React.ReactNode }) {
+function FormShell({
+  children,
+  variant = 'page',
+}: {
+  children: React.ReactNode;
+  variant?: 'page' | 'sidebar';
+}) {
+  if (variant === 'sidebar') {
+    return <div className="relative">{children}</div>;
+  }
+
   return (
     <div className="relative isolate">
       <div
@@ -121,13 +133,16 @@ export default function DynamicSiteApplicationForm({
   locale,
   formSlug,
   eventSlug,
+  variant = 'page',
+  initialForm,
 }: DynamicSiteApplicationFormProps) {
+  const isSidebar = variant === 'sidebar';
   const t = ui[locale as keyof typeof ui] || ui.tr;
   const captchaRef = useRef<HCaptcha>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(initialForm ?? null);
+  const [loading, setLoading] = useState(!initialForm);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -138,28 +153,58 @@ export default function DynamicSiteApplicationForm({
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
-  const siteKey =
-    process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || '7bcc41da-10a0-4fd6-933e-ee34e3787d3a';
+  const siteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+
+  const mapServerFieldError = (code: string) => {
+    switch (code) {
+      case 'invalid_email':
+        return t.invalidEmail;
+      case 'invalid_url':
+        return locale === 'tr' ? 'Geçerli bir URL giriniz' : 'Please enter a valid URL';
+      case 'invalid_option':
+        return locale === 'tr' ? 'Geçersiz seçim' : 'Invalid selection';
+      case 'required':
+      default:
+        return t.required;
+    }
+  };
 
   useEffect(() => {
+    if (initialForm) {
+      setFormConfig(initialForm);
+      setLoading(false);
+      if (initialForm.event_title) {
+        setValues((prev) => ({
+          ...prev,
+          event_name: prev.event_name || initialForm.event_title || '',
+        }));
+      }
+      return;
+    }
+
+    let cancelled = false;
+
     const load = async () => {
+      setLoading(true);
       try {
         const url = eventSlug
           ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
           : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
 
         if (!eventSlug && !formSlug) {
-          setFormConfig(null);
+          if (!cancelled) setFormConfig(null);
           return;
         }
 
         const res = await fetch(url);
         if (!res.ok) {
-          setFormConfig(null);
+          if (!cancelled) setFormConfig(null);
           return;
         }
         const data = await res.json();
         const loaded = data.form as PublicSiteApplicationForm;
+        if (cancelled) return;
+
         setFormConfig(loaded);
 
         if (loaded.event_title) {
@@ -169,13 +214,16 @@ export default function DynamicSiteApplicationForm({
           }));
         }
       } catch {
-        setFormConfig(null);
+        if (!cancelled) setFormConfig(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     load();
-  }, [formSlug, eventSlug, locale]);
+    return () => {
+      cancelled = true;
+    };
+  }, [formSlug, eventSlug, locale, initialForm]);
 
   const progress = useMemo(() => {
     if (!formConfig) return 0;
@@ -199,7 +247,7 @@ export default function DynamicSiteApplicationForm({
       }
     }
 
-    if (!captchaToken && process.env.NODE_ENV === 'production') {
+    if (!captchaToken && process.env.NODE_ENV === 'production' && siteKey) {
       nextErrors.captcha = t.captcha;
     }
 
@@ -244,7 +292,6 @@ export default function DynamicSiteApplicationForm({
             fileName: attachment.name,
             fileSize: attachment.size,
             mimeType: attachment.type,
-            hCaptchaToken: captchaToken,
           }),
         });
         const uploadData = await uploadRes.json();
@@ -280,7 +327,16 @@ export default function DynamicSiteApplicationForm({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t.error);
+      if (!res.ok) {
+        if (data.fieldErrors && typeof data.fieldErrors === 'object') {
+          const mapped: Record<string, string> = {};
+          for (const [key, code] of Object.entries(data.fieldErrors as Record<string, string>)) {
+            mapped[key] = mapServerFieldError(code);
+          }
+          setErrors(mapped);
+        }
+        throw new Error(data.error || t.error);
+      }
 
       setSuccess(true);
       captchaRef.current?.resetCaptcha();
@@ -296,15 +352,23 @@ export default function DynamicSiteApplicationForm({
 
   if (loading) {
     return (
-      <FormShell>
-        <div className="rounded-3xl border border-neutral-200/80 bg-white/70 dark:bg-neutral-800/50 backdrop-blur-sm p-10 shadow-lg shadow-neutral-200/40 dark:shadow-none">
-          <div className="flex flex-col items-center gap-4 py-8 text-neutral-600 dark:text-neutral-400">
+      <FormShell variant={variant}>
+        <div
+          className={
+            isSidebar
+              ? 'flex items-center justify-center py-6 text-neutral-600 dark:text-neutral-400'
+              : 'rounded-3xl border border-neutral-200/80 bg-white/70 dark:bg-neutral-800/50 backdrop-blur-sm p-10 shadow-lg shadow-neutral-200/40 dark:shadow-none'
+          }
+        >
+          <div className={`flex flex-col items-center gap-4 ${isSidebar ? '' : 'py-8'} text-neutral-600 dark:text-neutral-400`}>
             <div className="relative">
-              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#990000] to-rose-600 flex items-center justify-center shadow-lg shadow-[#990000]/25">
-                <Loader className="w-7 h-7 text-white animate-spin" />
+              <div
+                className={`${isSidebar ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-2xl'} bg-gradient-to-br from-[#990000] to-rose-600 flex items-center justify-center shadow-lg shadow-[#990000]/25`}
+              >
+                <Loader className={`${isSidebar ? 'w-5 h-5' : 'w-7 h-7'} text-white animate-spin`} />
               </div>
             </div>
-            <p className="text-sm font-medium animate-pulse">{t.loading}</p>
+            {!isSidebar && <p className="text-sm font-medium animate-pulse">{t.loading}</p>}
           </div>
         </div>
       </FormShell>
@@ -312,8 +376,10 @@ export default function DynamicSiteApplicationForm({
   }
 
   if (!formConfig) {
+    if (isSidebar) return null;
+
     return (
-      <FormShell>
+      <FormShell variant={variant}>
         <div className="rounded-3xl border border-red-200 bg-red-50/90 dark:bg-red-950/30 p-8 text-center text-red-700 dark:text-red-300">
           <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-80" />
           {t.notFound}
@@ -324,21 +390,35 @@ export default function DynamicSiteApplicationForm({
 
   if (success) {
     return (
-      <FormShell>
-        <div className="rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-950/40 dark:via-neutral-900 dark:to-teal-950/30 p-10 md:p-14 text-center shadow-xl shadow-emerald-100/50 dark:shadow-none">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-lg shadow-emerald-300/40 mb-6">
-            <PartyPopper className="w-10 h-10" />
+      <FormShell variant={variant}>
+        <div
+          className={
+            isSidebar
+              ? 'rounded-sm border border-emerald-200/80 bg-emerald-50 dark:bg-emerald-950/30 p-6 text-center'
+              : 'rounded-3xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-950/40 dark:via-neutral-900 dark:to-teal-950/30 p-10 md:p-14 text-center shadow-xl shadow-emerald-100/50 dark:shadow-none'
+          }
+        >
+          <div
+            className={`inline-flex items-center justify-center ${isSidebar ? 'w-12 h-12 mb-4' : 'w-20 h-20 mb-6'} rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-lg shadow-emerald-300/40`}
+          >
+            <PartyPopper className={isSidebar ? 'w-6 h-6' : 'w-10 h-10'} />
           </div>
-          <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-100 mb-3">
+          <h2
+            className={`${isSidebar ? 'text-lg' : 'text-2xl'} font-bold text-emerald-900 dark:text-emerald-100 mb-3`}
+          >
             {locale === 'tr' ? 'Harika, gönderildi!' : 'Awesome, sent!'}
           </h2>
-          <p className="text-lg text-emerald-800/90 dark:text-emerald-200/90 max-w-md mx-auto leading-relaxed">
+          <p
+            className={`${isSidebar ? 'text-sm' : 'text-lg'} text-emerald-800/90 dark:text-emerald-200/90 max-w-md mx-auto leading-relaxed`}
+          >
             {formConfig.success_message || t.success}
           </p>
-          <div className="mt-8 inline-flex items-center gap-2 text-sm text-emerald-700/80 dark:text-emerald-300/80">
-            <Heart className="w-4 h-4" />
-            {t.response}
-          </div>
+          {!isSidebar && (
+            <div className="mt-8 inline-flex items-center gap-2 text-sm text-emerald-700/80 dark:text-emerald-300/80">
+              <Heart className="w-4 h-4" />
+              {t.response}
+            </div>
+          )}
         </div>
       </FormShell>
     );
@@ -351,9 +431,15 @@ export default function DynamicSiteApplicationForm({
   ];
 
   return (
-    <FormShell>
-      <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-start">
-        {/* Sol panel — masaüstünde nefes alan alan */}
+    <FormShell variant={variant}>
+      <div
+        className={
+          isSidebar
+            ? 'space-y-4'
+            : 'grid lg:grid-cols-12 gap-8 lg:gap-10 items-start'
+        }
+      >
+        {!isSidebar && (
         <aside className="lg:col-span-4 space-y-5 order-1">
           <div className="rounded-3xl bg-gradient-to-br from-[#990000] via-[#b30000] to-rose-700 p-6 md:p-8 text-white shadow-xl shadow-[#990000]/20">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider bg-white/15 rounded-full px-3 py-1 mb-4">
@@ -392,23 +478,35 @@ export default function DynamicSiteApplicationForm({
             </span>
           </div>
         </aside>
+        )}
 
-        {/* Form kartı */}
-        <div className="lg:col-span-8 order-2">
+        <div className={isSidebar ? '' : 'lg:col-span-8 order-2'}>
           <form
             onSubmit={handleSubmit}
-            className="rounded-3xl border border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-800/70 backdrop-blur-sm shadow-xl shadow-neutral-200/30 dark:shadow-none overflow-hidden"
+            className={
+              isSidebar
+                ? 'space-y-4'
+                : 'rounded-3xl border border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-800/70 backdrop-blur-sm shadow-xl shadow-neutral-200/30 dark:shadow-none overflow-hidden'
+            }
           >
-            <div className="px-6 md:px-10 pt-8 pb-6 border-b border-neutral-100 dark:border-neutral-700/80 bg-gradient-to-r from-neutral-50/80 to-white dark:from-neutral-800/50 dark:to-neutral-800/30">
-              <h1 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-50 mb-2">
+            <div
+              className={
+                isSidebar
+                  ? 'pb-4 border-b border-neutral-100 dark:border-neutral-700'
+                  : 'px-6 md:px-10 pt-8 pb-6 border-b border-neutral-100 dark:border-neutral-700/80 bg-gradient-to-r from-neutral-50/80 to-white dark:from-neutral-800/50 dark:to-neutral-800/30'
+              }
+            >
+              <h1
+                className={`${isSidebar ? 'text-lg' : 'text-2xl md:text-3xl'} font-bold text-neutral-900 dark:text-neutral-50 mb-2`}
+              >
                 {formConfig.title}
               </h1>
               {formConfig.subtitle && (
-                <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   {formConfig.subtitle}
                 </p>
               )}
-              <div className="mt-5">
+              <div className="mt-4">
                 <div className="flex justify-between text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1.5">
                   <span>{t.progress}</span>
                   <span>{progress}%</span>
@@ -422,7 +520,7 @@ export default function DynamicSiteApplicationForm({
               </div>
             </div>
 
-            <div className="px-6 md:px-10 py-8 space-y-6">
+            <div className={isSidebar ? 'space-y-4' : 'px-6 md:px-10 py-8 space-y-6'}>
               <input
                 type="text"
                 name="website"
@@ -555,12 +653,14 @@ export default function DynamicSiteApplicationForm({
                   <Shield className="w-4 h-4 text-[#990000]" />
                   {t.spamNote}
                 </div>
-                <HCaptcha
-                  ref={captchaRef}
-                  sitekey={siteKey}
-                  onVerify={(token) => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken(null)}
-                />
+                {siteKey ? (
+                  <HCaptcha
+                    ref={captchaRef}
+                    sitekey={siteKey}
+                    onVerify={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken(null)}
+                  />
+                ) : null}
                 {errors.captcha && (
                   <p className="text-sm text-red-600 mt-2">{errors.captcha}</p>
                 )}
@@ -576,7 +676,7 @@ export default function DynamicSiteApplicationForm({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-10 py-3.5 rounded-2xl bg-gradient-to-r from-[#990000] to-rose-700 text-white font-semibold shadow-lg shadow-[#990000]/25 hover:shadow-xl hover:shadow-[#990000]/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:hover:scale-100 transition-all duration-200"
+                className={`w-full inline-flex items-center justify-center gap-2 ${isSidebar ? 'px-4 py-3 rounded-sm' : 'sm:w-auto px-10 py-3.5 rounded-2xl'} bg-gradient-to-r from-[#990000] to-rose-700 text-white font-semibold shadow-lg shadow-[#990000]/25 hover:shadow-xl hover:shadow-[#990000]/30 ${isSidebar ? '' : 'hover:scale-[1.02] active:scale-[0.98]'} disabled:opacity-60 disabled:hover:scale-100 transition-all duration-200`}
               >
                 {submitting ? (
                   <>

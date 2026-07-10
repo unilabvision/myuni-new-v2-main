@@ -65,7 +65,7 @@ export default async function EventApplicationPage({
       variant="application"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-10">
-        <DynamicSiteApplicationForm locale={locale} eventSlug={eventSlug} />
+        <DynamicSiteApplicationForm locale={locale} eventSlug={eventSlug} initialForm={form} />
       </div>
     </PageLayout>
   );

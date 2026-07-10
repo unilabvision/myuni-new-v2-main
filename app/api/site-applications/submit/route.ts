@@ -31,7 +31,7 @@ async function resolveForm(
       .eq('event_id', event.id)
       .eq('is_active', true)
       .eq('show_on_website', true)
-      .single();
+      .maybeSingle();
 
     if (error || !form) {
       return { error: 'Form not found or inactive', status: 404 as const };
@@ -46,7 +46,8 @@ async function resolveForm(
     .select('*')
     .eq(slugColumn, formSlug)
     .eq('is_active', true)
-    .single();
+    .eq('show_on_website', true)
+    .maybeSingle();
 
   if (formError || !form) {
     return { error: 'Form not found or inactive', status: 404 as const };

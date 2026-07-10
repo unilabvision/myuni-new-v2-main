@@ -11,8 +11,8 @@ import {
   getEventApplicationPath,
   getSiteApplicationPublicPath,
   siteApplicationsDb,
-  TEAM_FORM_SLUGS,
 } from './config';
+import { getTeamFormPublicPath } from './teamPaths';
 
 type FormWithEvent = {
   id: string;
@@ -56,30 +56,18 @@ export async function getVisibleSiteApplicationForms(
     for (const row of data as FormWithEvent[]) {
       const slug = isEn ? row.slug_en : row.slug_tr;
 
-      if (row.event_id && row.myuni_events?.slug && row.myuni_events.is_active) {
-        results.push({
-          id: row.id,
-          slug,
-          title: row.myuni_events.title,
-          subtitle: isEn ? row.subtitle_en : row.subtitle_tr,
-          url: getEventApplicationPath(locale, row.myuni_events.slug),
-          navSection: 'events',
-          eventSlug: row.myuni_events.slug,
-          eventTitle: row.myuni_events.title,
-        });
+      if (row.event_id) {
         continue;
       }
 
-      if (!row.event_id && TEAM_FORM_SLUGS.has(slug)) {
-        results.push({
-          id: row.id,
-          slug,
-          title: isEn ? row.title_en : row.title_tr,
-          subtitle: isEn ? row.subtitle_en : row.subtitle_tr,
-          url: getSiteApplicationPublicPath(locale, slug),
-          navSection: 'about',
-        });
-      }
+      results.push({
+        id: row.id,
+        slug,
+        title: isEn ? row.title_en : row.title_tr,
+        subtitle: isEn ? row.subtitle_en : row.subtitle_tr,
+        url: getTeamFormPublicPath(locale, slug),
+        navSection: 'about',
+      });
     }
 
     return results;
@@ -143,12 +131,44 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
 }
 
 export async function getEventApplicationSummary(eventSlug: string, locale: string) {
-  const result = await getPublicFormByEventSlug(eventSlug, locale);
-  if (!result) return null;
+  const supabase = getSiteApplicationsSupabase();
+  const isEn = locale === 'en';
+
+  const { data: event, error: eventError } = await supabase
+    .from('myuni_events')
+    .select('id, slug, title')
+    .eq('slug', eventSlug)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (eventError || !event) {
+    return null;
+  }
+
+  const { data: form, error: formError } = await supabase
+    .from(siteApplicationsDb.forms)
+    .select('id, title_tr, title_en')
+    .eq('event_id', event.id)
+    .eq('is_active', true)
+    .eq('show_on_website', true)
+    .maybeSingle();
+
+  if (formError || !form) {
+    return null;
+  }
+
+  const { count, error: countError } = await supabase
+    .from(siteApplicationsDb.formFields)
+    .select('id', { count: 'exact', head: true })
+    .eq('form_id', form.id);
+
+  if (countError || !count) {
+    return null;
+  }
 
   return {
     url: getEventApplicationPath(locale, eventSlug),
-    title: result.form.event_title || result.form.title,
-    formTitle: result.form.title,
+    title: event.title,
+    formTitle: isEn ? form.title_en : form.title_tr,
   };
 }

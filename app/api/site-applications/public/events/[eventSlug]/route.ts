@@ -14,7 +14,10 @@ export async function GET(
       return NextResponse.json({ available: false });
     }
 
-    return NextResponse.json({ available: true, ...summary });
+    return NextResponse.json(
+      { available: true, ...summary },
+      { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } }
+    );
   } catch (err) {
     console.error('Event application summary error:', err);
     return NextResponse.json({ available: false }, { status: 500 });

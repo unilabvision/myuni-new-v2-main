@@ -223,7 +223,7 @@ export default function PackageDetailPage({ params }: CourseDetailPageProps) {
   // Eğer courseType geçerli değilse 404 göster
   if (validCourseTypes[locale as keyof typeof validCourseTypes] !== courseType) {
     notFound();
-  }
+  } 
 
   // Dil metinlerini al
   const t = texts[locale as keyof typeof texts] || texts.tr;

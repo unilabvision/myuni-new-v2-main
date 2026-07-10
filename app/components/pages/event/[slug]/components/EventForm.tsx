@@ -25,6 +25,8 @@ interface Event {
 interface EventFormProps {
   event: Event;
   locale: string;
+  applicationFormUrl?: string;
+  applicationFormPending?: boolean;
   onSuccess?: () => void;
   onError?: (error: string) => void;
   onAttendeesChange?: (newCount: number) => void;
@@ -32,7 +34,9 @@ interface EventFormProps {
 
 const EventForm: React.FC<EventFormProps> = ({ 
   event, 
-  locale, 
+  locale,
+  applicationFormUrl,
+  applicationFormPending,
   onSuccess, 
   onError,
   onAttendeesChange
@@ -93,6 +97,11 @@ const EventForm: React.FC<EventFormProps> = ({
   };
 
   const handleRegistration = async () => {
+    if (applicationFormUrl) {
+      router.push(applicationFormUrl);
+      return;
+    }
+
     if (!isSignedIn) {
       const currentPath = window.location.pathname;
       const redirectUrl = `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
@@ -246,6 +255,30 @@ const EventForm: React.FC<EventFormProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  // Dashboard başvuru formu varsa doğrudan forma yönlendir
+  if (applicationFormPending) {
+    return (
+      <button
+        disabled
+        className="w-full bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-sm font-medium flex items-center justify-center"
+      >
+        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        {locale === 'tr' ? 'Kontrol ediliyor...' : 'Checking...'}
+      </button>
+    );
+  }
+
+  if (applicationFormUrl) {
+    return (
+      <button
+        onClick={() => router.push(applicationFormUrl)}
+        className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors flex items-center justify-center"
+      >
+        {locale === 'tr' ? 'Kayıt Ol' : 'Register'}
+      </button>
+    );
+  }
 
   // Loading state
   if (checkingRegistration) {

@@ -19,7 +19,8 @@ export async function GET(
       .select('*')
       .eq(slugColumn, slug)
       .eq('is_active', true)
-      .single();
+      .eq('show_on_website', true)
+      .maybeSingle();
 
     if (error || !form) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });

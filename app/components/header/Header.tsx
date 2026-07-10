@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { useUser, UserButton } from '@clerk/nextjs';
 import DesktopNav from './DesktopNav';
 import MobileNav from './MobileNav';
+import { useSiteApplicationNavForms } from './useSiteApplicationNavForms';
 import ThemeToggle from './ThemeToggle';
 import SearchBar from './SearchBar';
 import LanguageSwitcher from '../LanguageSwitcher';
@@ -28,6 +29,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [logoSrc, setLogoSrc] = useState('/myuni-logo.png'); // Default logo for SSR
   const [blogPostAlternateSlug, setBlogPostAlternateSlug] = useState<string | null>(null);
+  const siteForms = useSiteApplicationNavForms(locale);
 
   // Determine if the current path is under /tr/watch/ or /en/watch/
   const isWatchPage = pathname.startsWith(`/${locale}/watch/`);
@@ -125,7 +127,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
 
         {/* Desktop Navigation and Actions */}
         <div className="flex items-center space-x-5">
-          <DesktopNav locale={locale} />
+          <DesktopNav locale={locale} siteForms={siteForms} />
           <div className="hidden lg:flex items-center space-x-5">
             <SearchBar locale={locale} />
             <LanguageSwitcher blogPostAlternateSlug={blogPostAlternateSlug} />
@@ -224,7 +226,8 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
       {isMobileMenuOpen && (
         <MobileNav 
           toggleMobileMenu={toggleMobileMenu} 
-          locale={locale} 
+          locale={locale}
+          siteForms={siteForms}
         />
       )}
     </header>
