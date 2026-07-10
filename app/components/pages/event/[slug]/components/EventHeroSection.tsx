@@ -2,6 +2,11 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import {
+  EVENT_BANNER_ASPECT_CLASS,
+  EVENT_BANNER_HEIGHT,
+  EVENT_BANNER_WIDTH,
+} from '@/lib/events/banner';
 import Image from 'next/image';
 import { 
   Calendar, 
@@ -363,15 +368,13 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
   if (loading) {
     return (
       <div className="mb-8">
-        <div className="relative bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
-          <div className="w-full pb-[31.25%] relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center space-y-3">
-                <div className="w-14 h-14 bg-neutral-200 dark:bg-neutral-700 rounded-lg flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-neutral-400 border-t-neutral-800 rounded-full animate-spin"></div>
-                </div>
-                <p className="text-sm text-neutral-500 font-medium">{defaultTexts.loading}</p>
+        <div className={`relative bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 ${EVENT_BANNER_ASPECT_CLASS}`}>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="w-14 h-14 bg-neutral-200 dark:bg-neutral-700 rounded-lg flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-neutral-400 border-t-neutral-800 rounded-full animate-spin"></div>
               </div>
+              <p className="text-sm text-neutral-500 font-medium">{defaultTexts.loading}</p>
             </div>
           </div>
         </div>
@@ -383,19 +386,17 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
   if (error || !eventData) {
     return (
       <div className="mb-8">
-        <div className="relative bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
-          <div className="w-full pb-[31.25%] relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <div className="w-14 h-14 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
-                  <AlertCircle className="w-7 h-7 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <p className="text-neutral-900 dark:text-neutral-100 font-medium">
-                    {defaultTexts.error}
-                  </p>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{error}</p>
-                </div>
+        <div className={`relative bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700 ${EVENT_BANNER_ASPECT_CLASS}`}>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="w-14 h-14 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-7 h-7 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-neutral-900 dark:text-neutral-100 font-medium">
+                  {defaultTexts.error}
+                </p>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{error}</p>
               </div>
             </div>
           </div>
@@ -406,27 +407,24 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
 
   return (
     <div className="mb-2 space-y-6">
-      {/* Hero Banner - Exact aspect ratio for 1920x600 image (3.2:1) */}
-      <div className="relative bg-neutral-100 dark:bg-neutral-800 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700">
-        <div className="w-full pb-[31.25%] relative">
-          <Image
-            src={getBannerUrl(eventData)}
-            alt={eventData.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 640px) 100vw, (max-width: 768px) 90vw, (max-width: 1024px) 80vw, 1200px"
-            priority
-            quality={90}
-          />
-          
-          {/* Live indicator for ongoing events */}
-          {isLive && (
-            <div className="absolute top-3 right-3 z-10 flex items-center space-x-1.5 bg-red-600 text-white px-2.5 py-1 rounded-full text-xs font-medium">
-              <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-              <span>{locale === 'en' ? 'LIVE' : 'CANLI'}</span>
-            </div>
-          )}
-        </div>
+      <div className="relative w-full max-w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800">
+        <Image
+          src={getBannerUrl(eventData)}
+          alt={eventData.title}
+          width={EVENT_BANNER_WIDTH}
+          height={EVENT_BANNER_HEIGHT}
+          className="block w-full h-auto max-w-full"
+          sizes="(max-width: 1280px) 100vw, 1200px"
+          priority
+          quality={90}
+        />
+
+        {isLive && (
+          <div className="absolute top-3 right-3 z-10 flex items-center space-x-1.5 bg-red-600 text-white px-2.5 py-1 rounded-full text-xs font-medium">
+            <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+            <span>{locale === 'en' ? 'LIVE' : 'CANLI'}</span>
+          </div>
+        )}
       </div>
 
       {/* Event Details - Now with a cleaner grid layout */}
