@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
+import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import Iyzipay from 'iyzipay';
 
 interface CartItemInput {
@@ -32,7 +34,8 @@ interface PaymentRequestBody {
   clerkUserId?: string;
   userId?: string;
   tierId?: string;
-  itemType?: 'course' | 'product' | 'package' | 'tier' | 'cart';
+  itemType?: 'course' | 'product' | 'package' | 'tier' | 'cart' | 'event_certificate';
+  eventSlug?: string;
   // Cart Mode fields
   cartMode?: boolean;
   cartItems?: CartItemInput[];
@@ -97,6 +100,8 @@ async function saveOrderToDatabase(orderData: any) {
           userCity: orderData.userCity,
           userNotes: orderData.userNotes,
           itemType: orderData.itemType || 'course',
+          siteApplicationId: orderData.siteApplicationId || null,
+          eventSlug: orderData.eventSlug || null,
           tierId: orderData.tierId || null,
           cartMode: orderData.cartMode || false,
           cartItems: orderData.cartItems || [],
@@ -275,7 +280,59 @@ export async function POST(request: Request) {
       const isProduct = body.itemType === 'product';
       const isPackage = body.itemType === 'package';
       const isTier = body.itemType === 'tier';
-      if (isProduct) {
+      const isEventCertificate = body.itemType === 'event_certificate';
+
+      if (isEventCertificate) {
+        const applicationId = body.courseId;
+        if (!applicationId) {
+          return NextResponse.json({ success: false, message: 'Application ID required' }, { status: 400 });
+        }
+
+        const siteAppsSupabase = getSiteApplicationsSupabase();
+        const { data: application, error: appError } = await siteAppsSupabase
+          .from(siteApplicationsDb.applications)
+          .select('id, email, first_name, last_name, event_name, event_id, submission_data, myuni_events ( slug, title, is_active )')
+          .eq('id', applicationId)
+          .maybeSingle();
+
+        if (appError || !application) {
+          return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 });
+        }
+
+        const submission = (application.submission_data || {}) as Record<string, unknown>;
+        if (submission.registration_tier !== 'certificate') {
+          return NextResponse.json({ success: false, message: 'Invalid application tier' }, { status: 400 });
+        }
+        if (submission.payment_status === 'paid') {
+          return NextResponse.json({ success: false, message: 'Application already paid' }, { status: 409 });
+        }
+
+        const packagePrice = Number(submission.package_price) || 0;
+        if (packagePrice <= 0) {
+          return NextResponse.json({ success: false, message: 'Invalid certificate price' }, { status: 400 });
+        }
+
+        const eventInfoRaw = application.myuni_events as
+          | { slug: string; title: string; is_active: boolean }
+          | { slug: string; title: string; is_active: boolean }[]
+          | null;
+        const eventInfo = Array.isArray(eventInfoRaw) ? eventInfoRaw[0] : eventInfoRaw;
+        const eventTitle = eventInfo?.title || application.event_name || 'Etkinlik';
+
+        if (body.eventSlug && eventInfo?.slug && body.eventSlug !== eventInfo.slug) {
+          return NextResponse.json({ success: false, message: 'Event mismatch' }, { status: 400 });
+        }
+
+        validatedItems.push({
+          id: applicationId,
+          title: `Sertifika - ${eventTitle}`,
+          price: packagePrice,
+          type: 'event_certificate',
+          slug: eventInfo?.slug || body.eventSlug || '',
+          eventId: application.event_id,
+        });
+        originalTotalAmount = packagePrice;
+      } else if (isProduct) {
         const { data: productData } = await supabase
           .from('myuni_products')
           .select('id, title, price, description, slug')
@@ -392,12 +449,16 @@ export async function POST(request: Request) {
     const isTierPurchase = !isCartMode && body.itemType === 'tier';
 
     // Sipariş bilgilerini kaydet
+    const isEventCertificateOrder = !isCartMode && body.itemType === 'event_certificate';
+
     const orderData = {
       orderId,
       courseId: isCartMode ? 'CART' : (isTierPurchase ? body.courseId : validatedItems[0].id),
       tierId: isTierPurchase ? body.tierId : (validatedItems[0]?.type === 'tier' ? validatedItems[0].tierId : undefined),
       userEmail: buyerEmail,
-      courseName: orderName,
+      courseName: isEventCertificateOrder
+        ? validatedItems[0].title
+        : orderName,
       amount: finalAmount,
       clerkUserId,
       userId: userIdForEnrollment,
@@ -412,6 +473,8 @@ export async function POST(request: Request) {
       ipAddress: validIpAddress,
       userAgent,
       itemType: isCartMode ? 'cart' : (body.itemType || 'course'),
+      siteApplicationId: isEventCertificateOrder ? body.courseId : undefined,
+      eventSlug: isEventCertificateOrder ? (body.eventSlug || validatedItems[0]?.slug) : undefined,
       cartMode: isCartMode,
       cartItems: validatedItems,
     };

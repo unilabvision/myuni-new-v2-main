@@ -6,7 +6,13 @@ import {
   siteApplicationsDb,
   validateSubmissionFields,
 } from '@/lib/siteApplications';
-import { requireCaptchaInProduction, verifyHCaptcha } from '@/lib/siteApplications/captcha';
+import {
+  getCertificatePrice,
+  getEventApplicationCheckoutPath,
+  isValidRegistrationTier,
+  parsePackageSettings,
+  type RegistrationTier,
+} from '@/lib/siteApplications/packages';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 async function resolveForm(
@@ -68,20 +74,10 @@ export async function POST(request: NextRequest) {
     const eventSlug = String(body.eventSlug || '').trim() || undefined;
     const locale = body.locale === 'en' ? 'en' : 'tr';
     const fieldValues = (body.fields || {}) as Record<string, unknown>;
+    const registrationTierInput = String(body.registrationTier || 'free').trim() as RegistrationTier;
 
     if (!formSlug && !eventSlug) {
       return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
-    }
-
-    const captchaToken = body.hCaptchaToken as string | undefined;
-    if (!requireCaptchaInProduction(captchaToken)) {
-      return NextResponse.json({ error: 'Captcha required' }, { status: 400 });
-    }
-    if (captchaToken) {
-      const valid = await verifyHCaptcha(captchaToken);
-      if (!valid) {
-        return NextResponse.json({ error: 'Captcha verification failed' }, { status: 400 });
-      }
     }
 
     const supabase = getSiteApplicationsSupabase();
@@ -91,6 +87,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { form, event } = resolved;
+    const packageSettings = parsePackageSettings(form.package_settings);
+
+    if (!isValidRegistrationTier(registrationTierInput, packageSettings)) {
+      return NextResponse.json({ error: 'Invalid registration package' }, { status: 400 });
+    }
 
     const { data: fields, error: fieldsError } = await supabase
       .from(siteApplicationsDb.formFields)
@@ -126,6 +127,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Incomplete attachment metadata' }, { status: 400 });
     }
 
+    const certificatePrice = getCertificatePrice(packageSettings);
+    const requiresPayment =
+      registrationTierInput === 'certificate' && certificatePrice > 0;
+    const paymentStatus = requiresPayment ? 'pending' : 'none';
+    const packagePrice = registrationTierInput === 'certificate' ? certificatePrice : 0;
+
+    const submissionData: Record<string, unknown> = {
+      ...normalized,
+      registration_tier: registrationTierInput,
+      payment_status: paymentStatus,
+      package_price: packagePrice,
+    };
+
     const contact = extractContactFromSubmission(typedFields, normalized);
     const effectiveSlug = locale === 'en' ? form.slug_en : form.slug_tr;
 
@@ -154,7 +168,7 @@ export async function POST(request: NextRequest) {
       source: 'website',
       user_agent: request.headers.get('user-agent'),
       status: 'pending',
-      submission_data: normalized,
+      submission_data: submissionData,
       attachment_file_name: attachmentFileName,
       attachment_storage_path: attachmentStoragePath,
       attachment_mime_type: attachmentMimeType,
@@ -173,9 +187,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 
+    const resolvedEventSlug = event?.slug || eventSlug || '';
+    const checkoutUrl =
+      requiresPayment && resolvedEventSlug
+        ? getEventApplicationCheckoutPath(locale, data.id, resolvedEventSlug)
+        : null;
+
     return NextResponse.json({
       success: true,
       submissionId: data.id,
+      applicationId: data.id,
+      requiresPayment,
+      registrationTier: registrationTierInput,
+      paymentStatus,
+      eventSlug: resolvedEventSlug || undefined,
+      checkoutUrl,
     });
   } catch (err) {
     console.error('Form submit error:', err);

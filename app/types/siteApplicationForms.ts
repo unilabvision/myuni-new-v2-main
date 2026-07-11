@@ -44,11 +44,20 @@ export interface SiteApplicationForm {
   show_on_website: boolean;
   allows_attachment: boolean;
   event_id: string | null;
+  package_settings?: unknown;
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
   updated_at: string;
   fields?: SiteApplicationFormField[];
+}
+
+export interface PublicRegistrationPackage {
+  tier: 'free' | 'certificate';
+  title: string;
+  description: string;
+  price: number;
+  requiresPayment: boolean;
 }
 
 export interface PublicSiteApplicationForm {
@@ -61,6 +70,7 @@ export interface PublicSiteApplicationForm {
   event_id?: string | null;
   event_slug?: string | null;
   event_title?: string | null;
+  packages?: PublicRegistrationPackage[];
   fields: Array<{
     field_key: string;
     field_type: SiteApplicationFieldType;

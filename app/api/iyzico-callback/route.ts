@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
+import {
+  markSiteApplicationPaid,
+  notifyUniboardPaymentConfirm,
+} from '@/lib/siteApplications/applicationPayments';
 import Iyzipay from 'iyzipay';
 
 export async function POST(request: Request) {
@@ -143,6 +147,49 @@ export async function POST(request: Request) {
                 // ---- 2. TEKİL ÜRÜN MODU TESLİMATI ----
                 else {
                     const itemType = order.custom_data?.itemType || 'course';
+
+                    if (itemType === 'event_certificate') {
+                        const siteApplicationId =
+                          order.custom_data?.siteApplicationId || order.courseid;
+                        const eventSlug = order.custom_data?.eventSlug || '';
+
+                        const paymentResult = await markSiteApplicationPaid(
+                          siteApplicationId,
+                          orderId,
+                          'iyzico'
+                        );
+
+                        if (!paymentResult.success && !paymentResult.alreadyPaid) {
+                            console.error('Event certificate payment update failed:', paymentResult.error);
+                            resolve(NextResponse.redirect(new URL('/tr/payment-failed?error=application_update_failed', baseUrl), 303));
+                            return;
+                        }
+
+                        await notifyUniboardPaymentConfirm(siteApplicationId, orderId);
+
+                        await supabase.from('orders').update({
+                            status: 'completed',
+                            enrolled: false,
+                            updated_at: new Date().toISOString(),
+                            custom_data: {
+                                ...order.custom_data,
+                                iyzico_paymentId: result.paymentId,
+                                iyzico_authCode: result.authCode,
+                            },
+                        }).eq('orderid', orderId);
+
+                        const successUrl = new URL(`/${locale}/payment-success`, baseUrl);
+                        successUrl.searchParams.set('type', 'event_application');
+                        successUrl.searchParams.set('applicationId', siteApplicationId);
+                        successUrl.searchParams.set('orderId', orderId);
+                        if (eventSlug) {
+                            successUrl.searchParams.set('eventSlug', eventSlug);
+                        }
+                        successUrl.searchParams.set('name', order.coursename || '');
+
+                        resolve(NextResponse.redirect(successUrl, 303));
+                        return;
+                    }
                     
                     if (itemType === 'product') {
                         const { data: existingPurchase } = await supabase

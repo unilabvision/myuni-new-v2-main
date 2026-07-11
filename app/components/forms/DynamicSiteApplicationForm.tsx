@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import HCaptcha from '@hcaptcha/react-hcaptcha';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Loader,
@@ -20,8 +20,12 @@ import {
   PartyPopper,
   Heart,
   Clock,
+  Check,
 } from 'lucide-react';
-import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
+import type {
+  PublicRegistrationPackage,
+  PublicSiteApplicationForm,
+} from '@/app/types/siteApplicationForms';
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
 import { SITE_APPLICATION_MAX_FILE_BYTES } from '@/lib/siteApplications/config';
 import { formatFileSize, validateAttachmentFile } from '@/lib/siteApplications/files';
@@ -60,6 +64,9 @@ const ui = {
     badge: 'Açık başvuru',
     secure: 'Verilerin güvende',
     response: 'Genelde 3–5 iş günü içinde dönüş',
+    packageTitle: 'Kayıt paketi seçin',
+    free: 'Ücretsiz',
+    continueToPayment: 'Ödemeye devam et',
   },
   en: {
     loading: 'Preparing your form...',
@@ -86,6 +93,9 @@ const ui = {
     badge: 'Open application',
     secure: 'Your data is secure',
     response: 'We usually respond within 3–5 business days',
+    packageTitle: 'Choose your registration package',
+    free: 'Free',
+    continueToPayment: 'Continue to payment',
   },
 };
 
@@ -136,9 +146,9 @@ export default function DynamicSiteApplicationForm({
   variant = 'page',
   initialForm,
 }: DynamicSiteApplicationFormProps) {
+  const router = useRouter();
   const isSidebar = variant === 'sidebar';
   const t = ui[locale as keyof typeof ui] || ui.tr;
-  const captchaRef = useRef<HCaptcha>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(initialForm ?? null);
@@ -148,12 +158,14 @@ export default function DynamicSiteApplicationForm({
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<'free' | 'certificate'>('free');
 
-  const siteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+  const packages = formConfig?.packages ?? [];
+  const showPackageSelection = packages.length > 1;
+  const selectedPackage = packages.find((pkg) => pkg.tier === selectedTier) ?? packages[0];
 
   const mapServerFieldError = (code: string) => {
     switch (code) {
@@ -247,10 +259,6 @@ export default function DynamicSiteApplicationForm({
       }
     }
 
-    if (!captchaToken && process.env.NODE_ENV === 'production' && siteKey) {
-      nextErrors.captcha = t.captcha;
-    }
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -319,9 +327,9 @@ export default function DynamicSiteApplicationForm({
           formSlug: formConfig.slug,
           eventSlug: eventSlug || formConfig.event_slug || undefined,
           locale,
+          registrationTier: selectedTier,
           fields: values,
           honeypot,
-          hCaptchaToken: captchaToken,
           ...attachmentMeta,
         }),
       });
@@ -338,13 +346,14 @@ export default function DynamicSiteApplicationForm({
         throw new Error(data.error || t.error);
       }
 
+      if (data.requiresPayment && data.checkoutUrl) {
+        router.push(data.checkoutUrl);
+        return;
+      }
+
       setSuccess(true);
-      captchaRef.current?.resetCaptcha();
-      setCaptchaToken(null);
     } catch (err) {
       setGeneralError(err instanceof Error ? err.message : t.error);
-      captchaRef.current?.resetCaptcha();
-      setCaptchaToken(null);
     } finally {
       setSubmitting(false);
     }
@@ -531,6 +540,48 @@ export default function DynamicSiteApplicationForm({
                 autoComplete="off"
               />
 
+              {showPackageSelection && (
+                <div className="space-y-3">
+                  <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                    {t.packageTitle}
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {packages.map((pkg: PublicRegistrationPackage) => {
+                      const isSelected = selectedTier === pkg.tier;
+                      return (
+                        <button
+                          key={pkg.tier}
+                          type="button"
+                          onClick={() => setSelectedTier(pkg.tier)}
+                          className={`relative rounded-2xl border p-4 text-left transition-all ${
+                            isSelected
+                              ? 'border-[#990000] bg-[#990000]/5 shadow-sm ring-1 ring-[#990000]/30'
+                              : 'border-neutral-200 dark:border-neutral-700 hover:border-[#990000]/40'
+                          }`}
+                        >
+                          {isSelected && (
+                            <span className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-[#990000] text-white">
+                              <Check className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <p className="font-semibold text-neutral-900 dark:text-neutral-100 pr-8">
+                            {pkg.title}
+                          </p>
+                          {pkg.description && (
+                            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                              {pkg.description}
+                            </p>
+                          )}
+                          <p className="mt-3 text-lg font-bold text-[#990000]">
+                            {pkg.price > 0 ? `₺${pkg.price}` : t.free}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
                 return (
@@ -648,24 +699,6 @@ export default function DynamicSiteApplicationForm({
                 </div>
               )}
 
-              <div className="rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700 p-4">
-                <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-3">
-                  <Shield className="w-4 h-4 text-[#990000]" />
-                  {t.spamNote}
-                </div>
-                {siteKey ? (
-                  <HCaptcha
-                    ref={captchaRef}
-                    sitekey={siteKey}
-                    onVerify={(token) => setCaptchaToken(token)}
-                    onExpire={() => setCaptchaToken(null)}
-                  />
-                ) : null}
-                {errors.captcha && (
-                  <p className="text-sm text-red-600 mt-2">{errors.captcha}</p>
-                )}
-              </div>
-
               {generalError && (
                 <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300">
                   <AlertCircle className="w-5 h-5 shrink-0" />
@@ -686,7 +719,7 @@ export default function DynamicSiteApplicationForm({
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    {t.submit}
+                    {selectedPackage?.requiresPayment ? t.continueToPayment : t.submit}
                   </>
                 )}
               </button>

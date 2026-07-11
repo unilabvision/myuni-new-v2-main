@@ -4,6 +4,10 @@ import type {
   SiteApplicationFormField,
   SiteApplicationFormFieldOption,
 } from '@/app/types/siteApplicationForms';
+import {
+  getPublicRegistrationPackages,
+  parsePackageSettings,
+} from './packages';
 
 export function normalizeFieldOptions(options: unknown): SiteApplicationFormFieldOption[] {
   if (!options) return [];
@@ -48,6 +52,9 @@ export function toPublicForm(
   const isEn = locale === 'en';
   const slug = isEn ? form.slug_en : form.slug_tr;
 
+  const packageSettings = parsePackageSettings(form.package_settings);
+  const packages = getPublicRegistrationPackages(packageSettings, locale);
+
   return {
     id: form.id,
     slug,
@@ -55,6 +62,7 @@ export function toPublicForm(
     subtitle: isEn ? form.subtitle_en : form.subtitle_tr,
     success_message: isEn ? form.success_message_en : form.success_message_tr,
     allows_attachment: form.allows_attachment,
+    packages,
     fields: [...fields]
       .sort((a, b) => a.order_index - b.order_index)
       .map((field) => ({

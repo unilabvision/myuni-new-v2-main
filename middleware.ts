@@ -84,6 +84,8 @@ const isPublicRoute = createRouteMatcher([
   '/api/site-applications/submit',
   '/api/site-applications/public(.*)',
   '/api/site-applications/files/upload-url',
+  '/api/site-applications/applications(.*)',
+  '/api/site-applications/payments(.*)',
   '/api/contact',
   '/api/newsletter',
   '/api/content',
@@ -325,8 +327,11 @@ export default clerkMiddleware(async (auth, req) => {
       return response;
     }
 
-    // Checkout pages require authentication
+    // Checkout pages require authentication (event-application hariç)
     if (pathname.includes('/checkout')) {
+      if (pathname.includes('/checkout/event-application')) {
+        return response;
+      }
       if (!userId) {
         console.log('🔄 Non-signed user accessing checkout, redirecting to auth');
         const locale = pathname.startsWith('/tr') ? 'tr' : 'en';

@@ -43,6 +43,8 @@ const texts = {
     productAccessDesc: "Hesabınızdan \"Koleksiyonum\" bölümüne giderek satın aldığınız tüm dijital ürünlere ulaşabilirsiniz.",
     certificate: "🏆 Sertifika Kazanma",
     certificateDesc: "Kursu %100 tamamladığınızda dijital sertifikanızı otomatik olarak kazanacak ve indirebileceksiniz.",
+    eventApplicationPaid: "Sertifika paketi ödemeniz alındı. Başvurunuz onay sürecine alındı.",
+    backToEvent: "Etkinliğe Dön",
     errorFetchingCourse: "İçerik bilgileri alınırken hata oluştu",
     course: "Kurs",
     product: "Ürün",
@@ -75,6 +77,8 @@ const texts = {
     productAccessDesc: "You can access all your purchased digital products by going to \"My Collection\" section in your account.",
     certificate: "🏆 Earning Certificate",
     certificateDesc: "When you complete 100% of the course, you will automatically earn and be able to download your digital certificate.",
+    eventApplicationPaid: "Your certificate package payment was received. Your application is now in review.",
+    backToEvent: "Back to Event",
     errorFetchingCourse: "Error fetching content information",
     course: "Course",
     product: "Product",
@@ -110,6 +114,9 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const paymentId = searchParams.get('paymentId');
   const itemType = searchParams.get('type') || 'course';
   const isProduct = itemType === 'product';
+  const isEventApplication = itemType === 'event_application';
+  const eventSlugParam = searchParams.get('eventSlug') || '';
+  const applicationIdParam = searchParams.get('applicationId') || '';
   
   // Cart Mode fields
   const isCartMode = searchParams.get('cartMode') === 'true';
@@ -203,13 +210,50 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   }, [courseId, isProduct, isCartMode]);
 
   useEffect(() => {
+    if (isEventApplication) return;
     if (isLoaded && !user) {
       router.push(`/${locale}/login`);
     }
     if (!isCartMode && !courseId && !orderIdParam) {
       router.push(`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`);
     }
-  }, [isLoaded, user, courseId, orderIdParam, isCartMode, router, locale]);
+  }, [isLoaded, user, courseId, orderIdParam, isCartMode, isEventApplication, router, locale]);
+
+  if (isEventApplication) {
+    const eventSegment = locale === 'en' ? 'event' : 'etkinlik';
+    const eventHref = eventSlugParam
+      ? `/${locale}/${eventSegment}/${eventSlugParam}`
+      : `/${locale}/${eventSegment}`;
+
+    return (
+      <div className="min-h-screen bg-white dark:bg-neutral-900 py-20">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-sm p-8">
+            <div className="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mb-6">
+              <CheckCircle size={40} className="text-green-500" />
+            </div>
+            <h1 className="text-2xl font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+              {t.congratulations}
+            </h1>
+            <p className="text-neutral-600 dark:text-neutral-400 mb-8">
+              {t.eventApplicationPaid}
+            </p>
+            {orderId && (
+              <p className="text-sm text-neutral-500 mb-6">
+                Sipariş No: <span className="font-mono">{orderId}</span>
+              </p>
+            )}
+            <Link
+              href={eventHref}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#990000] hover:bg-[#770000] text-white rounded-lg text-sm font-medium"
+            >
+              {t.backToEvent}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isLoaded || (loadingItem && !isCartMode) || resolvingOrder || (!isCartMode && !courseId && !orderIdParam)) {
     return (
