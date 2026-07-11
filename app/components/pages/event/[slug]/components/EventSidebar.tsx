@@ -9,7 +9,9 @@ import Image from 'next/image';
 import { getAllEvents } from '../../../../../../lib/eventService';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
 import { supabase } from '../../../../../../lib/supabase';
+import type { PublicRegistrationPackage } from '@/app/types/siteApplicationForms';
 import EventForm from './EventForm';
+import EventRegistrationPackages from './EventRegistrationPackages';
 
 // Event interface matching myuni_events database schema
 interface Event {
@@ -91,6 +93,8 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   const [showMobileSticky, setShowMobileSticky] = useState(true);
   const [applicationFormUrl, setApplicationFormUrl] = useState<string | undefined>();
   const [applicationFormChecked, setApplicationFormChecked] = useState(false);
+  const [registrationPackages, setRegistrationPackages] = useState<PublicRegistrationPackage[]>([]);
+  const [selectedRegistrationTier, setSelectedRegistrationTier] = useState<'free' | 'certificate'>('free');
 
   // Scroll pozisyonunu izlemek için effect
   useEffect(() => {
@@ -126,6 +130,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
         const data = await res.json();
         if (!cancelled) {
           setApplicationFormUrl(data.available && data.url ? data.url : undefined);
+          setRegistrationPackages(data.available && data.packages ? data.packages : []);
         }
       } catch {
         if (!cancelled) setApplicationFormUrl(undefined);
@@ -440,6 +445,20 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
     setAttendeeCountLocal(newCount);
   };
 
+  const hasPackageChoice = registrationPackages.length > 1;
+  const selectedRegistrationPackage =
+    registrationPackages.find((pkg) => pkg.tier === selectedRegistrationTier) ?? registrationPackages[0];
+
+  const sidebarPriceLabel = (() => {
+    if (applicationFormUrl && hasPackageChoice && selectedRegistrationPackage) {
+      if (selectedRegistrationPackage.price > 0) {
+        return `₺${selectedRegistrationPackage.price}`;
+      }
+      return locale === 'tr' ? 'Ücretsiz' : 'Free';
+    }
+    return formatPrice(event.price, event.is_paid);
+  })();
+
   const eventFormProps = {
     event: {
       ...event,
@@ -448,6 +467,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
     locale,
     applicationFormUrl,
     applicationFormPending: !applicationFormChecked,
+    registrationTier: hasPackageChoice ? selectedRegistrationTier : undefined,
     onSuccess: handleRegistrationSuccess,
     onError: handleRegistrationError,
     onAttendeesChange: handleAttendeesChange,
@@ -462,7 +482,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
           <div className="mb-6">
             <div className="flex items-baseline space-x-3 mb-2">
               <span className="text-3xl font-medium text-neutral-900 dark:text-neutral-100">
-                {formatPrice(event.price, event.is_paid)}
+                {sidebarPriceLabel}
               </span>
             </div>
 
@@ -557,6 +577,14 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
 
           </div>
 
+          {applicationFormUrl && hasPackageChoice && (
+            <EventRegistrationPackages
+              locale={locale}
+              packages={registrationPackages}
+              selectedTier={selectedRegistrationTier}
+              onSelectTier={setSelectedRegistrationTier}
+            />
+          )}
 
           {/* EventForm — mobilde alttaki sticky bar'da */}
           <div className="md:block hidden">

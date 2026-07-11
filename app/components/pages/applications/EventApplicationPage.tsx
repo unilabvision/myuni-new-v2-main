@@ -1,18 +1,21 @@
 import DynamicSiteApplicationForm from '@/app/components/forms/DynamicSiteApplicationForm';
 import PageLayout from '@/app/components/layout/PageLayout';
 import { getEventApplicationPath } from '@/lib/siteApplications/config';
+import type { RegistrationTier } from '@/lib/siteApplications/packages';
 import { getPublicFormByEventSlug } from '@/lib/siteApplications/service';
 import { notFound } from 'next/navigation';
 
 interface EventApplicationPageProps {
   locale: string;
   eventSlug?: string;
+  registrationTier?: RegistrationTier;
 }
 
 /** Etkinlik sayfasından: /tr/etkinlik/{slug}/basvuru */
 export default async function EventApplicationPage({
   locale,
   eventSlug,
+  registrationTier = 'free',
 }: EventApplicationPageProps) {
   if (!eventSlug) {
     const fallbackSlug = locale === 'en' ? 'event-application' : 'etkinlik-basvuru';
@@ -65,7 +68,12 @@ export default async function EventApplicationPage({
       variant="application"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-10">
-        <DynamicSiteApplicationForm locale={locale} eventSlug={eventSlug} initialForm={form} />
+        <DynamicSiteApplicationForm
+          locale={locale}
+          eventSlug={eventSlug}
+          initialForm={form}
+          registrationTier={registrationTier}
+        />
       </div>
     </PageLayout>
   );

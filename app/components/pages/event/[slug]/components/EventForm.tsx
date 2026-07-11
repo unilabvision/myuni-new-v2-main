@@ -27,9 +27,19 @@ interface EventFormProps {
   locale: string;
   applicationFormUrl?: string;
   applicationFormPending?: boolean;
+  registrationTier?: 'free' | 'certificate';
   onSuccess?: () => void;
   onError?: (error: string) => void;
   onAttendeesChange?: (newCount: number) => void;
+}
+
+function buildApplicationFormUrl(
+  baseUrl: string,
+  tier?: 'free' | 'certificate'
+): string {
+  if (!tier) return baseUrl;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}tier=${tier}`;
 }
 
 const EventForm: React.FC<EventFormProps> = ({ 
@@ -37,6 +47,7 @@ const EventForm: React.FC<EventFormProps> = ({
   locale,
   applicationFormUrl,
   applicationFormPending,
+  registrationTier,
   onSuccess, 
   onError,
   onAttendeesChange
@@ -98,7 +109,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
   const handleRegistration = async () => {
     if (applicationFormUrl) {
-      router.push(applicationFormUrl);
+      router.push(buildApplicationFormUrl(applicationFormUrl, registrationTier));
       return;
     }
 
@@ -270,9 +281,10 @@ const EventForm: React.FC<EventFormProps> = ({
   }
 
   if (applicationFormUrl) {
+    const formUrl = buildApplicationFormUrl(applicationFormUrl, registrationTier);
     return (
       <button
-        onClick={() => router.push(applicationFormUrl)}
+        onClick={() => router.push(formUrl)}
         className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors flex items-center justify-center"
       >
         {locale === 'tr' ? 'Kayıt Ol' : 'Register'}

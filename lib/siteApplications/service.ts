@@ -13,6 +13,11 @@ import {
   siteApplicationsDb,
 } from './config';
 import { getTeamFormPublicPath } from './teamPaths';
+import {
+  getPublicRegistrationPackages,
+  parsePackageSettings,
+} from './packages';
+import type { PublicRegistrationPackage } from '@/app/types/siteApplicationForms';
 
 type FormWithEvent = {
   id: string;
@@ -147,7 +152,7 @@ export async function getEventApplicationSummary(eventSlug: string, locale: stri
 
   const { data: form, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
-    .select('id, title_tr, title_en')
+    .select('id, title_tr, title_en, package_settings')
     .eq('event_id', event.id)
     .eq('is_active', true)
     .eq('show_on_website', true)
@@ -166,9 +171,15 @@ export async function getEventApplicationSummary(eventSlug: string, locale: stri
     return null;
   }
 
+  const packages: PublicRegistrationPackage[] = getPublicRegistrationPackages(
+    parsePackageSettings(form.package_settings),
+    locale
+  );
+
   return {
     url: getEventApplicationPath(locale, eventSlug),
     title: event.title,
     formTitle: isEn ? form.title_en : form.title_tr,
+    packages,
   };
 }

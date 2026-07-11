@@ -20,12 +20,9 @@ import {
   PartyPopper,
   Heart,
   Clock,
-  Check,
 } from 'lucide-react';
-import type {
-  PublicRegistrationPackage,
-  PublicSiteApplicationForm,
-} from '@/app/types/siteApplicationForms';
+import type { RegistrationTier } from '@/lib/siteApplications/packages';
+import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
 import { SITE_APPLICATION_MAX_FILE_BYTES } from '@/lib/siteApplications/config';
 import { formatFileSize, validateAttachmentFile } from '@/lib/siteApplications/files';
@@ -36,6 +33,7 @@ interface DynamicSiteApplicationFormProps {
   eventSlug?: string;
   variant?: 'page' | 'sidebar';
   initialForm?: PublicSiteApplicationForm;
+  registrationTier?: RegistrationTier;
 }
 
 const ui = {
@@ -64,9 +62,6 @@ const ui = {
     badge: 'Açık başvuru',
     secure: 'Verilerin güvende',
     response: 'Genelde 3–5 iş günü içinde dönüş',
-    packageTitle: 'Kayıt paketi seçin',
-    free: 'Ücretsiz',
-    continueToPayment: 'Ödemeye devam et',
   },
   en: {
     loading: 'Preparing your form...',
@@ -93,9 +88,6 @@ const ui = {
     badge: 'Open application',
     secure: 'Your data is secure',
     response: 'We usually respond within 3–5 business days',
-    packageTitle: 'Choose your registration package',
-    free: 'Free',
-    continueToPayment: 'Continue to payment',
   },
 };
 
@@ -145,6 +137,7 @@ export default function DynamicSiteApplicationForm({
   eventSlug,
   variant = 'page',
   initialForm,
+  registrationTier = 'free',
 }: DynamicSiteApplicationFormProps) {
   const router = useRouter();
   const isSidebar = variant === 'sidebar';
@@ -161,11 +154,6 @@ export default function DynamicSiteApplicationForm({
   const [attachment, setAttachment] = useState<File | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<'free' | 'certificate'>('free');
-
-  const packages = formConfig?.packages ?? [];
-  const showPackageSelection = packages.length > 1;
-  const selectedPackage = packages.find((pkg) => pkg.tier === selectedTier) ?? packages[0];
 
   const mapServerFieldError = (code: string) => {
     switch (code) {
@@ -327,7 +315,7 @@ export default function DynamicSiteApplicationForm({
           formSlug: formConfig.slug,
           eventSlug: eventSlug || formConfig.event_slug || undefined,
           locale,
-          registrationTier: selectedTier,
+          registrationTier,
           fields: values,
           honeypot,
           ...attachmentMeta,
@@ -540,48 +528,6 @@ export default function DynamicSiteApplicationForm({
                 autoComplete="off"
               />
 
-              {showPackageSelection && (
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-                    {t.packageTitle}
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {packages.map((pkg: PublicRegistrationPackage) => {
-                      const isSelected = selectedTier === pkg.tier;
-                      return (
-                        <button
-                          key={pkg.tier}
-                          type="button"
-                          onClick={() => setSelectedTier(pkg.tier)}
-                          className={`relative rounded-2xl border p-4 text-left transition-all ${
-                            isSelected
-                              ? 'border-[#990000] bg-[#990000]/5 shadow-sm ring-1 ring-[#990000]/30'
-                              : 'border-neutral-200 dark:border-neutral-700 hover:border-[#990000]/40'
-                          }`}
-                        >
-                          {isSelected && (
-                            <span className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-[#990000] text-white">
-                              <Check className="h-3.5 w-3.5" />
-                            </span>
-                          )}
-                          <p className="font-semibold text-neutral-900 dark:text-neutral-100 pr-8">
-                            {pkg.title}
-                          </p>
-                          {pkg.description && (
-                            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                              {pkg.description}
-                            </p>
-                          )}
-                          <p className="mt-3 text-lg font-bold text-[#990000]">
-                            {pkg.price > 0 ? `₺${pkg.price}` : t.free}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
                 return (
@@ -719,7 +665,7 @@ export default function DynamicSiteApplicationForm({
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    {selectedPackage?.requiresPayment ? t.continueToPayment : t.submit}
+                    {t.submit}
                   </>
                 )}
               </button>
