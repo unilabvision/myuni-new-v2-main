@@ -34,7 +34,7 @@ const BackToTop = () => {
         <button
           onClick={scrollToTop}
           aria-label="Sayfanın üstüne git."
-          className="fixed bottom-20 right-5 p-3 rounded-full bg-neutral-800 dark:bg-neutral-700 text-white shadow-lg hover:bg-neutral-700 dark:hover:bg-neutral-600 transition-all duration-300 z-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 md:translate-x-[-16px] md:bottom-24 md:right-4"
+          className="fixed bottom-24 right-5 p-3 rounded-full bg-neutral-800 dark:bg-neutral-700 text-white shadow-lg hover:bg-neutral-700 dark:hover:bg-neutral-600 transition-all duration-300 z-40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 md:bottom-24 md:right-6"
         >
           <ArrowUp size={20} />
         </button>

@@ -6,7 +6,7 @@ import ConditionalLayout from "../components/ConditionalLayout";
 import CookieBanner from "../components/CookieBanner";
 import "../globals.css";
 import Script from "next/script";
-import CrispProvider from "../components/CrispProvider";
+import ContactSupportWidget from "../components/ContactSupportWidget";
 import CampaignsAssistant from "../components/CampaignsAssistant";
 
 // Font definitions
@@ -416,7 +416,7 @@ export default async function LocaleLayout({
             {children}
           </ConditionalLayout>
           <CookieBanner locale={locale} />
-          <CrispProvider />
+          <ContactSupportWidget />
           {/* Bottom-left AI-assisted campaigns popup */}
           <CampaignsAssistant locale={locale} />
         </ClerkProvider>

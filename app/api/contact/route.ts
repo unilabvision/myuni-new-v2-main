@@ -624,7 +624,12 @@ const generateNotificationEmail = (
 };
 
 // Send email function with improved error handling
-const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
+const sendEmail = async (
+  to: string,
+  subject: string,
+  html: string,
+  options?: { replyTo?: string }
+): Promise<boolean> => {
   try {
     const transporter = createTransporter();
     
@@ -636,6 +641,9 @@ const sendEmail = async (to: string, subject: string, html: string): Promise<boo
       to: to,
       subject: subject,
       html: html,
+      ...(options?.replyTo
+        ? { replyTo: options.replyTo, headers: { 'Reply-To': options.replyTo } }
+        : {}),
     };
 
     const result = await transporter.sendMail(mailOptions);
@@ -904,7 +912,8 @@ export async function POST(request: NextRequest) {
         await sendEmail(
           cleanEmail,
           locale === 'tr' ? 'Yeni İletişim Mesajı - MyUNI Eğitim Platformu' : 'New Contact Message - MyUNI Eğitim Platformu',
-          generateNotificationEmail(firstName, lastName, email, phone || '', message, data.id, clientInfo, locale)
+          generateNotificationEmail(firstName, lastName, email, phone || '', message, data.id, clientInfo, locale),
+          { replyTo: email.trim() }
         );
         notificationsSent++;
       } catch (notificationError) {
