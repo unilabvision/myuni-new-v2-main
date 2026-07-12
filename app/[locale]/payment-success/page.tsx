@@ -132,7 +132,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const { locale } = resolvedParams;
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
-  // Shopier legacy: order_id ile geldiyse çöz (Sadece tekil kurs ödemeleri için geçerli)
+  // Legacy: order_id ile geldiyse çöz (tekil kurs ödemeleri)
   useEffect(() => {
     if (isCartMode || !orderIdParam || courseId) {
       if ((orderIdParam && courseId) || isCartMode) setResolvingOrder(false);

@@ -128,10 +128,10 @@ export default function EnrollmentButton({
     setLoading(true);
 
     try {
-      // Kurs detaylarını al (shopier_product_url = link ile satış, OAuth2 yok)
+      // Kurs detaylarını al — ödeme yalnızca Iyzico checkout üzerinden
       const { data: courseData, error: courseError } = await supabase
         .from('myuni_courses')
-        .select('title, thumbnail_url, price, slug, shopier_product_url')
+        .select('title, thumbnail_url, price, slug')
         .eq('id', courseId)
         .single();
 
@@ -150,14 +150,7 @@ export default function EnrollmentButton({
         return;
       }
 
-      // Shopier link ile satış: doğrudan Shopier ödeme sayfasına git (checkout/OAuth2 kullanılmaz)
-      const shopierUrl = (courseData as { shopier_product_url?: string | null }).shopier_product_url;
-      if (shopierUrl) {
-        window.open(shopierUrl, '_blank', 'noopener,noreferrer');
-        return;
-      }
-
-      // Ücretli kurs - site checkout sayfasına yönlendir (OAuth2 ile ödeme)
+      // Ücretli kurs - Iyzico checkout sayfasına yönlendir
       console.log('Paid course, redirecting to checkout');
       
       // Keep affiliate code and referral code if they exist

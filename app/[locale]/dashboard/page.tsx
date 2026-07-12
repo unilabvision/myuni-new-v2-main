@@ -364,13 +364,6 @@ function DashboardContent({ locale }: { locale: string }) {
         return;
       }
 
-      // Shopier link: Sitede üye olmadan Shopier'dan alan kullanıcı, aynı e-posta ile giriş yaptıysa bekleyen siparişleri kursa yaz
-      try {
-        await fetch('/api/sync-pending-shopier-orders', { method: 'POST' });
-      } catch (_) {
-        // Sync hatası dashboard'ı bloklamasın
-      }
-      
       // Paralel olarak hem enrollments hem certificates'ları çek
       const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult, productPurchasesResult] = await Promise.all([
         // Enrollments

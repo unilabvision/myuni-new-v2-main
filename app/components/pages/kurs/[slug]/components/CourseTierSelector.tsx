@@ -157,8 +157,7 @@ export default function CourseTierSelector({
     const purchasable = selectedTiers.filter(
       (t) =>
         !enrolledTierIds.includes(t.id) &&
-        !isTierClosed(t, course.is_registration_open) &&
-        !t.shopier_product_url
+        !isTierClosed(t, course.is_registration_open)
     );
     if (purchasable.length === 0) return;
 
@@ -171,10 +170,6 @@ export default function CourseTierSelector({
 
     if (purchasable.length === 1) {
       const tier = purchasable[0];
-      if (tier.shopier_product_url) {
-        window.open(tier.shopier_product_url, '_blank', 'noopener,noreferrer');
-        return;
-      }
       let url = `/${locale}/checkout?id=${encodeURIComponent(course.id)}&tierId=${encodeURIComponent(tier.id)}&type=tier`;
       const ref = new URLSearchParams(window.location.search).get('ref');
       if (ref) url += `&ref=${encodeURIComponent(ref)}`;
@@ -193,7 +188,6 @@ export default function CourseTierSelector({
         (t) =>
           !enrolledTierIds.includes(t.id) &&
           !isTierClosed(t, course.is_registration_open) &&
-          !t.shopier_product_url &&
           !isInCart(t.id)
       )
       .map(buildCartItem);
@@ -207,7 +201,6 @@ export default function CourseTierSelector({
       (t) =>
         !enrolledTierIds.includes(t.id) &&
         !isTierClosed(t, course.is_registration_open) &&
-        !t.shopier_product_url &&
         !isInCart(t.id)
     );
 
@@ -244,11 +237,9 @@ export default function CourseTierSelector({
         onClick={handleBuySelected}
         className="w-full sm:flex-1 bg-[#990000] hover:bg-[#b30000] text-white py-3 px-6 rounded-xl font-medium transition-colors text-center text-sm"
       >
-        {selectedTiers.length === 1 && selectedTiers[0].shopier_product_url
-          ? "Shopier'da Satın Al"
-          : selectedTiers.length > 1
-            ? `${selectedTiers.length} Paketi Satın Al`
-            : 'Hemen Satın Al'}
+        {selectedTiers.length > 1
+          ? `${selectedTiers.length} Paketi Satın Al`
+          : 'Hemen Satın Al'}
       </button>
       {canAddToCart && (
         <button

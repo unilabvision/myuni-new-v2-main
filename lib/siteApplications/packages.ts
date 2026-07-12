@@ -12,7 +12,6 @@ export interface EventFormPackageSettings {
   free_title_en?: string;
   free_description_tr?: string;
   free_description_en?: string;
-  shopier_product_url?: string | null;
 }
 
 export interface PublicRegistrationPackage {

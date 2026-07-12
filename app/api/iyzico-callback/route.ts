@@ -161,7 +161,7 @@ export async function POST(request: Request) {
 
                         if (!paymentResult.success && !paymentResult.alreadyPaid) {
                             console.error('Event certificate payment update failed:', paymentResult.error);
-                            resolve(NextResponse.redirect(new URL('/tr/payment-failed?error=application_update_failed', baseUrl), 303));
+                            resolve(NextResponse.redirect(new URL(`/${locale}/payment-failed?error=application_update_failed`, baseUrl), 303));
                             return;
                         }
 

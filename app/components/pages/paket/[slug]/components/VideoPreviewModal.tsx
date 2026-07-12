@@ -290,22 +290,6 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
       return;
     }
     if (isSignedIn && courseId) {
-      // Shopier link entegrasyonu: Kurs link ile satılıyorsa Shopier sayfasına git (OAuth2/checkout yok)
-      try {
-        const { data } = await supabase
-          .from('myuni_courses')
-          .select('shopier_product_url')
-          .eq('id', courseId)
-          .single();
-        const shopierUrl = (data as { shopier_product_url?: string | null } | null)?.shopier_product_url;
-        if (shopierUrl) {
-          window.open(shopierUrl, '_blank', 'noopener,noreferrer');
-          onClose();
-          return;
-        }
-      } catch (_) {
-        // Hata olursa checkout'a düş
-      }
       const checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(courseId)}`;
       router.push(checkoutUrl);
     } else {

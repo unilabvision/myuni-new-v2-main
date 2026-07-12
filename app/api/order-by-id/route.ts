@@ -1,5 +1,4 @@
-// Shopier link entegrasyonu: Ödeme sonrası Shopier kullanıcıyı order_id ile yönlendirdiğinde
-// bu API ile sipariş sorgulanır; payment-success sayfasına courseId ve name ile yönlendirme yapılır.
+// Ödeme sonrası order_id ile sipariş sorgulama (payment-success yönlendirmesi).
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';

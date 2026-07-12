@@ -74,9 +74,10 @@ const isPublicRoute = createRouteMatcher([
   // API routes
   '/api/public(.*)',
   '/api/sitemap.xml',
-  '/api/shopier-payment', // Shopier payment endpoint
-  '/api/shopier-callback', // Shopier callback (webhook)
-  '/api/shopier-return', // Shopier return (user redirect)
+  '/api/shopier-payment',
+  '/api/shopier-callback',
+  '/api/shopier-return',
+  '/api/shopier-webhook',
   '/api/iyzico-payment',
   '/api/iyzico-callback',
   '/api/comments',
@@ -255,8 +256,9 @@ const isAuthFlowRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   const { pathname } = req.nextUrl;
   
-  // API Callback ve Webhook'ları Clerk handshake'inden korumak için auth() öncesi bypass
-  if (pathname.startsWith('/api/shopier-') || pathname.startsWith('/api/iyzico-')) {
+  // API Callback'leri Clerk handshake'inden korumak için auth() öncesi bypass
+  // Shopier stub'ları da Clerk redirect'ine takılmadan 410 dönebilsin
+  if (pathname.startsWith('/api/iyzico-') || pathname.startsWith('/api/shopier-')) {
     return NextResponse.next();
   }
 
@@ -316,13 +318,7 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Special handling for payment routes
   if (isPaymentRoute(req)) {
-    // Shopier API endpoints should always be accessible (webhooks)
-    if (pathname.startsWith('/api/shopier-')) {
-      console.log('✅ Allowing access to Shopier API endpoint');
-      return response;
-    }
-
-    // Payment success/failed pages should be accessible (redirects from Shopier)
+    // Payment success/failed pages should be accessible (Iyzico redirects)
     if (pathname.includes('/payment-success') || pathname.includes('/payment-failed')) {
       console.log('✅ Allowing access to payment result page');
       return response;
@@ -400,10 +396,10 @@ export const config = {
     // Match all request paths except for the ones starting with:
     // - _next/static (static files)
     // - _next/image (image optimization files)
-    // - api/iyzico-callback, api/shopier-callback (webhooks that fail on cross-origin POST with Clerk)
+    // - api/iyzico-callback (webhook that fails on cross-origin POST with Clerk)
     // - public folder files
-    '/((?!_next|api/iyzico-callback|api/shopier-callback|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes EXCEPT webhooks
-    '/(api(?!/iyzico-callback|/shopier-callback)|trpc)(.*)',
+    '/((?!_next|api/iyzico-callback|api/shopier-|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes EXCEPT webhooks / disabled shopier stubs
+    '/(api(?!/iyzico-callback|/shopier-)|trpc)(.*)',
   ],
 };

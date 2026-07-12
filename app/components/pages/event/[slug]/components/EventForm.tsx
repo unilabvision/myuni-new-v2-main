@@ -146,10 +146,13 @@ const EventForm: React.FC<EventFormProps> = ({
       }
     }
 
-    // Handle paid events
+    // Handle paid events without application form (Iyzico event ticket checkout yok)
     if (event.is_paid && event.price && event.price > 0) {
-      const checkoutUrl = `/${locale}/checkout/event?id=${encodeURIComponent(event.id)}`;
-      router.push(checkoutUrl);
+      onError?.(
+        locale === 'tr'
+          ? 'Bu etkinlik için ödeme/başvuru formu tanımlı değil. Lütfen etkinlik sayfasındaki Kayıt Ol ile başvurun veya destek ile iletişime geçin.'
+          : 'No payment/application form is configured for this event. Please use Register on the event page or contact support.'
+      );
       return;
     }
 

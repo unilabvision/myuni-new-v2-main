@@ -348,7 +348,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
 
-      // Shopier url check removed to keep user on checkout page for Iyzico
+      // Iyzico checkout — Shopier yönlendirmesi yok
     } catch (fetchError) {
       console.error('Error fetching course:', fetchError);
       setError(t.error);
