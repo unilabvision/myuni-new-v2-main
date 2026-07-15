@@ -140,8 +140,8 @@ export async function POST(request: NextRequest) {
       Boolean(eventSlug) ||
       form.form_type === 'event';
 
-    const initialStatus =
-      isEventApplication && !requiresPayment ? 'accepted' : 'pending';
+    // Events: always auto-accept (no admin review). Certificate fee tracked via payment_status.
+    const initialStatus = isEventApplication ? 'accepted' : 'pending';
 
     const submissionData: Record<string, unknown> = {
       ...normalized,
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 
-    if (initialStatus === 'accepted' && isEventApplication) {
+    if (isEventApplication && initialStatus === 'accepted') {
       await supabase.from(siteApplicationsDb.statusHistory).insert({
         application_id: data.id,
         old_status: null,
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
         changed_by_email: 'system:event-auto-accept',
       });
 
-      void sendSiteApplicationApprovalEmail({
+      const emailResult = await sendSiteApplicationApprovalEmail({
         to: contact.email,
         firstName: contact.firstName,
         lastName: contact.lastName,
@@ -215,6 +215,9 @@ export async function POST(request: NextRequest) {
         eventName,
         isEvent: true,
       });
+      if (!emailResult.success) {
+        console.error('Event registration email failed:', emailResult.error);
+      }
     }
 
     const resolvedEventSlug = event?.slug || eventSlug || '';
