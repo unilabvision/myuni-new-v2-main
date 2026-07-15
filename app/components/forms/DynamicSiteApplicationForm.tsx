@@ -43,6 +43,7 @@ const ui = {
     submit: 'Başvuruyu Gönder',
     submitting: 'Gönderiliyor...',
     success: 'Başvurunuz alındı. En kısa sürede sizinle iletişime geçeceğiz.',
+    eventSuccessFallback: 'Etkinliğe kaydınız başarıyla alınmıştır.',
     error: 'Başvuru gönderilirken bir hata oluştu.',
     required: 'Bu alan zorunludur',
     invalidEmail: 'Geçerli bir e-posta giriniz',
@@ -69,6 +70,7 @@ const ui = {
     submit: 'Submit Application',
     submitting: 'Submitting...',
     success: 'Your application has been received. We will contact you soon.',
+    eventSuccessFallback: 'Your event registration has been successfully received.',
     error: 'An error occurred while submitting your application.',
     required: 'This field is required',
     invalidEmail: 'Please enter a valid email',
@@ -154,6 +156,10 @@ export default function DynamicSiteApplicationForm({
   const [attachment, setAttachment] = useState<File | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
+
+  const isEventForm = Boolean(
+    eventSlug || formConfig?.event_slug || formConfig?.event_title || (formConfig?.packages?.length ?? 0) > 0
+  );
 
   const mapServerFieldError = (code: string) => {
     switch (code) {
@@ -408,9 +414,15 @@ export default function DynamicSiteApplicationForm({
           <p
             className={`${isSidebar ? 'text-sm' : 'text-lg'} text-emerald-800/90 dark:text-emerald-200/90 max-w-md mx-auto leading-relaxed`}
           >
-            {formConfig.success_message || t.success}
+            {isEventForm
+              ? (formConfig.event_title
+                  ? (locale === 'tr'
+                      ? `${formConfig.event_title} etkinliğe kaydınız başarıyla alınmıştır.`
+                      : `Your registration for ${formConfig.event_title} has been successfully received.`)
+                  : (formConfig.success_message || t.eventSuccessFallback))
+              : (formConfig.success_message || t.success)}
           </p>
-          {!isSidebar && (
+          {!isSidebar && !isEventForm && (
             <div className="mt-8 inline-flex items-center gap-2 text-sm text-emerald-700/80 dark:text-emerald-300/80">
               <Heart className="w-4 h-4" />
               {t.response}
@@ -469,10 +481,12 @@ export default function DynamicSiteApplicationForm({
               <Shield className="w-3.5 h-3.5 text-[#990000]" />
               {t.secure}
             </span>
+            {!isEventForm && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5">
               <Clock className="w-3.5 h-3.5 text-[#990000]" />
               {t.response}
             </span>
+            )}
           </div>
         </aside>
         )}

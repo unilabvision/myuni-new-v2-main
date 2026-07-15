@@ -14,6 +14,7 @@ import {
   type RegistrationTier,
 } from '@/lib/siteApplications/packages';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
+import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 
 async function resolveForm(
   supabase: ReturnType<typeof getSiteApplicationsSupabase>,
@@ -133,6 +134,15 @@ export async function POST(request: NextRequest) {
     const paymentStatus = requiresPayment ? 'pending' : 'none';
     const packagePrice = registrationTierInput === 'certificate' ? certificatePrice : 0;
 
+    const isEventApplication =
+      Boolean(event) ||
+      Boolean(form.event_id) ||
+      Boolean(eventSlug) ||
+      form.form_type === 'event';
+
+    const initialStatus =
+      isEventApplication && !requiresPayment ? 'accepted' : 'pending';
+
     const submissionData: Record<string, unknown> = {
       ...normalized,
       registration_tier: registrationTierInput,
@@ -142,6 +152,10 @@ export async function POST(request: NextRequest) {
 
     const contact = extractContactFromSubmission(typedFields, normalized);
     const effectiveSlug = locale === 'en' ? form.slug_en : form.slug_tr;
+    const eventName =
+      (typeof normalized.event_name === 'string' ? normalized.event_name : null) ||
+      event?.title ||
+      null;
 
     const row = {
       form_id: form.id,
@@ -151,10 +165,7 @@ export async function POST(request: NextRequest) {
       last_name: contact.lastName,
       email: contact.email,
       phone: contact.phone,
-      event_name:
-        (typeof normalized.event_name === 'string' ? normalized.event_name : null) ||
-        event?.title ||
-        null,
+      event_name: eventName,
       event_date: typeof normalized.event_date === 'string' ? normalized.event_date : null,
       participant_count:
         typeof normalized.participant_count === 'number' ? normalized.participant_count : null,
@@ -165,9 +176,9 @@ export async function POST(request: NextRequest) {
       message: typeof normalized.message === 'string' ? normalized.message : null,
       motivation: typeof normalized.motivation === 'string' ? normalized.motivation : null,
       locale,
-      source: 'website',
+      source: isEventApplication ? 'event_website' : 'website',
       user_agent: request.headers.get('user-agent'),
-      status: 'pending',
+      status: initialStatus,
       submission_data: submissionData,
       attachment_file_name: attachmentFileName,
       attachment_storage_path: attachmentStoragePath,
@@ -187,6 +198,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 
+    if (initialStatus === 'accepted' && isEventApplication) {
+      await supabase.from(siteApplicationsDb.statusHistory).insert({
+        application_id: data.id,
+        old_status: null,
+        new_status: 'accepted',
+        changed_by: null,
+        changed_by_email: 'system:event-auto-accept',
+      });
+
+      void sendSiteApplicationApprovalEmail({
+        to: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        locale,
+        eventName,
+        isEvent: true,
+      });
+    }
+
     const resolvedEventSlug = event?.slug || eventSlug || '';
     const checkoutUrl =
       requiresPayment && resolvedEventSlug
@@ -197,6 +227,7 @@ export async function POST(request: NextRequest) {
       success: true,
       submissionId: data.id,
       applicationId: data.id,
+      status: initialStatus,
       requiresPayment,
       registrationTier: registrationTierInput,
       paymentStatus,
