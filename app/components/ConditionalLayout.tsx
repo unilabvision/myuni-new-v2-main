@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Header from "./header/Header";
 import Footer from "./Footer";
 import BackToTop from "./BackToTop";
+import CampaignPromoBar from "./CampaignPromoBar";
 import { CartProvider } from '../context/CartContext';
 import CartDrawer from './cart/CartDrawer';
 
@@ -29,6 +30,7 @@ export default function ConditionalLayout({ children, locale }: ConditionalLayou
       <div className="flex flex-col min-h-screen">
         {!isAdminPage && <Header locale={locale} />}
         <div className={`flex-grow ${isAdminPage ? '' : 'mt-[75px]'}`}>
+          {!isAdminPage && <CampaignPromoBar locale={locale} />}
           {children}
         </div>
         {shouldShowFooter && <Footer locale={locale} />}

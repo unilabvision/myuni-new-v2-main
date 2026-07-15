@@ -7,7 +7,6 @@ import CookieBanner from "../components/CookieBanner";
 import "../globals.css";
 import Script from "next/script";
 import ContactSupportWidget from "../components/ContactSupportWidget";
-import CampaignsAssistant from "../components/CampaignsAssistant";
 
 // Font definitions
 const arimo = Arimo({
@@ -417,8 +416,6 @@ export default async function LocaleLayout({
           </ConditionalLayout>
           <CookieBanner locale={locale} />
           <ContactSupportWidget />
-          {/* Bottom-left AI-assisted campaigns popup */}
-          <CampaignsAssistant locale={locale} />
         </ClerkProvider>
       </body>
     </html>
