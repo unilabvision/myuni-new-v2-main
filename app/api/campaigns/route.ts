@@ -14,6 +14,7 @@ type DiscountRow = {
   max_usage?: number | null;
   is_campaign?: boolean | null;
   is_referral?: boolean | null;
+  influencer_id?: string | null;
   has_balance_limit?: boolean | null;
   remaining_balance?: number | null;
   campaign_name?: string | null;
@@ -27,6 +28,8 @@ type DiscountRow = {
 
 function isPublicPromoCode(row: DiscountRow): boolean {
   if (row.is_referral) return false;
+  // İnfluencer kodları influencer tarafından dağıtılır; public şeritte gösterilmez
+  if (row.influencer_id) return false;
   const code = String(row.code || '').toUpperCase();
   if (code.startsWith('REFUSER_') || code.startsWith('REF_') || code.startsWith('REWARDUSER_')) {
     return false;
