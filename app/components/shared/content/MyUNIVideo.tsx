@@ -156,8 +156,16 @@ export function MyUNIVideo({
       responsive: '1'
     });
 
-    if (video.vimeo_hash) {
-      params.set('h', video.vimeo_hash);
+    let hash: string | null = null;
+    // Prefer h= from embed URL when present
+    // (legacy rows sometimes store vimeo_id into vimeo_hash by mistake)
+    const stored = (video.vimeo_hash || '').trim();
+    if (stored && stored !== String(video.vimeo_id) && !/^\d+$/.test(stored)) {
+      hash = stored;
+    }
+
+    if (hash) {
+      params.set('h', hash);
     }
 
     return `${baseUrl}?${params.toString()}`;

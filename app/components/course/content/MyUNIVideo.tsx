@@ -41,6 +41,29 @@ interface VimeoVideo {
   duration_seconds: number | null;
   order_index: number | null;
   vimeo_hash: string | null;
+  vimeo_embed_url?: string | null;
+}
+
+/** Privacy hash: embed URL'deki h= öncelikli; vimeo_id ile aynı olan sahte hash'leri yok say */
+function resolvePrivacyHash(video: {
+  vimeo_id: string | null;
+  vimeo_hash: string | null;
+  vimeo_embed_url?: string | null;
+}): string | null {
+  if (video.vimeo_embed_url) {
+    try {
+      const fromEmbed = new URL(video.vimeo_embed_url).searchParams.get('h');
+      if (fromEmbed && fromEmbed !== String(video.vimeo_id)) return fromEmbed;
+    } catch {
+      // ignore invalid embed url
+    }
+  }
+
+  const stored = (video.vimeo_hash || '').trim();
+  if (!stored) return null;
+  // Eski kayıt hatası: hash alanına video id yazılmış
+  if (stored === String(video.vimeo_id) || /^\d+$/.test(stored)) return null;
+  return stored;
 }
 
 interface UserProgress {
@@ -90,8 +113,9 @@ export function MyUNIVideo({
       playsinline: '1' // Better mobile experience
     });
 
-    if (video.vimeo_hash) {
-      params.set('h', video.vimeo_hash);
+    const hash = resolvePrivacyHash(video);
+    if (hash) {
+      params.set('h', hash);
     }
 
     return `${baseUrl}?${params.toString()}`;
@@ -107,7 +131,7 @@ export function MyUNIVideo({
 
       const { data, error } = await supabase
         .from('myuni_videos')
-        .select('id, lesson_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash')
+        .select('id, lesson_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash, vimeo_embed_url')
         .eq('lesson_id', lessonId)
         .order('order_index', { ascending: true })
         .limit(1);
@@ -497,12 +521,20 @@ export function MyUNIVideo({
     fetchVideoContent();
   }, [lessonId, fetchVideoContent]); // Include fetchVideoContent
 
-  // Load user progress when video is loaded
+  // Load user progress when video is loaded (userId yoksa da default progress ver → player takılmasın)
   useEffect(() => {
-    if (currentVideo && currentVideo.id && userId) {
-      console.log('Loading user progress for video:', currentVideo.id, 'lesson:', lessonId);
-      loadUserProgress();
+    if (!currentVideo?.id) return;
+    if (!userId) {
+      setUserProgress({
+        watch_time_seconds: 0,
+        last_position_seconds: 0,
+        is_completed: false,
+        video_watch_count: 0,
+      });
+      return;
     }
+    console.log('Loading user progress for video:', currentVideo.id, 'lesson:', lessonId);
+    loadUserProgress();
   }, [currentVideo, loadUserProgress, userId, lessonId]);
 
   // Initialize player when iframe is ready, video is loaded, and user progress is loaded
@@ -516,6 +548,19 @@ export function MyUNIVideo({
       return () => clearTimeout(timer);
     }
   }, [iframeReady, currentVideo, playerInitialized, userProgress, initializePlayer]);
+
+  // Sonsuz "Video yükleniyor..." engeli: player hazır olmazsa hata göster
+  useEffect(() => {
+    if (!currentVideo?.vimeo_id || playerInitialized || error) return;
+    const timer = window.setTimeout(() => {
+      if (!playerInitialized) {
+        setError(
+          'Video oynatılamadı. Vimeo gizlilik ayarı veya privacy hash eksik olabilir. Lütfen tekrar deneyin.'
+        );
+      }
+    }, 15000);
+    return () => window.clearTimeout(timer);
+  }, [currentVideo?.vimeo_id, playerInitialized, error, lessonId]);
 
   // Handle iframe load
   const handleIframeLoad = useCallback(() => {
