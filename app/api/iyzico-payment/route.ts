@@ -306,6 +306,54 @@ export async function POST(request: Request) {
         if (submission.payment_status === 'paid') {
           return NextResponse.json({ success: false, message: 'Application already paid' }, { status: 409 });
         }
+        if (submission.payment_status === 'superseded') {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                'This application was superseded by another paid registration for the same email/event',
+            },
+            { status: 409 }
+          );
+        }
+
+        // Aynı e-posta + etkinlikte başka ödenmiş sertifika varsa yeni ödeme başlatma
+        if (application.email && application.event_id) {
+          const { data: siblingApps } = await siteAppsSupabase
+            .from(siteApplicationsDb.applications)
+            .select('id, submission_data')
+            .eq('event_id', application.event_id)
+            .ilike('email', String(application.email).trim())
+            .neq('id', applicationId)
+            .limit(20);
+
+          const siblingPaid = (siblingApps || []).find((row) => {
+            const s = (row.submission_data || {}) as Record<string, unknown>;
+            return (
+              s.registration_tier === 'certificate' && s.payment_status === 'paid'
+            );
+          });
+          if (siblingPaid) {
+            return NextResponse.json(
+              {
+                success: false,
+                message: 'Certificate already paid for this email and event',
+                paidApplicationId: siblingPaid.id,
+              },
+              { status: 409 }
+            );
+          }
+        }
+
+        // Açık pending siparişleri kapat — her checkout'ta yeni pending birikmesin
+        await supabase
+          .from('orders')
+          .update({
+            status: 'cancelled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('courseid', applicationId)
+          .eq('status', 'pending');
 
         const packagePrice = Number(submission.package_price) || 0;
         if (packagePrice <= 0) {

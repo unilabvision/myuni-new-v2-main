@@ -97,8 +97,21 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.paid && eventSlug) {
-          router.replace(`/${locale}/payment-success?type=event_application&applicationId=${applicationId}&eventSlug=${eventSlug}`);
+        if ((data.paid || data.superseded) && (eventSlug || data.eventSlug)) {
+          const slug = data.eventSlug || eventSlug;
+          const success = new URLSearchParams({
+            type: 'event_application',
+            applicationId,
+          });
+          if (slug) success.set('eventSlug', slug);
+          if (data.superseded) success.set('alreadyPaid', '1');
+          router.replace(`/${locale}/payment-success?${success.toString()}`);
+          return;
+        }
+        if (data.paid) {
+          router.replace(
+            `/${locale}/payment-success?type=event_application&applicationId=${applicationId}`
+          );
           return;
         }
         throw new Error(data.error || t.notFound);
@@ -155,6 +168,17 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
 
       const result = await response.json();
       if (!response.ok || !result.success) {
+        // Ödeme zaten alınmışsa tekrar Iyzico'ya gitme
+        if (response.status === 409 || /already paid/i.test(String(result.message || ''))) {
+          const success = new URLSearchParams({
+            type: 'event_application',
+            applicationId: application.id,
+            alreadyPaid: '1',
+          });
+          if (application.eventSlug) success.set('eventSlug', application.eventSlug);
+          router.replace(`/${locale}/payment-success?${success.toString()}`);
+          return;
+        }
         throw new Error(result.message || t.error);
       }
 

@@ -1,5 +1,5 @@
 export type RegistrationTier = 'free' | 'certificate';
-export type ApplicationPaymentStatus = 'none' | 'pending' | 'paid';
+export type ApplicationPaymentStatus = 'none' | 'pending' | 'paid' | 'superseded';
 
 export interface EventFormPackageSettings {
   certificate_enabled?: boolean;
