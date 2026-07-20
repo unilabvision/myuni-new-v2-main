@@ -541,7 +541,8 @@ export default function AdminDiscountCodesPage() {
                   className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
                 />
                 <p className="mt-1 text-xs text-neutral-500">
-                  Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz (ör. 2000 ₺ modül + 2500 ₺ sabit indirim).
+                  Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz. Sabit 2000 ₺+ kodlarda sistem otomatik olarak
+                  en az (indirim + 1) uygular.
                 </p>
               </div>
 
@@ -549,7 +550,12 @@ export default function AdminDiscountCodesPage() {
                 <input
                   type="checkbox"
                   id="full_course_only"
-                  checked={form.full_course_only}
+                  checked={
+                    form.full_course_only ||
+                    (form.discount_type === 'fixed' &&
+                      !form.has_balance_limit &&
+                      Number(form.discount_amount) >= 2000)
+                  }
                   onChange={(e) =>
                     setForm((f) => ({ ...f, full_course_only: e.target.checked }))
                   }
@@ -559,6 +565,14 @@ export default function AdminDiscountCodesPage() {
                   Yalnızca tam eğitim paketi (modül paketlerinde kullanılamaz)
                 </label>
               </div>
+              {form.discount_type === 'fixed' &&
+                !form.has_balance_limit &&
+                Number(form.discount_amount) >= 2000 && (
+                  <p className="text-xs text-[#990000]">
+                    Sabit 2000 ₺ ve üzeri kodlar otomatik olarak yalnızca tam eğitim paketinde geçerlidir; minimum
+                    sipariş tutarı da (indirim + 1) olur.
+                  </p>
+                )}
 
               <div className="flex items-center gap-2">
                 <input

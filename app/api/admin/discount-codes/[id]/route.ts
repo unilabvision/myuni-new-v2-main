@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/adminAuth';
+import { applyHighValueFixedDefaults } from '@/lib/discountRestrictions';
 
 type UpdatePayload = {
   code?: string;
@@ -104,6 +105,33 @@ export async function PATCH(
       { error: 'Güncellenecek alan yok' },
       { status: 400 }
     );
+  }
+
+  // Mevcut satırla birleştir: 2000₺+ fixed için otomatik kısıtları uygula
+  const { data: existing } = await supabaseAdmin
+    .from('discount_codes')
+    .select('discount_type, discount_amount, has_balance_limit, minimum_order_amount, full_course_only')
+    .eq('id', id)
+    .single();
+
+  const merged = applyHighValueFixedDefaults({
+    discount_type: (updates.discount_type as string) ?? existing?.discount_type ?? 'percentage',
+    discount_amount: Number(updates.discount_amount ?? existing?.discount_amount ?? 0),
+    has_balance_limit: Boolean(
+      updates.has_balance_limit !== undefined ? updates.has_balance_limit : existing?.has_balance_limit
+    ),
+    minimum_order_amount:
+      updates.minimum_order_amount !== undefined
+        ? (updates.minimum_order_amount as number | null)
+        : existing?.minimum_order_amount ?? null,
+    full_course_only: Boolean(
+      updates.full_course_only !== undefined ? updates.full_course_only : existing?.full_course_only
+    ),
+  });
+
+  if (merged.full_course_only) updates.full_course_only = true;
+  if (merged.minimum_order_amount != null) {
+    updates.minimum_order_amount = merged.minimum_order_amount;
   }
 
   const { data, error } = await supabaseAdmin

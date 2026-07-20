@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
 import supabase from '../../_services/supabaseClient.js';
 import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
+import { resolveDiscountRestrictions } from '../../../lib/discountRestrictions';
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -760,8 +761,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       return;
     }
 
-    // Tam eğitim kısıtı: modül paketlerinde kod kullanılamaz
-    if (foundCode.full_course_only) {
+    // Tam eğitim + min tutar: DB bayrakları VE 2000₺+ fixed otomatik kuralları
+    const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions({
+      type: foundCode.type,
+      discountAmount: foundCode.discountAmount,
+      has_balance_limit: foundCode.has_balance_limit,
+      minimum_order_amount: foundCode.minimum_order_amount,
+      full_course_only: foundCode.full_course_only,
+    });
+
+    if (fullCourseOnly) {
       if (isCartMode) {
         const activeCartItemsForFull = cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id));
         const hasFullCourseItem = activeCartItemsForFull.some(ci => ci.type === 'tier' && ci.isFullCourse);
@@ -790,7 +799,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           })
         : activeCartItems;
 
-      if (foundCode.full_course_only) {
+      if (fullCourseOnly) {
         eligibleItems = eligibleItems.filter(ci => ci.type === 'tier' && ci.isFullCourse);
       }
 
@@ -801,7 +810,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
 
-      if (foundCode.full_course_only && eligibleItems.length === 0) {
+      if (fullCourseOnly && eligibleItems.length === 0) {
         setDiscountError(t.discountFullCourseOnly);
         setDiscountLoading(false);
         return;
@@ -809,12 +818,11 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
       const eligibleTotal = eligibleItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0);
 
-      const minOrder = Number(foundCode.minimum_order_amount) || 0;
-      if (minOrder > 0 && eligibleTotal < minOrder) {
+      if (minimumOrderAmount > 0 && eligibleTotal < minimumOrderAmount) {
         setDiscountError(
           locale === 'tr'
-            ? `${t.discountMinOrder} (min. ${minOrder.toLocaleString('tr-TR')} ₺)`
-            : `${t.discountMinOrder} (min. ${minOrder.toLocaleString('en-US')} ₺)`
+            ? `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('en-US')} ₺)`
         );
         setDiscountLoading(false);
         return;
@@ -834,8 +842,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           console.log(`Cart percentage discount: Applied ${foundCode.discountAmount}% to ${eligibleTotal} TL = ${discountValue} TL`);
         } else {
           discountValue = foundCode.discountAmount;
-          if (discountValue > cartTotal) {
-            discountValue = cartTotal;
+          if (discountValue > eligibleTotal) {
+            discountValue = eligibleTotal;
           }
           console.log(`Cart fixed discount: Applied ${discountValue} TL`);
         }
@@ -843,12 +851,11 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     } else {
       // ---- SINGLE ITEM DISCOUNT CALCULATION ----
       const singlePrice = courseData ? getActivePrice(courseData) : 0;
-      const minOrder = Number(foundCode.minimum_order_amount) || 0;
-      if (minOrder > 0 && singlePrice < minOrder) {
+      if (minimumOrderAmount > 0 && singlePrice < minimumOrderAmount) {
         setDiscountError(
           locale === 'tr'
-            ? `${t.discountMinOrder} (min. ${minOrder.toLocaleString('tr-TR')} ₺)`
-            : `${t.discountMinOrder} (min. ${minOrder.toLocaleString('en-US')} ₺)`
+            ? `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('en-US')} ₺)`
         );
         setDiscountLoading(false);
         return;
@@ -871,12 +878,12 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       } else if (courseData) {
         // Normal indirim hesaplama (bakiye limiti yoksa)
         if (foundCode.type === 'percentage') {
-          discountValue = (courseData.price * foundCode.discountAmount) / 100;
+          discountValue = (singlePrice * foundCode.discountAmount) / 100;
           console.log(`Applying ${foundCode.discountAmount}% discount: ${discountValue}`);
         } else {
           discountValue = foundCode.discountAmount;
-          if (discountValue > courseData.price) {
-            discountValue = courseData.price;
+          if (discountValue > singlePrice) {
+            discountValue = singlePrice;
           }
           console.log(`Applying fixed discount: ${discountValue}`);
         }
@@ -896,12 +903,12 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           discountAmount: discountValue,
           // Minimum tutar kontrolü için indirime konu olan tutar
           coursePrice: isCartMode
-            ? (foundCode.applicableCourses.length > 0 || foundCode.full_course_only
+            ? (foundCode.applicableCourses.length > 0 || fullCourseOnly
                 ? activeCartItems
                     .filter(ci => {
                       const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
                       const courseOk = foundCode.applicableCourses.length === 0 || foundCode.applicableCourses.includes(productId);
-                      const fullOk = !foundCode.full_course_only || (ci.type === 'tier' && ci.isFullCourse);
+                      const fullOk = !fullCourseOnly || (ci.type === 'tier' && ci.isFullCourse);
                       return courseOk && fullOk;
                     })
                     .reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0)

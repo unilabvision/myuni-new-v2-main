@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/adminAuth';
+import { applyHighValueFixedDefaults } from '@/lib/discountRestrictions';
 
 export type DiscountCodePayload = {
   code: string;
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
       ? (body.initial_balance != null ? Number(body.initial_balance) : remainingBalance)
       : null;
 
-    const row = {
+    const row = applyHighValueFixedDefaults({
       code,
       discount_amount: discountAmount,
       discount_type: discountType,
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
           ? Math.max(0, Number(body.minimum_order_amount) || 0) || null
           : null,
       full_course_only: Boolean(body.full_course_only),
-    };
+    });
 
     const { data, error } = await supabaseAdmin
       .from('discount_codes')
