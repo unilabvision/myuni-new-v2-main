@@ -35,12 +35,9 @@ const nextConfig = {
     return config;
   },
   images: {
-    // Fewer unique (url,w,q) transforms → lower Vercel Image Optimization quota burn
-    minimumCacheTTL: 2678400, // 31 days
-    formats: ['image/webp'],
-    deviceSizes: [640, 750, 1080, 1920],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256],
-    qualities: [75],
+    // Vercel Image Optimization kotası dolduğunda /_next/image kırılıyor.
+    // Supabase/Clerk görselleri doğrudan kaynak URL'den yüklenir (koleksiyon/dergi fix'i site geneli).
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -63,6 +60,18 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'myunilab.net',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.myunilab.net',
         port: '',
         pathname: '/**',
       },
