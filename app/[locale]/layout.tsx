@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Arimo, Syne } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs';
+import { Analytics } from "@vercel/analytics/next";
 import ConditionalLayout from "../components/ConditionalLayout";
 import CookieBanner from "../components/CookieBanner";
 import "../globals.css";
@@ -416,6 +417,7 @@ export default async function LocaleLayout({
           </ConditionalLayout>
           <CookieBanner locale={locale} />
           <ContactSupportWidget />
+          <Analytics />
         </ClerkProvider>
       </body>
     </html>
