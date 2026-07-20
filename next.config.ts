@@ -35,6 +35,12 @@ const nextConfig = {
     return config;
   },
   images: {
+    // Fewer unique (url,w,q) transforms → lower Vercel Image Optimization quota burn
+    minimumCacheTTL: 2678400, // 31 days
+    formats: ['image/webp'],
+    deviceSizes: [640, 750, 1080, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    qualities: [75],
     remotePatterns: [
       {
         protocol: 'https',

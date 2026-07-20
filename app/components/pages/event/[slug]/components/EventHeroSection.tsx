@@ -416,7 +416,7 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
           className="block w-full h-auto max-w-full"
           sizes="(max-width: 1280px) 100vw, 1200px"
           priority
-          quality={90}
+          quality={75}
         />
 
         {isLive && (

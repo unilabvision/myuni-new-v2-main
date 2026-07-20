@@ -325,11 +325,14 @@ export default async function FeaturesSection({ locale }: FeaturesSectionProps) 
               >
                 {/* Görsel Katmanı */}
                 <div className="h-48 overflow-hidden relative">
-                  <Image 
-                    src={feature.image.startsWith('/') ? feature.image : `/${feature.image}`} 
-                    alt={feature.imageAlt} 
+                  <Image
+                    src={feature.image.startsWith('/') ? feature.image : `/${feature.image}`}
+                    alt={feature.imageAlt}
                     fill
-                    className="object-cover transform group-hover:scale-105 transition-transform duration-500" 
+                    className="object-cover transform group-hover:scale-105 transition-transform duration-500"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    quality={75}
+                    unoptimized
                   />
                   <div className="absolute inset-0 bg-neutral-900 opacity-10"></div>
                   <div className="absolute top-4 left-4 bg-neutral-100 dark:bg-neutral-700 p-3 rounded-sm">

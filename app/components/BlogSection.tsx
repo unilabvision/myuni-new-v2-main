@@ -263,6 +263,8 @@ const BlogSection: React.FC<BlogSectionProps> = ({ locale }) => {
                       alt={post.title}
                       fill
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      quality={75}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = "/blog/default-image.webp";

@@ -42,6 +42,7 @@ export default async function VisualHighlightSection({ locale }: VisualHighlight
           sizes="100vw"
           className={`object-cover transition-transform duration-1000 ease-in-out ${styles.imageHover}`}
           priority
+          unoptimized
         />
         {/* Primary Overlay */}
         <div className={`absolute inset-0 bg-gradient-to-t from-[#990000]/70 to-transparent opacity-0 transition-opacity duration-700 ease-in-out ${styles.overlay}`} />

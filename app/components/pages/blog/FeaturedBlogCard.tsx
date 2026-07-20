@@ -49,6 +49,8 @@ const FeaturedBlogCard: React.FC<FeaturedBlogCardProps> = ({ post, locale }) => 
           alt={post.title}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-105"
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          quality={75}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
         

@@ -471,6 +471,8 @@ export default function CourseListPage({ params }: CourseListPageProps) {
             alt={course.name || course.title}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            quality={75}
           />
 
           {course.course_type !== 'online' && (
@@ -759,6 +761,8 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                                   alt={course.name || course.title}
                                   fill
                                   className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                  quality={75}
                                 />
                               </div>
 
@@ -1043,6 +1047,8 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                       alt={pkg.title}
                       fill
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      quality={75}
                     />
                     <div className="absolute top-3 left-3 bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium tracking-wide">
                       {locale === 'tr' ? 'Eğitim Paketi' : 'Course Package'}

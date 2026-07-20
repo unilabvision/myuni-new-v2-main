@@ -162,6 +162,7 @@ export default function HeroSection({ locale, activeCourseCount }: HeroSectionPr
               className="object-cover transition-transform transform hover:scale-105 duration-300 ease-in-out"
               priority={imgNum === 1}
               sizes="(max-width: 640px) 95vw, (max-width: 768px) 90vw, (max-width: 1024px) 45vw, 50vw"
+              unoptimized
             />
           </div>
         ))}
