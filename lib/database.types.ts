@@ -157,6 +157,10 @@ export type Database = {
           remaining_balance: number | null;
           owner_id: string | null;
           initial_balance: number | null;
+          /** Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz (modül paketlerini engellemek için) */
+          minimum_order_amount: number | null;
+          /** true ise yalnızca is_full_course / tam-egitim tier'larında geçerli */
+          full_course_only: boolean;
         };
         Insert: {
           id?: string;
@@ -186,6 +190,8 @@ export type Database = {
           remaining_balance?: number | null;
           owner_id?: string | null;
           initial_balance?: number | null;
+          minimum_order_amount?: number | null;
+          full_course_only?: boolean;
         };
         Update: {
           id?: string;
@@ -215,6 +221,8 @@ export type Database = {
           remaining_balance?: number | null;
           owner_id?: string | null;
           initial_balance?: number | null;
+          minimum_order_amount?: number | null;
+          full_course_only?: boolean;
         };
       };
       hero_slides: {

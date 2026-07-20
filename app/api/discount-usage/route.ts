@@ -3,7 +3,8 @@ import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 
 export async function POST(request: NextRequest) {
   try {
-    const { code, userId, discountAmount, coursePrice } = await request.json();
+    const { code, userId, discountAmount, coursePrice, isFullCourse, itemType } = await request.json();
+    const isEnglish = request.nextUrl.searchParams.get('locale') === 'en';
 
     if (!code || !userId) {
       return NextResponse.json({ 
@@ -48,7 +49,6 @@ export async function POST(request: NextRequest) {
       }
 
       if (previousOrders && previousOrders.length > 0) {
-        const isEnglish = request.nextUrl.searchParams.get('locale') === 'en';
         return NextResponse.json({ 
           success: false, 
           error: isEnglish
@@ -77,6 +77,36 @@ export async function POST(request: NextRequest) {
         success: false, 
         error: 'Bu kodun kullanım limiti dolmuş' 
       });
+    }
+
+    // Yalnızca tam eğitim paketi
+    if (discountCode.full_course_only) {
+      const allowed =
+        itemType === 'cart'
+          ? Boolean(isFullCourse)
+          : itemType === 'tier' && Boolean(isFullCourse);
+      if (!allowed) {
+        return NextResponse.json({
+          success: false,
+          error: isEnglish
+            ? 'This discount code is only valid for the full education package'
+            : 'Bu indirim kodu yalnızca tam eğitim paketi için geçerlidir',
+        });
+      }
+    }
+
+    // Minimum sipariş tutarı (modül paketlerinin bedava kalmasını engeller)
+    const minOrder = Number(discountCode.minimum_order_amount) || 0;
+    if (minOrder > 0) {
+      const price = Number(coursePrice) || 0;
+      if (price < minOrder) {
+        return NextResponse.json({
+          success: false,
+          error: isEnglish
+            ? `This discount code requires a minimum order of ${minOrder} ₺`
+            : `Bu indirim kodu için minimum sipariş tutarı ${minOrder.toLocaleString('tr-TR')} ₺ olmalıdır`,
+        });
+      }
     }
 
     // Bakiye limiti kontrolü - has_balance_limit=true ise discount_amount'u görmezden gel

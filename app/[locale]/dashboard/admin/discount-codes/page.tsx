@@ -30,6 +30,8 @@ interface DiscountCodeRow {
   has_balance_limit: boolean;
   remaining_balance: number | null;
   initial_balance?: number | null;
+  minimum_order_amount?: number | null;
+  full_course_only?: boolean;
   is_campaign: boolean;
   campaign_name: string | null;
   campaign_description: string | null;
@@ -46,6 +48,8 @@ const emptyForm = {
   has_balance_limit: false,
   remaining_balance: 0,
   initial_balance: 0,
+  minimum_order_amount: 0,
+  full_course_only: false,
   is_campaign: false,
   campaign_name: '',
   campaign_description: '',
@@ -111,6 +115,8 @@ export default function AdminDiscountCodesPage() {
       has_balance_limit: row.has_balance_limit,
       remaining_balance: row.remaining_balance ?? 0,
       initial_balance: row.initial_balance ?? 0,
+      minimum_order_amount: row.minimum_order_amount ?? 0,
+      full_course_only: !!row.full_course_only,
       is_campaign: row.is_campaign,
       campaign_name: row.campaign_name || '',
       campaign_description: row.campaign_description || '',
@@ -145,6 +151,8 @@ export default function AdminDiscountCodesPage() {
         has_balance_limit: form.has_balance_limit,
         remaining_balance: form.has_balance_limit ? Number(form.remaining_balance) || 0 : null,
         initial_balance: form.has_balance_limit ? Number(form.initial_balance) || 0 : null,
+        minimum_order_amount: Number(form.minimum_order_amount) > 0 ? Number(form.minimum_order_amount) : null,
+        full_course_only: form.full_course_only,
         is_campaign: form.is_campaign,
         campaign_name: form.campaign_name.trim() || null,
         campaign_description: form.campaign_description.trim() || null,
@@ -512,6 +520,44 @@ export default function AdminDiscountCodesPage() {
                   placeholder="uuid-1, uuid-2"
                   className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                  Minimum sipariş tutarı (₺) — boş/0 = yok
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.minimum_order_amount}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      minimum_order_amount: Math.max(0, Number(e.target.value) || 0),
+                    }))
+                  }
+                  placeholder="Örn. 2501 (modül paketlerini engeller)"
+                  className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz (ör. 2000 ₺ modül + 2500 ₺ sabit indirim).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="full_course_only"
+                  checked={form.full_course_only}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, full_course_only: e.target.checked }))
+                  }
+                  className="rounded border-neutral-300 text-[#990000] focus:ring-[#990000]"
+                />
+                <label htmlFor="full_course_only" className="text-sm text-neutral-700 dark:text-neutral-300">
+                  Yalnızca tam eğitim paketi (modül paketlerinde kullanılamaz)
+                </label>
               </div>
 
               <div className="flex items-center gap-2">

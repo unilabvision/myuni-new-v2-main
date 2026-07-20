@@ -32,6 +32,8 @@ interface CourseData {
   early_bird_deadline?: string | null;
   /** Shopier link ile satış: varsa ödeme bu linkte, OAuth2 kullanılmaz */
   shopier_product_url?: string | null;
+  /** Tier checkout: tam eğitim paketi mi? */
+  isFullCourse?: boolean;
 }
 
 interface DiscountCode {
@@ -46,6 +48,10 @@ interface DiscountCode {
   has_balance_limit?: boolean;
   remaining_balance?: number | null;
   owner_id?: string | null;
+  /** Sipariş tutarı bundan düşükse kod uygulanmaz */
+  minimum_order_amount?: number | null;
+  /** Yalnızca tam eğitim (full course) tier'larında geçerli */
+  full_course_only?: boolean;
 }
 
 interface AppliedDiscount {
@@ -130,6 +136,8 @@ const texts = {
     invalidDiscount: "Geçersiz indirim kodu",
     discountExpired: "Bu indirim kodunun süresi dolmuş",
     discountNotApplicable: "Bu indirim kodu bu kurs için geçerli değil",
+    discountMinOrder: "Bu indirim kodu için minimum sipariş tutarı karşılanmıyor",
+    discountFullCourseOnly: "Bu indirim kodu yalnızca tam eğitim paketi için geçerlidir",
     discountAlreadyApplied: "Bu indirim kodu zaten uygulandı",
     discountOnlyOne: "Sadece bir indirim kodu kullanabilirsin",
     referralOnlyOne: "Sadece bir referans kodu kullanabilirsin",
@@ -188,6 +196,8 @@ const texts = {
     invalidDiscount: "Invalid discount code",
     discountExpired: "This discount code has expired",
     discountNotApplicable: "This discount code is not applicable for this course",
+    discountMinOrder: "This discount code requires a higher minimum order amount",
+    discountFullCourseOnly: "This discount code is only valid for the full education package",
     discountAlreadyApplied: "This discount code is already applied",
     discountOnlyOne: "You can only use one discount code",
     referralOnlyOne: "You can only use one referral code",
@@ -403,6 +413,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         slug: course.slug,
         is_active: true,
         shopier_product_url: tier.shopier_product_url,
+        isFullCourse: tier.is_full_course === true || tier.slug === 'tam-egitim',
       } as CourseData);
     } catch (fetchError) {
       console.error('Error fetching tier:', fetchError);
@@ -517,7 +528,9 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         has_balance_limit: !!code.has_balance_limit,
         // IMPORTANT: don't use `|| null` or you'll lose 0 balances.
         remaining_balance: code.remaining_balance ?? null,
-        owner_id: code.owner_id || null
+        owner_id: code.owner_id || null,
+        minimum_order_amount: code.minimum_order_amount ?? null,
+        full_course_only: !!code.full_course_only,
       }));
       
       console.log(`Successfully fetched ${mappedCodes.length} discount codes (excluding referral codes)`);
@@ -746,6 +759,23 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       setDiscountLoading(false);
       return;
     }
+
+    // Tam eğitim kısıtı: modül paketlerinde kod kullanılamaz
+    if (foundCode.full_course_only) {
+      if (isCartMode) {
+        const activeCartItemsForFull = cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id));
+        const hasFullCourseItem = activeCartItemsForFull.some(ci => ci.type === 'tier' && ci.isFullCourse);
+        if (!hasFullCourseItem) {
+          setDiscountError(t.discountFullCourseOnly);
+          setDiscountLoading(false);
+          return;
+        }
+      } else if (itemType !== 'tier' || !courseData?.isFullCourse) {
+        setDiscountError(t.discountFullCourseOnly);
+        setDiscountLoading(false);
+        return;
+      }
+    }
     
     let discountValue = 0;
     const activeCartItems = isCartMode ? cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id)) : [];
@@ -753,12 +783,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     
     if (isCartMode) {
       // ---- CART MODE DISCOUNT CALCULATION ----
-      const eligibleItems = foundCode.applicableCourses.length > 0
+      let eligibleItems = foundCode.applicableCourses.length > 0
         ? activeCartItems.filter(ci => {
             const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
             return foundCode.applicableCourses.includes(productId);
           })
         : activeCartItems;
+
+      if (foundCode.full_course_only) {
+        eligibleItems = eligibleItems.filter(ci => ci.type === 'tier' && ci.isFullCourse);
+      }
 
       if (foundCode.applicableCourses.length > 0 && eligibleItems.length === 0) {
         console.log('Code not applicable for any items in the cart, showing error');
@@ -767,12 +801,29 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
 
+      if (foundCode.full_course_only && eligibleItems.length === 0) {
+        setDiscountError(t.discountFullCourseOnly);
+        setDiscountLoading(false);
+        return;
+      }
+
       const eligibleTotal = eligibleItems.reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0);
+
+      const minOrder = Number(foundCode.minimum_order_amount) || 0;
+      if (minOrder > 0 && eligibleTotal < minOrder) {
+        setDiscountError(
+          locale === 'tr'
+            ? `${t.discountMinOrder} (min. ${minOrder.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMinOrder} (min. ${minOrder.toLocaleString('en-US')} ₺)`
+        );
+        setDiscountLoading(false);
+        return;
+      }
 
       if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined) {
         const remainingBalance = foundCode.remaining_balance;
-        if (remainingBalance >= cartTotal) {
-          discountValue = cartTotal;
+        if (remainingBalance >= eligibleTotal) {
+          discountValue = eligibleTotal;
         } else {
           discountValue = remainingBalance;
         }
@@ -791,9 +842,21 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       }
     } else {
       // ---- SINGLE ITEM DISCOUNT CALCULATION ----
+      const singlePrice = courseData ? getActivePrice(courseData) : 0;
+      const minOrder = Number(foundCode.minimum_order_amount) || 0;
+      if (minOrder > 0 && singlePrice < minOrder) {
+        setDiscountError(
+          locale === 'tr'
+            ? `${t.discountMinOrder} (min. ${minOrder.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMinOrder} (min. ${minOrder.toLocaleString('en-US')} ₺)`
+        );
+        setDiscountLoading(false);
+        return;
+      }
+
       // Eğer bakiye limiti aktifse, discount_amount'u görmezden gel ve bakiye mantığına göre hesapla
       if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined && courseData) {
-        const coursePrice = getActivePrice(courseData);
+        const coursePrice = singlePrice;
         const remainingBalance = foundCode.remaining_balance;
         
         // Bakiye yeterliyse %100 indirim (kurs bedava)
@@ -830,8 +893,24 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         body: JSON.stringify({ 
           code: foundCode.code, 
           userId: user?.id || user?.emailAddresses?.[0]?.emailAddress,
-          discountAmount: discountValue, // Bakiye güncellemesi için indirim miktarını gönder
-          coursePrice: isCartMode ? cartTotal : (courseData ? getActivePrice(courseData) : 0) // Kurs/Sepet fiyatını gönder
+          discountAmount: discountValue,
+          // Minimum tutar kontrolü için indirime konu olan tutar
+          coursePrice: isCartMode
+            ? (foundCode.applicableCourses.length > 0 || foundCode.full_course_only
+                ? activeCartItems
+                    .filter(ci => {
+                      const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
+                      const courseOk = foundCode.applicableCourses.length === 0 || foundCode.applicableCourses.includes(productId);
+                      const fullOk = !foundCode.full_course_only || (ci.type === 'tier' && ci.isFullCourse);
+                      return courseOk && fullOk;
+                    })
+                    .reduce((sum, ci) => sum + getCartItemActivePrice(ci), 0)
+                : cartTotal)
+            : (courseData ? getActivePrice(courseData) : 0),
+          isFullCourse: isCartMode
+            ? cartItems.some(ci => cartIdsParam.split(',').includes(ci.id) && ci.type === 'tier' && ci.isFullCourse)
+            : !!courseData?.isFullCourse,
+          itemType: isCartMode ? 'cart' : itemType,
         }),
       });
 

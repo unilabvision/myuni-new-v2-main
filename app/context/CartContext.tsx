@@ -16,6 +16,8 @@ export interface CartItem {
   courseId?: string;
   /** tier satışında paket ID */
   tierId?: string;
+  /** true ise tam eğitim paketi (modül değil) */
+  isFullCourse?: boolean;
 }
 
 interface CartContextValue {

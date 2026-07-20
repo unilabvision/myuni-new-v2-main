@@ -25,6 +25,8 @@ export type DiscountCodePayload = {
   influencer_id?: string | null;
   campaign_id?: string | null;
   commission?: number | null;
+  minimum_order_amount?: number | null;
+  full_course_only?: boolean;
 };
 
 /**
@@ -137,6 +139,11 @@ export async function POST(request: NextRequest) {
       influencer_id: body.influencer_id ?? null,
       campaign_id: body.campaign_id ?? null,
       commission: body.commission != null ? Number(body.commission) : null,
+      minimum_order_amount:
+        body.minimum_order_amount != null && body.minimum_order_amount !== undefined
+          ? Math.max(0, Number(body.minimum_order_amount) || 0) || null
+          : null,
+      full_course_only: Boolean(body.full_course_only),
     };
 
     const { data, error } = await supabaseAdmin

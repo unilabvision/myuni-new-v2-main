@@ -133,6 +133,7 @@ export default function CourseTierSelector({
     tierId: tier.id,
     earlyBirdPrice: tier.early_bird_price,
     earlyBirdDeadline: tier.early_bird_deadline,
+    isFullCourse: tier.is_full_course === true || tier.slug === 'tam-egitim',
   });
 
   const toggleTier = (tier: CourseTier) => {
