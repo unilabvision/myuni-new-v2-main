@@ -1,5 +1,6 @@
 // lib/eventEnrollmentService.ts
-import { supabase } from './supabase';
+import 'server-only';
+import { supabaseAdmin as supabase } from './supabaseAdmin';
 
 export interface EventEnrollment {
   id: string;
@@ -65,7 +66,22 @@ interface EventEnrollmentStatus {
 }
 
 // Import getEventAttendeeCount from eventUtils
-import { getEventAttendeeCount } from './eventUtils';
+async function getEventAttendeeCount(eventId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('myuni_event_enrollments')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', eventId);
+    if (error) {
+      console.error('Error counting event attendees:', error);
+      return 0;
+    }
+    return count || 0;
+  } catch (error) {
+    console.error('Error counting event attendees:', error);
+    return 0;
+  }
+}
 
 // Kullanıcının etkinliğe kayıtlı olup olmadığını ve welcome'u görup görmediğini kontrol et
 export async function checkUserEventEnrollmentStatus(userId: string, eventId: string): Promise<EventEnrollmentStatus> {

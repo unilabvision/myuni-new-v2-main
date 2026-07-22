@@ -144,23 +144,14 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
         setIsEnrolled(false);
         return;
       }
-      
-      setCheckingEnrollment(true);
-      
-      const { data: enrollmentData, error } = await supabase
-        .from('myuni_enrollments')
-        .select('id, is_active')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId)
-        .eq('is_active', true)
-        .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Enrollment check error:', error);
-        setIsEnrolled(false);
-      } else {
-        setIsEnrolled(!!enrollmentData);
-      }
+      setCheckingEnrollment(true);
+
+      const res = await fetch(
+        `/api/enrollments/me?courseId=${encodeURIComponent(courseId)}`
+      );
+      const json = await res.json();
+      setIsEnrolled(!!json.isEnrolled);
     } catch (error) {
       console.error('Error checking enrollment:', error);
       setIsEnrolled(false);

@@ -1,6 +1,56 @@
 // lib/eventService.ts - Revised functions for new myuni_event_user_progress table
 
 import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+
+/**
+ * Enrollment counts for event lists.
+ * Must NOT import supabaseAdmin (server-only) — this module is used by client components.
+ */
+async function fetchEventEnrollmentCountMap(eventIds: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (!eventIds.length) return map;
+
+  try {
+    if (typeof window === 'undefined') {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        console.warn('Missing SUPABASE_SERVICE_ROLE_KEY for event enrollment counts');
+        return map;
+      }
+      const admin = createClient(supabaseUrl, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await admin
+        .from('myuni_event_enrollments')
+        .select('event_id')
+        .in('event_id', eventIds);
+      if (error) {
+        console.error('Error fetching enrollment counts:', error);
+        return map;
+      }
+      (data || []).forEach((row) => {
+        const id = row.event_id as string;
+        map.set(id, (map.get(id) || 0) + 1);
+      });
+      return map;
+    }
+
+    const res = await fetch(
+      `/api/event-enrollments/counts?eventIds=${encodeURIComponent(eventIds.join(','))}`
+    );
+    const json = await res.json();
+    if (json.success && json.counts) {
+      Object.entries(json.counts as Record<string, number>).forEach(([id, count]) => {
+        map.set(id, Number(count) || 0);
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching enrollment counts:', error);
+  }
+  return map;
+}
 
 // ========================================
 // INTERFACES & TYPES
@@ -603,23 +653,7 @@ export async function getFeaturedEvents(_locale: string = 'tr') {
 
     // Get enrollment counts for all events
     const eventIds = data.map(event => event.id);
-    const { data: enrollmentCounts, error: enrollmentError } = await supabase
-      .from('myuni_event_enrollments')
-      .select('event_id')
-      .in('event_id', eventIds);
-
-    if (enrollmentError) {
-      console.error('Error fetching enrollment counts:', enrollmentError);
-    }
-
-    // Create a map of event_id to enrollment count
-    const enrollmentCountMap = new Map();
-    if (enrollmentCounts) {
-      enrollmentCounts.forEach(enrollment => {
-        const eventId = enrollment.event_id;
-        enrollmentCountMap.set(eventId, (enrollmentCountMap.get(eventId) || 0) + 1);
-      });
-    }
+    const enrollmentCountMap = await fetchEventEnrollmentCountMap(eventIds);
 
     const transformedEvents = data?.map(event => {
       const actualAttendeeCount = enrollmentCountMap.get(event.id) || 0;
@@ -705,23 +739,7 @@ export async function getEventsForFilter(_locale: string = 'tr') {
 
     // Get enrollment counts for all events
     const eventIds = data.map(event => event.id);
-    const { data: enrollmentCounts, error: enrollmentError } = await supabase
-      .from('myuni_event_enrollments')
-      .select('event_id')
-      .in('event_id', eventIds);
-
-    if (enrollmentError) {
-      console.error('Error fetching enrollment counts:', enrollmentError);
-    }
-
-    // Create a map of event_id to enrollment count
-    const enrollmentCountMap = new Map();
-    if (enrollmentCounts) {
-      enrollmentCounts.forEach(enrollment => {
-        const eventId = enrollment.event_id;
-        enrollmentCountMap.set(eventId, (enrollmentCountMap.get(eventId) || 0) + 1);
-      });
-    }
+    const enrollmentCountMap = await fetchEventEnrollmentCountMap(eventIds);
 
     // Transform data to match EventListFilter component expectations
     const transformedEvents = data.map(event => {
@@ -802,23 +820,7 @@ export async function getAllEvents(_locale: string = 'tr') {
 
     // Get enrollment counts for all events
     const eventIds = data.map(event => event.id);
-    const { data: enrollmentCounts, error: enrollmentError } = await supabase
-      .from('myuni_event_enrollments')
-      .select('event_id')
-      .in('event_id', eventIds);
-
-    if (enrollmentError) {
-      console.error('Error fetching enrollment counts:', enrollmentError);
-    }
-
-    // Create a map of event_id to enrollment count
-    const enrollmentCountMap = new Map();
-    if (enrollmentCounts) {
-      enrollmentCounts.forEach(enrollment => {
-        const eventId = enrollment.event_id;
-        enrollmentCountMap.set(eventId, (enrollmentCountMap.get(eventId) || 0) + 1);
-      });
-    }
+    const enrollmentCountMap = await fetchEventEnrollmentCountMap(eventIds);
 
     const transformedEvents = data?.map(event => {
       const actualAttendeeCount = enrollmentCountMap.get(event.id) || 0;
@@ -902,16 +904,8 @@ export async function getEventBySlug(slug: string, locale: string = 'tr') {
     console.log('Found event:', data.title);
 
     // Get actual enrollment count for this event
-    const { data: enrollmentCounts, error: enrollmentError } = await supabase
-      .from('myuni_event_enrollments')
-      .select('event_id')
-      .eq('event_id', data.id);
-
-    if (enrollmentError) {
-      console.error('Error fetching enrollment count:', enrollmentError);
-    }
-
-    const actualAttendeeCount = enrollmentCounts?.length || 0;
+    const enrollmentCountMap = await fetchEventEnrollmentCountMap([data.id]);
+    const actualAttendeeCount = enrollmentCountMap.get(data.id) || 0;
 
     // Get sections safely
     let sections: EventSection[] = [];

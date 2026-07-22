@@ -320,16 +320,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   const checkEnrollmentStatus = useCallback(async () => {
     try {
       setCheckingEnrollment(true);
-      
-      const { data: enrollmentData, error } = await supabase
-        .from('myuni_package_enrollments')
-        .select('id, is_active')
-        .eq('user_id', user?.id)
-        .eq('package_id', course.id)
-        .eq('is_active', true)
-        .maybeSingle();
+      if (!user?.id) return;
 
-      setIsEnrolled(!!enrollmentData);
+      const res = await fetch(
+        `/api/enrollments/package-check?packageId=${encodeURIComponent(course.id)}`
+      );
+      const json = await res.json();
+      setIsEnrolled(!!json.isEnrolled);
     } catch (error) {
       console.error('Error checking enrollment:', error);
     } finally {

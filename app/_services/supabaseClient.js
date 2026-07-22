@@ -158,109 +158,31 @@ export const dbHelpers = {
   },
 
   // Kullanıcının kayıtlı olduğu kursları al
-  async getUserEnrollments(userId, activeOnly = true) {
-    let query = supabase
-      .from('myuni_enrollments')
-      .select(`
-        *,
-        myuni_courses (
-          id,
-          title,
-          slug,
-          description,
-          thumbnail_url,
-          price,
-          duration,
-          level
-        )
-      `)
-      .eq('user_id', userId);
-    
-    if (activeOnly) {
-      query = query.eq('is_active', true);
-    }
-    
-    const { data, error } = await query.order('enrolled_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching user enrollments:', error);
-      return [];
-    }
-    
-    return data || [];
+  // DEPRECATED: use GET /api/enrollments/me
+  async getUserEnrollments(_userId, _activeOnly = true) {
+    console.warn('[supabaseClient.getUserEnrollments] Deprecated: use /api/enrollments/me');
+    return [];
   },
 
   // Kullanıcının belirli bir kursa kayıtlı olup olmadığını kontrol et
-  async checkEnrollment(userId, courseId) {
-    const { data, error } = await supabase
-      .from('myuni_enrollments')
-      .select('id, progress_percentage, is_active')
-      .eq('user_id', userId)
-      .eq('course_id', courseId)
-      .eq('is_active', true)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-      console.error('Error checking enrollment:', error);
-      return null;
-    }
-    
-    return data;
+  // DEPRECATED: use GET /api/enrollments/me?courseId=
+  async checkEnrollment(_userId, _courseId) {
+    console.warn('[supabaseClient.checkEnrollment] Deprecated: use /api/enrollments/me');
+    return null;
   },
 
   // Kullanıcıyı kursa kaydet
-  async enrollUser(userId, courseId) {
-    // Önce zaten kayıtlı olup olmadığını kontrol et
-    const existingEnrollment = await this.checkEnrollment(userId, courseId);
-    
-    if (existingEnrollment) {
-      return { 
-        success: true, 
-        data: existingEnrollment, 
-        message: 'Already enrolled' 
-      };
-    }
-    
-    const { data, error } = await supabase
-      .from('myuni_enrollments')
-      .insert({
-        user_id: userId,
-        course_id: courseId,
-        enrolled_at: new Date().toISOString(),
-        progress_percentage: 0,
-        is_active: true
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error enrolling user:', error);
-      return { success: false, error: error.message };
-    }
-    
-    return { success: true, data };
+  // DEPRECATED: use POST /api/enrollments
+  async enrollUser(_userId, _courseId) {
+    console.warn('[supabaseClient.enrollUser] Deprecated: use POST /api/enrollments');
+    return { success: false, error: 'Use /api/enrollments' };
   },
 
   // Kullanıcının kurs progress'ini güncelle
-  async updateProgress(userId, courseId, progressPercentage) {
-    const { data, error } = await supabase
-      .from('myuni_enrollments')
-      .update({ 
-        progress_percentage: Math.min(100, Math.max(0, progressPercentage)),
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId)
-      .eq('course_id', courseId)
-      .eq('is_active', true)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating progress:', error);
-      return { success: false, error: error.message };
-    }
-    
-    return { success: true, data };
+  // DEPRECATED: use PATCH /api/enrollments
+  async updateProgress(_userId, _courseId, _progressPercentage) {
+    console.warn('[supabaseClient.updateProgress] Deprecated: use PATCH /api/enrollments');
+    return { success: false, error: 'Use /api/enrollments' };
   },
 
   // İndirim kodlarını al
@@ -283,31 +205,18 @@ export const dbHelpers = {
   },
 
   // Kurs istatistiklerini al
+  // DEPRECATED under RLS: enrollment aggregates must go through server APIs
   async getCourseStats() {
-    // Toplam aktif kurs sayısı
+    console.warn('[supabaseClient.getCourseStats] enrollment counts locked; returning course count only');
     const { count: totalCourses } = await supabase
       .from('myuni_courses')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true);
-    
-    // Toplam kayıt sayısı
-    const { count: totalEnrollments } = await supabase
-      .from('myuni_enrollments')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true);
-    
-    // Toplam öğrenci sayısı (unique users)
-    const { data: uniqueStudents } = await supabase
-      .from('myuni_enrollments')
-      .select('user_id')
-      .eq('is_active', true);
-    
-    const uniqueStudentCount = new Set(uniqueStudents?.map(e => e.user_id)).size;
-    
+
     return {
       totalCourses: totalCourses || 0,
-      totalEnrollments: totalEnrollments || 0,
-      totalStudents: uniqueStudentCount || 0
+      totalEnrollments: 0,
+      totalStudents: 0,
     };
   }
 };

@@ -84,24 +84,18 @@ const EventForm: React.FC<EventFormProps> = ({
   const checkRegistrationStatus = async () => {
     try {
       setCheckingRegistration(true);
-      
-      const { data, error } = await supabase
-        .from('myuni_event_enrollments')
-        .select('id, attendance_status')
-        .eq('user_id', user?.id)
-        .eq('event_id', event.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
-        console.error('Error checking registration:', error);
+      if (!user?.id) {
+        setIsRegistered(false);
+        return;
       }
 
-      setIsRegistered(!!data);
-      
-      // Her kontrol sırasında katılımcı sayısını da güncelle
-      await updateAttendeeCount();
+      const res = await fetch(
+        `/api/event-enrollment-check?eventId=${encodeURIComponent(event.id)}`
+      );
+      const json = await res.json();
+      setIsRegistered(!!json.isEnrolled);
     } catch (error) {
-      console.error('Error checking registration status:', error);
+      console.error('Error checking registration:', error);
     } finally {
       setCheckingRegistration(false);
     }

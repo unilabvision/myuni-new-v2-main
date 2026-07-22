@@ -96,18 +96,15 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
         if (courseIds.length > 0) {
           const sinceDate = new Date();
           sinceDate.setDate(sinceDate.getDate() - 30);
-          const [commentsRes, enrollmentsRes] = await Promise.all([
+          const [commentsRes, enrollmentsJson] = await Promise.all([
             supabase
               .from('myuni_comments')
               .select('course_id, rating, status')
               .in('course_id', courseIds)
               .eq('status', 'approved'),
-            supabase
-              .from('myuni_enrollments')
-              .select('course_id, enrolled_at')
-              .in('course_id', courseIds)
-              .eq('is_active', true)
-              .gte('enrolled_at', sinceDate.toISOString())
+            fetch(
+              `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
+            ).then((r) => r.json()).catch(() => ({ success: false, counts: {} })),
           ]);
 
           // Build rating map
@@ -128,12 +125,8 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
           }
 
           // Build popularity map (enrollment counts)
-          if (!enrollmentsRes.error && Array.isArray(enrollmentsRes.data)) {
-            const pMap: Record<string, number> = {};
-            for (const row of enrollmentsRes.data as Array<{ course_id: string }>) {
-              if (!row.course_id) continue;
-              pMap[row.course_id] = (pMap[row.course_id] || 0) + 1;
-            }
+          if (enrollmentsJson.success && enrollmentsJson.counts) {
+            const pMap: Record<string, number> = enrollmentsJson.counts as Record<string, number>;
             setPopularityMap(pMap);
 
             // Top sellers (last 30 days): pick top 3 by enrollments (same as course list)

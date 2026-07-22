@@ -1,7 +1,14 @@
 // hooks/useEnrollment.ts
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { enrollUserInCourse, checkUserEnrollment, EnrollmentResult } from '../lib/enrollmentService';
+
+export interface EnrollmentResult {
+  success: boolean;
+  message: string;
+  enrollment?: unknown;
+  requiresAuth?: boolean;
+  error?: unknown;
+}
 
 export function useEnrollment(courseId: string) {
   const { user, isLoaded } = useUser();
@@ -10,7 +17,6 @@ export function useEnrollment(courseId: string) {
   const [enrollmentChecked, setEnrollmentChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check enrollment status when user and courseId are available
   useEffect(() => {
     async function checkEnrollment() {
       if (!isLoaded || !user || !courseId) {
@@ -19,10 +25,11 @@ export function useEnrollment(courseId: string) {
       }
 
       try {
-        console.log('Checking enrollment for user:', user.id, 'course:', courseId);
-        const enrolled = await checkUserEnrollment(user.id, courseId);
-        console.log('Enrollment status:', enrolled);
-        setIsEnrolled(enrolled);
+        const res = await fetch(
+          `/api/enrollments/me?courseId=${encodeURIComponent(courseId)}`
+        );
+        const json = await res.json();
+        setIsEnrolled(!!json.isEnrolled);
         setError(null);
       } catch (err) {
         console.error('Error checking enrollment:', err);
@@ -41,14 +48,14 @@ export function useEnrollment(courseId: string) {
       return {
         success: false,
         message: 'User not authenticated',
-        requiresAuth: true
+        requiresAuth: true,
       };
     }
 
     if (!courseId) {
       return {
         success: false,
-        message: 'Course ID is required'
+        message: 'Course ID is required',
       };
     }
 
@@ -56,17 +63,18 @@ export function useEnrollment(courseId: string) {
     setError(null);
 
     try {
-      console.log('Starting enrollment process...');
-      const result = await enrollUserInCourse(user.id, courseId);
-      
-      console.log('Enrollment result:', result);
+      const res = await fetch('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId }),
+      });
+      const result = await res.json();
 
       if (result.success) {
         setIsEnrolled(true);
         setError(null);
       } else {
         setError(result.message);
-        console.error('Enrollment failed:', result.error);
       }
 
       return result;
@@ -74,11 +82,11 @@ export function useEnrollment(courseId: string) {
       console.error('Unexpected enrollment error:', err);
       const errorMessage = 'An unexpected error occurred during enrollment';
       setError(errorMessage);
-      
+
       return {
         success: false,
         message: errorMessage,
-        error: err
+        error: err,
       };
     } finally {
       setIsEnrolling(false);
@@ -91,14 +99,16 @@ export function useEnrollment(courseId: string) {
     enrollmentChecked,
     error,
     enroll,
-    // Helper function to refresh enrollment status
     refreshEnrollment: async () => {
       if (user && courseId) {
         setEnrollmentChecked(false);
-        const enrolled = await checkUserEnrollment(user.id, courseId);
-        setIsEnrolled(enrolled);
+        const res = await fetch(
+          `/api/enrollments/me?courseId=${encodeURIComponent(courseId)}`
+        );
+        const json = await res.json();
+        setIsEnrolled(!!json.isEnrolled);
         setEnrollmentChecked(true);
       }
-    }
+    },
   };
 }

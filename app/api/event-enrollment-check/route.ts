@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { supabase } from '../../../lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 // GET: Check if user is enrolled in an event
 export async function GET(request: Request) {
@@ -17,8 +17,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'eventId is required' }, { status: 400 });
     }
 
-    // Check enrollment in event
-    const { data: enrollment, error: enrollmentError } = await supabase
+    const { data: enrollment, error: enrollmentError } = await supabaseAdmin
       .from('myuni_event_enrollments')
       .select('id, attendance_status')
       .eq('user_id', userId)
@@ -34,15 +33,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ isEnrolled: false });
     }
 
-    // Check if attendance status is valid for commenting
     const validStatuses = ['registered', 'attended', 'completed'];
     const isEnrolled = validStatuses.includes(enrollment.attendance_status);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       isEnrolled,
-      attendanceStatus: enrollment.attendance_status 
+      attendanceStatus: enrollment.attendance_status,
     });
-
   } catch (err) {
     console.error('GET /event-enrollment-check error', err);
     return NextResponse.json({ error: 'Failed to check enrollment' }, { status: 500 });

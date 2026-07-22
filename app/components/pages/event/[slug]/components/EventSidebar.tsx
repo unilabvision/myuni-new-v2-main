@@ -173,18 +173,11 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('myuni_event_enrollments')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('event_id', event.id)
-          .single();
-
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
-          console.error('Error checking registration:', error);
-        }
-
-        setIsUserRegistered(!!data);
+        const res = await fetch(
+          `/api/event-enrollment-check?eventId=${encodeURIComponent(event.id)}`
+        );
+        const json = await res.json();
+        setIsUserRegistered(!!json.isEnrolled);
       } catch (error) {
         console.error('Error checking user registration status:', error);
         setIsUserRegistered(false);

@@ -7,7 +7,6 @@ import ReactMarkdown from 'react-markdown';
 import { Clock, Users, Play, CheckCircle, Book, TrendingUp, Award, Download, Calendar, MapPin, Trophy, X, Copy, ChevronDown, ShoppingBag } from 'lucide-react';
 import { getCourseCompletionStats } from '../../../lib/courseService';
 import { supabase } from '../../../lib/supabase';
-import { getUserEventEnrollments } from '../../../lib/eventEnrollmentService';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
 import DashboardOpportunitiesTab from '../../components/dashboard/DashboardOpportunitiesTab';
@@ -366,16 +365,16 @@ function DashboardContent({ locale }: { locale: string }) {
 
       // Paralel olarak hem enrollments hem certificates'ları çek
       const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult, productPurchasesResult] = await Promise.all([
-        // Enrollments
-        supabase
-          .from('myuni_enrollments')
-          .select(`
-            *,
-            course:myuni_courses(*)
-          `)
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .order('enrolled_at', { ascending: false }),
+        // Enrollments via API
+        fetch('/api/enrollments/me')
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({ success: false, data: [] }));
+            if (!res.ok || !json.success) {
+              return { data: null, error: json.error || `HTTP ${res.status}` };
+            }
+            return { data: json.data || [], error: null };
+          })
+          .catch((err) => ({ data: null, error: err })),
         
         // Course Certificates
         supabase
@@ -387,7 +386,7 @@ function DashboardContent({ locale }: { locale: string }) {
           .eq('user_id', userId)
           .eq('is_active', true)
           .order('issue_date', { ascending: false }),
-
+        
         // Event Certificates
         supabase
           .from('myuni_event_certificates')
@@ -399,8 +398,20 @@ function DashboardContent({ locale }: { locale: string }) {
           .eq('is_active', true)
           .order('issue_date', { ascending: false }),
 
-        // Event Enrollments
-        getUserEventEnrollments(userId),
+        // Event Enrollments via API
+        fetch('/api/event-enrollments/me')
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({ success: false, data: [] }));
+            if (!res.ok || !json.success) {
+              console.error('Error fetching event enrollments:', json.error);
+              return [];
+            }
+            return json.data || [];
+          })
+          .catch((err) => {
+            console.error('Error fetching event enrollments:', err);
+            return [];
+          }),
 
         // Discount Codes (owner) — server API + Clerk auth
         fetch('/api/discount-codes/mine')
@@ -510,7 +521,7 @@ function DashboardContent({ locale }: { locale: string }) {
       } else {
         // Her enrollment için progress hesapla
         const enrollmentsWithProgress = await Promise.all(
-          enrollmentsData.map(async (enrollment) => {
+          enrollmentsData.map(async (enrollment: { course_id: string; [key: string]: unknown }) => {
             try {
               console.log(`Calculating progress for course: ${enrollment.course_id}`);
               

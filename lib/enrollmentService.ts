@@ -1,5 +1,6 @@
 // lib/enrollmentService.ts
-import { supabase } from './supabase';
+import 'server-only';
+import { supabaseAdmin as supabase } from './supabaseAdmin';
 
 export interface Enrollment {
   id: string;

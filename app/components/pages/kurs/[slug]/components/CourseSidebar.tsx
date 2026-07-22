@@ -368,57 +368,26 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   const checkEnrollmentStatus = useCallback(async () => {
     try {
       setCheckingEnrollment(true);
+      if (!user?.id) return;
+
+      const res = await fetch(
+        `/api/enrollments/me?courseId=${encodeURIComponent(course.id)}`
+      );
+      const json = await res.json();
 
       if (hasTierPackages) {
-        const { data: fullEnrollment } = await supabase
-          .from('myuni_enrollments')
-          .select('id')
-          .eq('user_id', user?.id)
-          .eq('course_id', course.id)
-          .eq('is_active', true)
-          .is('tier_id', null)
-          .maybeSingle();
-
-        if (fullEnrollment) {
+        if (json.hasFullEnrollment) {
           setIsEnrolled(true);
           setEnrolledTierIds(courseTiers.map((t) => t.id));
           return;
         }
-
-        const { data: tierEnrollments, error: tierError } = await supabase
-          .from('myuni_enrollments')
-          .select('tier_id')
-          .eq('user_id', user?.id)
-          .eq('course_id', course.id)
-          .eq('is_active', true)
-          .not('tier_id', 'is', null);
-
-        if (tierError && tierError.code !== 'PGRST116') {
-          console.error('Tier enrollment check error:', tierError);
-        }
-
-        const ids = (tierEnrollments || [])
-          .map((row) => row.tier_id)
-          .filter(Boolean) as string[];
+        const ids = (json.tierIds || []) as string[];
         setEnrolledTierIds(ids);
-        setIsEnrolled(ids.length > 0);
-        return;
-      }
-      
-      const { data: enrollmentData, error } = await supabase
-        .from('myuni_enrollments')
-        .select('id, is_active')
-        .eq('user_id', user?.id)
-        .eq('course_id', course.id)
-        .eq('is_active', true)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Enrollment check error:', error);
+        setIsEnrolled(ids.length > 0 || !!json.isEnrolled);
         return;
       }
 
-      setIsEnrolled(!!enrollmentData);
+      setIsEnrolled(!!json.isEnrolled);
     } catch (error) {
       console.error('Error checking enrollment:', error);
     } finally {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { supabase } from '../../../lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { sendCommentNotifications } from '../../_services/commentNotificationService';
 
 function toInitials(firstName?: string | null, lastName?: string | null): string {
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
     }
 
     // Check enrollment: user must have enrollment for this event
-    const { data: enrollment, error: enrollmentError } = await supabase
+    const { data: enrollment, error: enrollmentError } = await supabaseAdmin
       .from('myuni_event_enrollments')
       .select('id, attendance_status')
       .eq('user_id', userId)

@@ -12,14 +12,6 @@ import {
   markLessonCompleted
 } from '../../../../../lib/courseService';
 
-// Import updated enrollment service
-import { 
-  enrollUserInCourse, 
-  checkUserEnrollmentStatus,
-  markWelcomeAsShown,
-  updateCourseProgress
-} from '../../../../../lib/enrollmentService';
-
 // Import certificate service
 import { 
   checkCertificateEligibility, 
@@ -348,7 +340,14 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
       console.log('Course data loaded:', courseData.course.id);
 
       console.log('Checking user enrollment status...');
-      const enrollmentStatus = await checkUserEnrollmentStatus(user.id, courseData.course.id);
+      const enrollRes = await fetch(
+        `/api/enrollments/me?courseId=${encodeURIComponent(courseData.course.id)}`
+      );
+      const enrollJson = await enrollRes.json();
+      const enrollmentStatus = {
+        isEnrolled: !!enrollJson.isEnrolled,
+        welcomeShown: !!enrollJson.welcomeShown,
+      };
       console.log('Enrollment status:', enrollmentStatus);
 
       setIsEnrolled(enrollmentStatus.isEnrolled);
@@ -474,9 +473,14 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
         
         // Kurs ilerleme yüzdesini veritabanında da güncelle
         if (user?.id && course?.id) {
-          updateCourseProgress(user.id, course.id, progress)
-            .then(result => console.log('Course progress updated in database:', result))
-            .catch(err => console.error('Error updating course progress in database:', err));
+          fetch('/api/enrollments', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseId: course.id, progressPercentage: progress }),
+          })
+            .then((r) => r.json())
+            .then((result) => console.log('Course progress updated in database:', result))
+            .catch((err) => console.error('Error updating course progress in database:', err));
         }
         
         return {
@@ -509,7 +513,12 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
       setEnrollmentLoading(true);
       console.log('Starting enrollment process...');
       
-      const result = await enrollUserInCourse(user.id, course.id);
+      const resultRes = await fetch('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: course.id }),
+      });
+      const result = await resultRes.json();
       console.log('Enrollment result:', result);
 
       if (result.success) {
@@ -537,7 +546,13 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
 
     try {
       // Mark welcome as shown in database
-      const success = await markWelcomeAsShown(user.id, course.id);
+      const welcomeRes = await fetch('/api/enrollments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: course.id, welcomeShown: true }),
+      });
+      const welcomeJson = await welcomeRes.json();
+      const success = !!welcomeJson.success;
       
       if (success) {
         console.log('Welcome marked as shown in database');

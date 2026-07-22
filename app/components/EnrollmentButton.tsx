@@ -44,41 +44,18 @@ export default function EnrollmentButton({
   const checkEnrollmentStatus = useCallback(async () => {
     try {
       setCheckingEnrollment(true);
-      
-      // Clerk user objesini tamamen debug et
-      console.log('=== CLERK USER DEBUG ===');
-      console.log('Full user object:', user);
-      console.log('user.id:', user?.id);
-      console.log('user.primaryEmailAddress?.emailAddress:', user?.primaryEmailAddress?.emailAddress);
-      console.log('user.emailAddresses:', user?.emailAddresses);
-      console.log('user.externalId:', user?.externalId);
-      console.log('========================');
-      
-      // Clerk user ID'sini doğru şekilde al
+
       const clerkUserId = user?.id;
-      console.log('Using Clerk user ID for enrollment check:', clerkUserId, 'course:', courseId);
-      
       if (!clerkUserId) {
-        console.log('No Clerk user ID found');
         setCheckingEnrollment(false);
         return;
       }
-      
-      const { data, error } = await supabase
-        .from('myuni_enrollments')
-        .select('id, is_active')
-        .eq('user_id', clerkUserId) // Clerk user ID kullan
-        .eq('course_id', courseId)
-        .eq('is_active', true)
-        .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('Enrollment check error:', error);
-        return;
-      }
-
-      console.log('Enrollment check result:', data);
-      setIsEnrolled(!!data);
+      const res = await fetch(
+        `/api/enrollments/me?courseId=${encodeURIComponent(courseId)}`
+      );
+      const json = await res.json();
+      setIsEnrolled(!!json.isEnrolled);
     } catch (error) {
       console.error('Error checking enrollment:', error);
     } finally {
@@ -212,108 +189,30 @@ export default function EnrollmentButton({
   const enrollDirectly = async (courseTitle: string) => {
     try {
       console.log('Direct enrollment starting for:', courseTitle);
-      
-      // Clerk user objesini tamamen debug et
-      console.log('=== ENROLLMENT USER DEBUG ===');
-      console.log('Full user object:', user);
-      console.log('user.id:', user?.id);
-      console.log('user.primaryEmailAddress?.emailAddress:', user?.primaryEmailAddress?.emailAddress);
-      console.log('user.emailAddresses:', user?.emailAddresses);
-      console.log('user.externalId:', user?.externalId);
-      console.log('typeof user.id:', typeof user?.id);
-      console.log('==============================');
-      
-      // Clerk user ID'sini doğru şekilde al
+
       const clerkUserId = user?.id;
-      
+
       if (!clerkUserId) {
         console.error('No Clerk user ID found for enrollment');
         alert('Kullanıcı bilgisi bulunamadı. Lütfen tekrar giriş yapın.');
         return;
       }
 
-      // ID'nin gerçekten Clerk ID olduğunu doğrula
-      if (clerkUserId.includes('@') || !clerkUserId.startsWith('user_')) {
-        console.error('WARNING: This does not look like a valid Clerk user ID:', clerkUserId);
-        console.error('Expected format: user_xxxxxxxxxx but got:', clerkUserId);
+      const res = await fetch('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId }),
+      });
+      const result = await res.json();
+
+      if (!result.success) {
+        console.error('Direct enrollment error:', result);
+        throw new Error(result.message || 'Enrollment failed');
       }
 
-      console.log('Using Clerk User ID for enrollment:', clerkUserId);
-      console.log('Clerk User ID type:', typeof clerkUserId);
-      console.log('Clerk User ID length:', clerkUserId.length);
-      
-      // Önce mevcut kaydı kontrol et
-      const { data: existingEnrollment, error: checkError } = await supabase
-        .from('myuni_enrollments')
-        .select('id, is_active')
-        .eq('user_id', clerkUserId) // Clerk user ID kullan
-        .eq('course_id', courseId)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Existing enrollment check error:', checkError);
-        throw checkError;
-      }
-
-      if (existingEnrollment && existingEnrollment.is_active) {
-        console.log('User already enrolled, updating state');
-        setIsEnrolled(true);
-        router.push(`/${locale}/watch/${courseSlug}`);
-        return;
-      }
-
-      // Yeni kayıt oluştur veya eskisini aktif et
-      if (existingEnrollment && !existingEnrollment.is_active) {
-        // Mevcut kaydı aktif et
-        console.log('Reactivating existing enrollment:', existingEnrollment.id);
-        const { error: updateError } = await supabase
-          .from('myuni_enrollments')
-          .update({
-            is_active: true,
-            enrolled_at: new Date().toISOString(),
-            progress_percentage: 0
-          })
-          .eq('id', existingEnrollment.id);
-
-        if (updateError) {
-          console.error('Enrollment update error:', updateError);
-          throw updateError;
-        }
-
-        console.log('Existing enrollment reactivated successfully');
-      } else {
-        // Yeni kayıt oluştur
-        console.log('Creating new enrollment with Clerk User ID:', clerkUserId);
-        
-        const enrollmentData = {
-          user_id: clerkUserId, // Clerk user ID'sini doğru şekilde kullan
-          course_id: courseId,
-          enrolled_at: new Date().toISOString(),
-          progress_percentage: 0,
-          is_active: true
-        };
-
-        console.log('Enrollment data to insert:', enrollmentData);
-
-        const { data, error } = await supabase
-          .from('myuni_enrollments')
-          .insert(enrollmentData)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Direct enrollment error:', error);
-          console.error('Error details:', error.details);
-          console.error('Error hint:', error.hint);
-          console.error('Error message:', error.message);
-          throw error;
-        }
-
-        console.log('Direct enrollment successful:', data);
-      }
-
+      console.log('Direct enrollment successful:', result);
       setIsEnrolled(true);
-      
+
       // Başarı sayfasına yönlendir
       const successUrl = `/${locale}/payment-success?courseId=${encodeURIComponent(courseId)}&name=${encodeURIComponent(courseTitle)}&free=true`;
       console.log('Redirecting to success page:', successUrl);

@@ -13,12 +13,6 @@ import {
   UserEventProgress
 } from '../../../../../lib/eventService';
 
-// Import updated enrollment service
-import {
-  enrollUserInEvent,
-  checkUserEventEnrollmentStatus
-} from '../../../../../lib/eventEnrollmentService';
-
 // Import certificate service
 import {
   checkEventCertificateEligibility,
@@ -461,7 +455,11 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
         return;
       }
 
-      const enrollmentStatus = await checkUserEventEnrollmentStatus(user.id, eventData.event.id);
+      const enrollRes = await fetch(
+        `/api/event-enrollment-check?eventId=${encodeURIComponent(eventData.event.id)}`
+      );
+      const enrollJson = await enrollRes.json();
+      const enrollmentStatus = { isEnrolled: !!enrollJson.isEnrolled };
       setIsEnrolled(enrollmentStatus.isEnrolled);
 
       if (!enrollmentStatus.isEnrolled) {
@@ -726,14 +724,23 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     try {
       setEnrollmentLoading(true);
 
-      const result = await enrollUserInEvent(user.id, event.id);
+      const resultRes = await fetch('/api/event-enrollment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          userEmail: user.emailAddresses?.[0]?.emailAddress,
+          userName: [user.firstName, user.lastName].filter(Boolean).join(' '),
+        }),
+      });
+      const result = await resultRes.json();
 
       if (result.success) {
         setIsEnrolled(true);
         setError(null);
         await fetchEventData();
       } else {
-        setError(result.message);
+        setError(result.error || result.message || 'Failed to enroll');
       }
     } catch (err) {
       console.error('Enrollment error:', err);

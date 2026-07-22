@@ -1,20 +1,13 @@
-// lib/eventUtils.ts
-import { supabase } from './supabase';
-
-// Etkinlik için katılımcı sayısını dinamik olarak hesapla
+// lib/eventUtils.ts — client-safe attendee count via API
 export async function getEventAttendeeCount(eventId: string): Promise<number> {
   try {
-    const { count, error } = await supabase
-      .from('myuni_event_enrollments')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_id', eventId);
-
-    if (error) {
-      console.error('Error counting event attendees:', error);
-      return 0;
-    }
-
-    return count || 0;
+    const response = await fetch(
+      `/api/event-enrollments/counts?eventIds=${encodeURIComponent(eventId)}`
+    );
+    if (!response.ok) return 0;
+    const json = await response.json();
+    if (!json.success) return 0;
+    return Number(json.counts?.[eventId] || 0);
   } catch (error) {
     console.error('Error counting event attendees:', error);
     return 0;

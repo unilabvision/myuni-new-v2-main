@@ -1,6 +1,7 @@
 // app/api/course-comments/route.ts
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { sendCommentNotifications } from '@/app/_services/commentNotificationService';
 
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     }
 
     // Check enrollment: user must have active enrollment for this course
-    const { data: enrollment, error: enrollmentError } = await supabase
+    const { data: enrollment, error: enrollmentError } = await supabaseAdmin
       .from('myuni_enrollments')
       .select('id')
       .eq('user_id', userId)

@@ -5,7 +5,6 @@ import { User, Linkedin, Mail, Lock, Edit2, Trash2, X, Check } from 'lucide-reac
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 import { useUser } from '@clerk/nextjs';
-import { checkUserEnrollment } from '../../../../../../lib/enrollmentService';
 
 // Supabase client'ı oluşturun
 const supabase = createClient(
@@ -117,8 +116,11 @@ const CourseMainContent: React.FC<CourseMainContentProps> = ({
       }
 
       try {
-        const enrolled = await checkUserEnrollment(user.id, course.id);
-        setIsEnrolled(enrolled);
+        const res = await fetch(
+          `/api/enrollments/me?courseId=${encodeURIComponent(course.id)}`
+        );
+        const json = await res.json();
+        setIsEnrolled(!!json.isEnrolled);
       } catch (err) {
         console.error('Error checking enrollment:', err);
         setIsEnrolled(false);
