@@ -16,7 +16,10 @@ node_modules
 .env.development
 .env.test
 .env.production
-
-
-
-
+.vscode/
+.cursorrules/
+.test_prompt.mjs/
+.supabase/
+.test_prompt.mjs
+.supabase/
+.test_prompt.mjs

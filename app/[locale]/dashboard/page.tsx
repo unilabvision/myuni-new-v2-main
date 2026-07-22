@@ -9,6 +9,7 @@ import { getCourseCompletionStats } from '../../../lib/courseService';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
 import DashboardOpportunitiesTab from '../../components/dashboard/DashboardOpportunitiesTab';
+import DashboardOrdersTab from '../../components/dashboard/DashboardOrdersTab';
 
 // Types
 interface Enrollment {
@@ -148,7 +149,32 @@ const texts = {
       certificates: "Sertifikalarım",
       competitions: "Yarışmalarım",
       discountCodes: "İndirim Kodlarım",
-      opportunities: "Staj & Kariyer"
+      opportunities: "Staj & Kariyer",
+      orders: "Siparişlerim"
+    },
+    orders: {
+      emptyTitle: "Henüz siparişiniz yok",
+      emptySubtitle: "Satın aldığınız kurs ve ürünler burada görünecek",
+      orderNo: "Sipariş No",
+      listTotal: "Liste toplamı",
+      discount: "İndirim",
+      paidTotal: "Ödenen tutar",
+      free: "Ücretsiz",
+      details: "Detay",
+      paymentMethod: "Ödeme",
+      close: "Kapat",
+      status: {
+        completed: "Tamamlandı",
+        pending: "Beklemede",
+        failed: "Başarısız",
+        free: "Ücretsiz"
+      },
+      types: {
+        course: "Kurs",
+        product: "Ürün",
+        package: "Paket",
+        tier: "Seviye"
+      }
     },
     competitionCard: {
       viewResult: "Sonucu Gör",
@@ -200,6 +226,9 @@ const texts = {
       },
       competitions: {
         title: "Henüz bir yarışmaya kaydolmadınız"
+      },
+      orders: {
+        title: "Henüz siparişiniz yok"
       }
     },
     loading: "Yükleniyor...",
@@ -216,6 +245,31 @@ const texts = {
       competitions: "My Competitions",
       discountCodes: "My Discount Codes",
       opportunities: "Internships & Career",
+      orders: "My Orders",
+    },
+    orders: {
+      emptyTitle: "No orders yet",
+      emptySubtitle: "Courses and products you purchase will appear here",
+      orderNo: "Order No",
+      listTotal: "List total",
+      discount: "Discount",
+      paidTotal: "Amount paid",
+      free: "Free",
+      details: "Details",
+      paymentMethod: "Payment",
+      close: "Close",
+      status: {
+        completed: "Completed",
+        pending: "Pending",
+        failed: "Failed",
+        free: "Free"
+      },
+      types: {
+        course: "Course",
+        product: "Product",
+        package: "Package",
+        tier: "Tier"
+      }
     },
     competitionCard: {
       viewResult: "View Result",
@@ -267,6 +321,9 @@ const texts = {
       },
       competitions: {
         title: "You haven't enrolled in any competitions yet"
+      },
+      orders: {
+        title: "No orders yet"
       }
     },
     loading: "Loading...",
@@ -323,7 +380,7 @@ function DashboardContent({ locale }: { locale: string }) {
   const tabParam = searchParams ? searchParams.get('tab') : null;
 
   useEffect(() => {
-    if (tabParam && ['courses', 'events', 'collection', 'certificates', 'competitions', 'discountCodes', 'opportunities'].includes(tabParam)) {
+    if (tabParam && ['courses', 'events', 'collection', 'certificates', 'competitions', 'discountCodes', 'opportunities', 'orders'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -1950,10 +2007,20 @@ function DashboardContent({ locale }: { locale: string }) {
             >
               {t.tabs.opportunities}
             </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-xs ${
+                activeTab === 'orders'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.orders}
+            </button>
           </div>
 
           {/* Desktop: Horizontal Flex */}
-          <div className="hidden sm:flex space-x-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-lg max-w-4xl">
+          <div className="hidden sm:flex flex-wrap gap-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-lg max-w-5xl">
             <button
               onClick={() => setActiveTab('courses')}
               className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 text-sm lg:text-base ${
@@ -2023,6 +2090,16 @@ function DashboardContent({ locale }: { locale: string }) {
               }`}
             >
               {t.tabs.opportunities}
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 text-sm lg:text-base ${
+                activeTab === 'orders'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
+              }`}
+            >
+              {t.tabs.orders}
             </button>
           </div>
         </div>
@@ -2407,6 +2484,10 @@ function DashboardContent({ locale }: { locale: string }) {
 
         {activeTab === 'opportunities' && (
           <DashboardOpportunitiesTab locale={locale} />
+        )}
+
+        {activeTab === 'orders' && (
+          <DashboardOrdersTab locale={locale} texts={t.orders} />
         )}
       </div>
     </div>
