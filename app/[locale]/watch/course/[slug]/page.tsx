@@ -16,7 +16,7 @@ import {
 import { 
   checkCertificateEligibility, 
   getUserCertificate 
-} from '../../../../../lib/certificateService';
+} from '../../../../../lib/certificateApi';
 
 // Import all components
 import CourseSidebar from '../../../../components/course/CourseSidebar';

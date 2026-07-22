@@ -1,6 +1,17 @@
 // lib/courseService.ts - Complete Fixed Version
 
 import { supabase } from './supabase';
+import {
+  getUserCourseProgress as apiGetUserCourseProgress,
+  getUserLessonProgress as apiGetUserLessonProgress,
+  getCourseCompletionStats as apiGetCourseCompletionStats,
+  getLatestQuizResult as apiGetLatestQuizResult,
+  updateUserProgress as apiUpdateUserProgress,
+  markLessonCompleted as apiMarkLessonCompleted,
+  updateVideoPosition as apiUpdateVideoPosition,
+  saveQuizResult as apiSaveQuizResult,
+  getCourseAnalytics as apiGetCourseAnalytics,
+} from './progressApi';
 
 // ========================================
 // INTERFACES & TYPES
@@ -165,126 +176,26 @@ export async function getAllCourses(locale: string = 'tr') {
 
 export async function getUserAnalytics(userId: string, courseId: string) {
   try {
-    console.log('=== FETCHING USER ANALYTICS ===');
-    console.log({ userId, courseId });
+    const [progress, analytics] = await Promise.all([
+      apiGetUserCourseProgress(userId, courseId),
+      apiGetCourseAnalytics(userId, courseId),
+    ]);
 
-    // Get user's course progress
-    const progress = await getUserCourseProgress(userId, courseId);
-    
-    // Get user's enrollment info
-    const enrollment = await getUserEnrollment(userId, courseId);
-    
-    // Generate analytics data for the last 30 days
-    const analytics = await generateUserAnalytics(userId, courseId);
+    let enrollment = null;
+    try {
+      const res = await fetch(`/api/enrollments/me?courseId=${encodeURIComponent(courseId)}`);
+      const json = await res.json();
+      if (res.ok && json.success) {
+        enrollment = json.enrollment || null;
+      }
+    } catch {
+      enrollment = null;
+    }
 
-    return {
-      analytics,
-      progress,
-      enrollment
-    };
+    return { analytics, progress, enrollment };
   } catch (error) {
     console.error('Error fetching user analytics:', error);
     throw error;
-  }
-}
-
-async function generateUserAnalytics(userId: string, courseId: string) {
-  try {
-    // Get all lessons for the course to calculate daily analytics
-    const { data: lessons, error: lessonsError } = await supabase
-      .from('myuni_course_lessons')
-      .select(`
-        id,
-        myuni_course_sections!inner(
-          course_id
-        )
-      `)
-      .eq('myuni_course_sections.course_id', courseId)
-      .eq('is_active', true);
-
-    if (lessonsError) throw lessonsError;
-    if (!lessons || lessons.length === 0) return [];
-
-    const lessonIds = lessons.map(lesson => lesson.id);
-
-    // Get user progress data with timestamps
-    const { data: progressData, error: progressError } = await supabase
-      .from('myuni_user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .in('lesson_id', lessonIds)
-      .order('updated_at', { ascending: false });
-
-    if (progressError) throw progressError;
-
-    // Generate daily analytics for the last 30 days
-    const analytics = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
-      
-      // Find progress updates for this day
-      const dayProgress = progressData?.filter(p => {
-        const progressDate = new Date(p.updated_at || p.created_at).toISOString().split('T')[0];
-        return progressDate === dateString;
-      }) || [];
-
-      // Calculate daily metrics
-      const totalWatchTimeMinutes = dayProgress.reduce((acc, p) => 
-        acc + Math.floor((p.watch_time_seconds || 0) / 60), 0
-      );
-      
-      const lessonsCompleted = dayProgress.filter(p => 
-        p.is_completed && p.completed_at && 
-        new Date(p.completed_at).toISOString().split('T')[0] === dateString
-      ).length;
-
-      const videosWatched = dayProgress.filter(p => 
-        p.watch_time_seconds && p.watch_time_seconds > 0
-      ).length;
-
-      const quizzesAttempted = dayProgress.filter(p => 
-        p.quiz_attempts && p.quiz_attempts > 0 &&
-        p.last_quiz_attempt_at &&
-        new Date(p.last_quiz_attempt_at).toISOString().split('T')[0] === dateString
-      ).length;
-
-      const quizzesPassed = dayProgress.filter(p => 
-        p.quiz_score && p.quiz_score >= 70 && // Assuming 70 is passing score
-        p.last_quiz_attempt_at &&
-        new Date(p.last_quiz_attempt_at).toISOString().split('T')[0] === dateString
-      ).length;
-
-      const notesCreated = dayProgress.filter(p => 
-        p.notes && p.notes.trim().length > 0
-      ).length;
-
-      analytics.push({
-        session_date: dateString,
-        user_id: userId,
-        course_id: courseId,
-        total_watch_time_minutes: totalWatchTimeMinutes,
-        lessons_completed: lessonsCompleted,
-        videos_watched: videosWatched,
-        quizzes_attempted: quizzesAttempted,
-        quizzes_passed: quizzesPassed,
-        quizzes_failed: quizzesAttempted - quizzesPassed,
-        quiz_time_minutes: Math.floor(totalWatchTimeMinutes * 0.2), // Estimate
-        notes_created: notesCreated,
-        session_count: dayProgress.length > 0 ? 1 : 0,
-        avg_quiz_score: dayProgress.length > 0 
-          ? dayProgress.reduce((acc, p) => acc + (p.quiz_score || 0), 0) / dayProgress.length 
-          : 0
-      });
-    }
-
-    return analytics.filter(a => a.session_count > 0); // Only return days with activity
-  } catch (error) {
-    console.error('Error generating user analytics:', error);
-    return [];
   }
 }
 
@@ -501,41 +412,7 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
 
 export async function getLatestQuizResult(userId: string, quickId: string) {
   try {
-    console.log('=== FETCHING LATEST QUIZ RESULT ===');
-    console.log({ userId, quickId });
-
-    // Fetch the lesson_id associated with the quickId
-    const { data: quickData, error: quickError } = await supabase
-      .from('myuni_quicks')
-      .select('lesson_id')
-      .eq('id', quickId)
-      .single();
-
-    if (quickError) throw quickError;
-    if (!quickData?.lesson_id) throw new Error('Lesson not found for the given quick ID');
-
-    // Fetch the latest progress entry for the user and lesson
-    const { data, error } = await supabase
-      .from('myuni_user_progress')
-      .select('quiz_score, quiz_attempts, last_quiz_attempt_at, is_completed')
-      .eq('user_id', userId)
-      .eq('lesson_id', quickData.lesson_id)
-      .order('last_quiz_attempt_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-
-    if (!data) {
-      return null; // No quiz result found
-    }
-
-    return {
-      score: data.quiz_score || 0,
-      attempts: data.quiz_attempts || 0,
-      lastAttemptAt: data.last_quiz_attempt_at,
-      isPassed: data.is_completed || false,
-    };
+    return await apiGetLatestQuizResult(userId, quickId);
   } catch (error) {
     console.error('Error fetching latest quiz result:', error);
     throw error;
@@ -1040,149 +917,27 @@ export async function enrollUserToCourse(userId: string, courseId: string) {
 }
 
 // ========================================
-// USER PROGRESS
+// USER PROGRESS (via authenticated APIs)
 // ========================================
 
 export async function getUserCourseProgress(userId: string, courseId: string) {
-  try {
-    console.log('=== FETCHING USER COURSE PROGRESS ===');
-    console.log('userId:', userId, 'courseId:', courseId);
-
-    const { data: lessons, error: lessonsError } = await supabase
-      .from('myuni_course_lessons')
-      .select(`
-        id,
-        title,
-        lesson_type,
-        duration_minutes,
-        order_index,
-        section_id,
-        myuni_course_sections!inner(
-          course_id
-        )
-      `)
-      .eq('myuni_course_sections.course_id', courseId)
-      .eq('is_active', true);
-
-    if (lessonsError) throw lessonsError;
-    if (!lessons || lessons.length === 0) return [];
-
-    const lessonIds = lessons.map(lesson => lesson.id);
-
-    const { data: progressData, error: progressError } = await supabase
-      .from('myuni_user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .in('lesson_id', lessonIds);
-
-    if (progressError) throw progressError;
-
-    const progressMap = new Map(progressData?.map(p => [p.lesson_id, p]) || []);
-
-    const result = lessons.map(lesson => {
-      const progress = progressMap.get(lesson.id);
-      return {
-        lesson_id: lesson.id,
-        lesson_title: lesson.title,
-        lesson_type: lesson.lesson_type,
-        duration_minutes: lesson.duration_minutes,
-        order_index: lesson.order_index,
-        section_id: lesson.section_id,
-        is_completed: progress?.is_completed || false,
-        watch_time_seconds: progress?.watch_time_seconds || 0,
-        last_position_seconds: progress?.last_position_seconds || 0,
-        completed_at: progress?.completed_at,
-        notes: progress?.notes || '',
-        quiz_score: progress?.quiz_score || null,
-        progress_created_at: progress?.created_at,
-        progress_updated_at: progress?.updated_at
-      };
-    });
-
-    return result;
-  } catch (error) {
-    console.error('Error fetching user course progress:', error);
-    throw error;
-  }
+  return apiGetUserCourseProgress(userId, courseId);
 }
 
 export async function getUserLessonProgress(userId: string, lessonId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('myuni_user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('lesson_id', lessonId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-
-    return data || {
-      user_id: userId,
-      lesson_id: lessonId,
-      watch_time_seconds: 0,
-      is_completed: false,
-      last_position_seconds: 0,
-      notes: '',
-      quiz_score: null
-    };
-  } catch (error) {
-    console.error('Error fetching user lesson progress:', error);
-    throw error;
-  }
+  return apiGetUserLessonProgress(userId, lessonId);
 }
 
 export async function markLessonCompleted(userId: string, lessonId: string, watchTimeSeconds?: number) {
-  try {
-    const progressData: Record<string, unknown> = { is_completed: true };
-    if (watchTimeSeconds !== undefined) {
-      progressData.watch_time_seconds = watchTimeSeconds;
-    }
-    return await updateUserProgress(userId, lessonId, progressData);
-  } catch (error) {
-    console.error('Error marking lesson completed:', error);
-    throw error;
-  }
+  return apiMarkLessonCompleted(userId, lessonId, watchTimeSeconds);
 }
 
 export async function updateVideoPosition(userId: string, lessonId: string, positionSeconds: number, totalWatchTime?: number) {
-  try {
-    const progressData: Record<string, unknown> = { last_position_seconds: positionSeconds };
-    if (totalWatchTime !== undefined) {
-      progressData.watch_time_seconds = totalWatchTime;
-    }
-    return await updateUserProgress(userId, lessonId, progressData);
-  } catch (error) {
-    console.error('Error updating video position:', error);
-    throw error;
-  }
+  return apiUpdateVideoPosition(userId, lessonId, positionSeconds, totalWatchTime);
 }
 
 export async function getCourseCompletionStats(userId: string, courseId: string) {
-  try {
-    const progressData = await getUserCourseProgress(userId, courseId);
-    
-    const totalLessons = progressData.length;
-    const completedLessons = progressData.filter(p => p.is_completed).length;
-    const totalWatchTime = progressData.reduce((acc, p) => acc + (p.watch_time_seconds || 0), 0);
-    
-    // ✅ Progress hesaplamasını düzelttik - Math.min ile maksimum %100 garantisi
-    const completionPercentage = totalLessons > 0 ? 
-      Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
-
-    return {
-      totalLessons,
-      completedLessons,
-      completionPercentage,
-      totalWatchTimeSeconds: totalWatchTime,
-      totalWatchTimeMinutes: Math.round(totalWatchTime / 60),
-      lastActiveDate: progressData.length > 0 ? 
-        Math.max(...progressData.map(p => p.progress_updated_at ? new Date(p.progress_updated_at).getTime() : 0)) : null
-    };
-  } catch (error) {
-    console.error('Error getting course completion stats:', error);
-    throw error;
-  }
+  return apiGetCourseCompletionStats(userId, courseId);
 }
 
 export const saveQuizResult = async (
@@ -1191,84 +946,7 @@ export const saveQuizResult = async (
   quickId: string,
   score: number
 ) => {
-  try {
-    console.log('=== SAVING QUIZ RESULT ===');
-    console.log({ userId, lessonId, quickId, score });
-
-    // Adım 1: Quiz yapılandırmasını al
-    const { data: quickData, error: quickError } = await supabase
-      .from('myuni_quicks')
-      .select('config, lesson_id')
-      .eq('id', quickId)
-      .single();
-
-    if (quickError) throw quickError;
-
-    const configData = quickData?.config as Record<string, unknown> || {};
-    const passingScore = (configData.passing_score as number) || 70;
-    const isPassed = score >= passingScore;
-
-    // Adım 2: Mevcut ilerlemeyi kontrol et
-    const { data: currentProgress, error: progressError } = await supabase
-      .from('myuni_user_progress')
-      .select('quiz_attempts, quiz_score, is_completed')
-      .eq('user_id', userId)
-      .eq('lesson_id', lessonId)
-      .single();
-
-    // Hata PGRST116 (sonuç bulunamadı) değilse gerçek bir hatadır
-    if (progressError && progressError.code !== 'PGRST116') throw progressError;
-
-    const currentAttempts = currentProgress?.quiz_attempts || 0;
-    const newAttempts = currentAttempts + 1;
-    const wasCompletedBefore = currentProgress?.is_completed || false;
-
-    // Şu durumlarda skoru güncelle:
-    // 1. Daha önce hiç quiz skoru yoksa
-    // 2. Yeni skor daha yüksekse
-    // 3. Bu denemede geçtiyse
-    const shouldUpdateScore = !currentProgress?.quiz_score || 
-                             score > currentProgress.quiz_score || 
-                             isPassed;
-
-    // Adım 3: İlerlemeyi güncelle
-    console.log('Updating user progress with:', {
-      is_completed: isPassed,
-      quiz_score: shouldUpdateScore ? score : currentProgress?.quiz_score,
-      quiz_attempts: newAttempts
-    });
-
-    const progressData = await updateUserProgress(userId, lessonId, {
-      is_completed: isPassed,
-      quiz_score: shouldUpdateScore ? score : currentProgress?.quiz_score,
-      quiz_attempts: newAttempts,
-      last_quiz_attempt_at: new Date().toISOString()
-    });
-
-    // Eğer kurs bölümünde çoklu içerik varsa, onları da kontrol et
-    // Bu içeriklerin hepsinin tamamlanıp tamamlanmadığını kontrol etmek için
-    // Şu an bunu yapmıyoruz, gerekirse ileride eklenir
-
-    console.log('Quiz result saved successfully', {
-      attempts: newAttempts,
-      score: shouldUpdateScore ? score : currentProgress?.quiz_score,
-      passed: isPassed,
-      wasCompletedBefore
-    });
-
-    return { 
-      success: true, 
-      progressData,
-      isPassed,
-      passingScore,
-      attempts: newAttempts,
-      isNewBestScore: shouldUpdateScore && score > (currentProgress?.quiz_score || 0),
-      wasCompletedBefore
-    };
-  } catch (error) {
-    console.error('saveQuizResult error:', error);
-    throw error;
-  }
+  return apiSaveQuizResult(userId, lessonId, quickId, score);
 };
 
 export async function updateUserProgress(userId: string, lessonId: string, progressData: {
@@ -1282,85 +960,7 @@ export async function updateUserProgress(userId: string, lessonId: string, progr
   video_watch_count?: number;
   last_video_watch_at?: string;
 }) {
-  try {
-    console.log('=== UPDATING USER PROGRESS ===');
-    console.log('userId:', userId, 'lessonId:', lessonId);
-    console.log('progressData:', progressData);
-
-    const updateData: Record<string, unknown> = {
-      user_id: userId,
-      lesson_id: lessonId,
-      updated_at: new Date().toISOString()
-    };
-
-    if (progressData.watch_time_seconds !== undefined) {
-      updateData.watch_time_seconds = progressData.watch_time_seconds;
-    }
-    if (progressData.is_completed !== undefined) {
-      updateData.is_completed = progressData.is_completed;
-      
-      // Eğer is_completed true olarak ayarlandıysa ve completed_at daha önce ayarlanmadıysa,
-      // şimdi ayarla
-      if (progressData.is_completed === true) {
-        updateData.completed_at = new Date().toISOString();
-      }
-    }
-    if (progressData.last_position_seconds !== undefined) {
-      updateData.last_position_seconds = progressData.last_position_seconds;
-    }
-    if (progressData.notes !== undefined) {
-      updateData.notes = progressData.notes;
-    }
-    if (progressData.quiz_score !== undefined) {
-      updateData.quiz_score = progressData.quiz_score;
-    }
-    if (progressData.quiz_attempts !== undefined) {
-      updateData.quiz_attempts = progressData.quiz_attempts;
-    }
-    if (progressData.last_quiz_attempt_at !== undefined) {
-      updateData.last_quiz_attempt_at = progressData.last_quiz_attempt_at;
-    }
-    if (progressData.video_watch_count !== undefined) {
-      updateData.video_watch_count = progressData.video_watch_count;
-    }
-    if (progressData.last_video_watch_at !== undefined) {
-      updateData.last_video_watch_at = progressData.last_video_watch_at;
-    }
-
-    // Daha önce veritabanında kayıt var mı kontrol et
-    const { data: existingRecord } = await supabase
-      .from('myuni_user_progress')
-      .select('completed_at, is_completed')
-      .eq('user_id', userId)
-      .eq('lesson_id', lessonId)
-      .maybeSingle();
-
-    // Eğer kayıt varsa ve daha önce tamamlanmışsa, completed_at'i koruyalım
-    if (existingRecord && existingRecord.is_completed && existingRecord.completed_at) {
-      console.log('Existing record already completed at:', existingRecord.completed_at);
-      // Sadece ilk kez tamamlandığında completed_at'i güncelle
-      if (updateData.is_completed === true && !updateData.completed_at) {
-        updateData.completed_at = existingRecord.completed_at;
-      }
-    }
-
-    console.log('Final update data:', updateData);
-
-    const { data, error } = await supabase
-      .from('myuni_user_progress')
-      .upsert(updateData, {
-        onConflict: 'user_id,lesson_id',
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error updating user progress:', error);
-    throw error;
-  }
+  return apiUpdateUserProgress(userId, lessonId, progressData);
 }
 
 // ========================================

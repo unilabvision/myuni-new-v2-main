@@ -24,7 +24,7 @@ import {
   checkCertificateEligibility, 
   getUserCertificate, 
   generateCertificateWithProgress 
-} from '../../../lib/certificateService';
+} from '../../../lib/certificateApi';
 
 import { Course, Lesson } from '../../../lib/types/course';
 import { getUserCourseProgress } from '../../../lib/courseService';

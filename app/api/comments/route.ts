@@ -1,6 +1,6 @@
 // app/api/comments/route.ts
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 // Basit spam kontrolü

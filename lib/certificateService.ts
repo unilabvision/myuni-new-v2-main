@@ -1,6 +1,7 @@
 // lib/certificateService.ts - Updated with separate Event Certificates table
 
-import supabase from '../app/_services/supabaseClient';
+import 'server-only';
+import { supabaseAdmin as supabase } from './supabaseAdmin';
 
 export interface CertificateData {
   userId: string;

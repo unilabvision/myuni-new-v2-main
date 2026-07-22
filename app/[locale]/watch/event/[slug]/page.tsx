@@ -17,7 +17,7 @@ import {
 import {
   checkEventCertificateEligibility,
   getUserEventCertificate
-} from '../../../../../lib/certificateService';
+} from '../../../../../lib/certificateApi';
 
 // Import all components
 import EventSidebar from '../../../../components/event/EventSidebar';

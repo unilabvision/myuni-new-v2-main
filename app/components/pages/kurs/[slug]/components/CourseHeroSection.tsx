@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, RotateCcw, CheckCircle, RotateCcw as Replay } from 'lucide-react';
 import supabase from '../../../../../_services/supabaseClient';
+import { getUserLessonProgress, updateUserProgress } from '@/lib/progressApi';
 
 // Use the existing global types from your global.d.ts file
 type VimeoPlayer = import('../../../../../types/global').VimeoPlayer;
@@ -310,16 +311,7 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
     if (!userId || !firstVideo || !firstVideo.lesson_id) return;
 
     try {
-      const { data, error } = await supabase
-        .from('myuni_user_progress')
-        .select('watch_time_seconds, last_position_seconds, is_completed, completed_at')
-        .eq('user_id', userId)
-        .eq('lesson_id', firstVideo.lesson_id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(error.message);
-      }
+      const data = await getUserLessonProgress(userId, firstVideo.lesson_id);
 
       if (data) {
         setUserProgress({
@@ -340,8 +332,6 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
 
     try {
       const isCompleted = progressPercent >= 90 || userProgress.is_completed;
-      
-      // Watch time hesaplama - Hero video için basit versiyon
       const watchTimeIncrease = Math.max(0, Math.floor(positionSeconds - userProgress.last_position_seconds));
       const newTotalWatchTime = userProgress.watch_time_seconds + watchTimeIncrease;
 
@@ -349,35 +339,17 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
         watch_time_seconds: newTotalWatchTime,
         last_position_seconds: Math.floor(positionSeconds),
         is_completed: isCompleted,
-        completed_at: isCompleted && !userProgress.is_completed ? new Date().toISOString() : userProgress.completed_at,
-        updated_at: new Date().toISOString(),
       };
 
-      console.log('Hero video progress save:', {
-        positionSeconds,
-        watchTimeIncrease,
-        newTotalWatchTime,
-        progressData
-      });
-
-      const { error } = await supabase
-        .from('myuni_user_progress')
-        .upsert({
-          user_id: userId,
-          lesson_id: firstVideo.lesson_id,
-          ...progressData,
-        }, {
-          onConflict: 'user_id,lesson_id',
-          ignoreDuplicates: false
-        });
-
-      if (error) {
-        throw new Error(error.message);
-      }
+      await updateUserProgress(userId, firstVideo.lesson_id, progressData);
 
       setUserProgress((prev) => ({
         ...prev,
         ...progressData,
+        completed_at:
+          isCompleted && !userProgress.is_completed
+            ? new Date().toISOString()
+            : userProgress.completed_at,
       }));
     } catch (error) {
       console.error('Hero video progress save error:', error);

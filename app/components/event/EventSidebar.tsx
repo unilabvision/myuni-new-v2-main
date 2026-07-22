@@ -27,7 +27,7 @@ import {
   checkEventCertificateEligibility,
   getUserEventCertificate,
   generateCertificateWithProgress
-} from '../../../lib/certificateService';
+} from '../../../lib/certificateApi';
 
 import { getUserEventProgress } from '../../../lib/eventService';
 

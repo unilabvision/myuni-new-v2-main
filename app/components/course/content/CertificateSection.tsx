@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Award, Download, ExternalLink, CheckCircle, Calendar, User, BookOpen, Clock } from 'lucide-react';
-import { generateCertificate, checkCertificateEligibility } from '../../../../lib/certificateService';
+import { generateCertificate, checkCertificateEligibility } from '../../../../lib/certificateApi';
+import type { EligibilityCheck } from '../../../../lib/certificateApi';
 
 interface CertificateSectionProps {
   courseId: string;
@@ -14,30 +15,32 @@ interface CertificateSectionProps {
   onCertificateGenerated?: (certificateNumber: string) => void;
 }
 
-// Updated Certificate interface to match the service
 interface Certificate {
   id: string;
   certificate_number: string;
   user_id: string;
-  course_id: string;
+  course_id?: string;
+  event_id?: string;
   student_full_name: string;
-  course_name: string;
-  instructor_name: string;
-  course_duration: string;
+  course_name?: string;
+  event_name?: string;
+  instructor_name?: string;
+  organizer_name?: string;
+  course_duration?: string;
+  event_duration?: string;
   organization_name: string;
   organization_description: string;
-  instructor_bio: string;
+  instructor_bio?: string;
   certificate_url: string | null;
   certificate_metadata: object;
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  // Helper property for display
   issue_date?: string;
 }
 
-// Import the types from the service to avoid conflicts
-import type { EligibilityCheck, CourseCertificate, EventCertificate } from '../../../../lib/certificateService';
+type CourseCertificate = Certificate;
+type EventCertificate = Certificate;
 
 export function CertificateSection({ 
   courseId, 

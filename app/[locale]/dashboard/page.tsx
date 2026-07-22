@@ -6,7 +6,6 @@ import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import { Clock, Users, Play, CheckCircle, Book, TrendingUp, Award, Download, Calendar, MapPin, Trophy, X, Copy, ChevronDown, ShoppingBag } from 'lucide-react';
 import { getCourseCompletionStats } from '../../../lib/courseService';
-import { supabase } from '../../../lib/supabase';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
 import DashboardOpportunitiesTab from '../../components/dashboard/DashboardOpportunitiesTab';
@@ -364,7 +363,7 @@ function DashboardContent({ locale }: { locale: string }) {
       }
 
       // Paralel olarak hem enrollments hem certificates'ları çek
-      const [enrollmentsResult, courseCertificatesResult, eventCertificatesResult, eventEnrollmentsResult, discountCodesResult, productPurchasesResult] = await Promise.all([
+      const [enrollmentsResult, certificatesResult, eventEnrollmentsResult, discountCodesResult, productPurchasesResult] = await Promise.all([
         // Enrollments via API
         fetch('/api/enrollments/me')
           .then(async (res) => {
@@ -376,27 +375,28 @@ function DashboardContent({ locale }: { locale: string }) {
           })
           .catch((err) => ({ data: null, error: err })),
         
-        // Course Certificates
-        supabase
-          .from('myuni_certificates')
-          .select(`
-            *,
-            course:myuni_courses(*)
-          `)
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .order('issue_date', { ascending: false }),
-        
-        // Event Certificates
-        supabase
-          .from('myuni_event_certificates')
-          .select(`
-            *,
-            event:myuni_events(*)
-          `)
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .order('issue_date', { ascending: false }),
+        // Certificates via API
+        fetch('/api/certificates/me')
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({ success: false }));
+            if (!res.ok || !json.success) {
+              return {
+                courseCertificates: [],
+                eventCertificates: [],
+                error: json.error || `HTTP ${res.status}`,
+              };
+            }
+            return {
+              courseCertificates: json.courseCertificates || [],
+              eventCertificates: json.eventCertificates || [],
+              error: null,
+            };
+          })
+          .catch((err) => ({
+            courseCertificates: [],
+            eventCertificates: [],
+            error: err,
+          })),
 
         // Event Enrollments via API
         fetch('/api/event-enrollments/me')
@@ -435,8 +435,9 @@ function DashboardContent({ locale }: { locale: string }) {
       ]);
 
       const { data: enrollmentsData, error: enrollmentsError } = enrollmentsResult;
-      const { data: courseCertificatesData, error: courseCertificatesError } = courseCertificatesResult;
-      const { data: eventCertificatesData, error: eventCertificatesError } = eventCertificatesResult;
+      const courseCertificatesData = certificatesResult.courseCertificates;
+      const eventCertificatesData = certificatesResult.eventCertificates;
+      const certificatesError = certificatesResult.error;
       const eventEnrollmentsData = eventEnrollmentsResult;
       const { data: discountCodesData, error: discountCodesError } = discountCodesResult;
       const productPurchasesData = productPurchasesResult?.success ? productPurchasesResult.purchases : [];
@@ -445,12 +446,8 @@ function DashboardContent({ locale }: { locale: string }) {
         throw enrollmentsError;
       }
 
-      if (courseCertificatesError) {
-        throw courseCertificatesError;
-      }
-
-      if (eventCertificatesError) {
-        throw eventCertificatesError;
+      if (certificatesError) {
+        throw certificatesError;
       }
 
       if (discountCodesError) {

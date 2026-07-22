@@ -2,6 +2,16 @@
 
 import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
+import {
+  getUserEventProgress as apiGetUserEventProgress,
+  getUserEventLessonProgress as apiGetUserEventLessonProgress,
+  updateUserEventProgress as apiUpdateUserEventProgress,
+  markEventLessonCompleted as apiMarkEventLessonCompleted,
+  getEventCompletionStats as apiGetEventCompletionStats,
+  getLatestEventQuizResult as apiGetLatestEventQuizResult,
+  saveEventQuizResult as apiSaveEventQuizResult,
+  getEventAnalytics as apiGetEventAnalytics,
+} from './eventProgressApi';
 
 /**
  * Enrollment counts for event lists.
@@ -347,109 +357,15 @@ export async function getEventLessonContent(sectionId: string) {
 }
 
 // ========================================
-// USER EVENT PROGRESS FUNCTIONS - UPDATED FOR NEW TABLE
+// USER EVENT PROGRESS (via authenticated APIs)
 // ========================================
 
-export async function getUserEventProgress(userId: string, eventId: string): Promise<UserEventProgress[]> {
-  try {
-    console.log('Fetching user event progress for:', { userId, eventId });
-
-    if (!userId || !eventId) {
-      console.log('Missing userId or eventId');
-      return [];
-    }
-
-    // Hem lesson_id hem section_id alanlarını çek
-    const { data: progressData, error: progressError } = await supabase
-      .from('myuni_event_user_progress')
-      .select('section_id, lesson_id, is_completed, watch_time_seconds, last_position_seconds, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at')
-      .eq('user_id', userId)
-      .eq('event_id', eventId);
-
-    if (progressError) {
-      console.warn('Error fetching event progress:', progressError);
-      return [];
-    }
-
-    console.log('Found event progress data:', progressData?.length || 0);
-
-    // Normalize: lesson_id varsa lesson_id, yoksa section_id'yi lookup key olarak kullan
-    // Bu sayede EventSidebar'daki sectionProgressMap.get(lesson.id) her iki durumda da çalışır
-    const result = (progressData || []).map(p => ({
-      section_id: p.lesson_id || p.section_id, // unified lookup key
-      is_completed: p.is_completed || false,
-      watch_time_seconds: p.watch_time_seconds || 0,
-      last_position_seconds: p.last_position_seconds || 0,
-      completed_at: p.completed_at || null,
-      notes: p.notes || undefined,
-      quiz_score: p.quiz_score || null,
-      quiz_attempts: p.quiz_attempts || 0,
-      last_quiz_attempt_at: p.last_quiz_attempt_at || null,
-      video_watch_count: p.video_watch_count || 0,
-      last_video_watch_at: p.last_video_watch_at || null
-    }));
-
-    console.log('Returning progress for', result.length, 'items (lesson or section based)');
-    return result;
-
-  } catch (error) {
-    console.error('Error fetching user event progress:', error);
-    return [];
-  }
+export async function getUserEventProgress(userId: string, eventId: string) {
+  return apiGetUserEventProgress(userId, eventId);
 }
 
 export async function getUserEventLessonProgress(userId: string, sectionId: string) {
-  try {
-    console.log('Fetching user event lesson progress for:', { userId, sectionId });
-
-    // sectionId parametresi aslında lesson.id veya section.id olabilir
-    // Önce myuni_event_lessons'da ara (lesson bazlı)
-    const { data: lessonCheck } = await supabase
-      .from('myuni_event_lessons')
-      .select('id')
-      .eq('id', sectionId)
-      .single();
-
-    const isLessonBased = !!lessonCheck;
-
-    let query = supabase
-      .from('myuni_event_user_progress')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (isLessonBased) {
-      // Yeni eventler: lesson_id ile ara
-      query = query.eq('lesson_id', sectionId);
-    } else {
-      // Eski eventler: section_id ile ara, lesson_id NULL olmalı
-      query = query.eq('section_id', sectionId).is('lesson_id', null);
-    }
-
-    const { data, error } = await query.single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching user event lesson progress:', error);
-      throw error;
-    }
-
-    return data || {
-      user_id: userId,
-      section_id: isLessonBased ? null : sectionId,
-      lesson_id: isLessonBased ? sectionId : null,
-      watch_time_seconds: 0,
-      is_completed: false,
-      last_position_seconds: 0,
-      notes: '',
-      quiz_score: null,
-      quiz_attempts: 0,
-      last_quiz_attempt_at: null,
-      video_watch_count: 0,
-      last_video_watch_at: null
-    };
-  } catch (error) {
-    console.error('Error fetching user event lesson progress:', error);
-    throw error;
-  }
+  return apiGetUserEventLessonProgress(userId, sectionId);
 }
 
 export async function updateUserEventProgress(userId: string, sectionId: string, progressData: {
@@ -463,135 +379,8 @@ export async function updateUserEventProgress(userId: string, sectionId: string,
   video_watch_count?: number;
   last_video_watch_at?: string;
 }) {
-  try {
-    console.log('Updating user event progress:', { userId, sectionId, progressData });
-
-    let eventId: string | null = null;
-    let isLessonBased = false;
-    let lessonId: string | null = null;
-    let realSectionId: string | null = null;
-
-    // Step 1: sectionId parametresi bir lesson.id mi? (yeni event - lesson bazlı)
-    const { data: lessonData } = await supabase
-      .from('myuni_event_lessons')
-      .select('section_id')
-      .eq('id', sectionId)
-      .single();
-
-    if (lessonData?.section_id) {
-      // Lesson bazlı tracking (yeni eventler)
-      isLessonBased = true;
-      lessonId = sectionId;     // lesson_id kolonu
-      realSectionId = null;     // section_id NULL
-
-      const { data: secData } = await supabase
-        .from('myuni_event_sections')
-        .select('event_id')
-        .eq('id', lessonData.section_id)
-        .single();
-      if (secData?.event_id) eventId = secData.event_id;
-    }
-
-    // Step 2: Fallback — sectionId bir section.id ise (eski eventler)
-    if (!eventId) {
-      const { data: sectionData } = await supabase
-        .from('myuni_event_sections')
-        .select('event_id')
-        .eq('id', sectionId)
-        .single();
-      if (sectionData?.event_id) {
-        eventId = sectionData.event_id;
-        isLessonBased = false;
-        lessonId = null;          // lesson_id NULL
-        realSectionId = sectionId; // section_id kolonu
-      }
-    }
-
-    if (!eventId) {
-      console.error('Could not resolve event_id for sectionId:', sectionId);
-      throw new Error('Section/Lesson not found or event_id could not be resolved');
-    }
-
-    const updateData: Record<string, unknown> = {
-      user_id: userId,
-      event_id: eventId,
-      section_id: realSectionId,  // null for lesson-based (yeni eventler)
-      lesson_id: lessonId,         // null for section-based (eski eventler)
-      updated_at: new Date().toISOString()
-    };
-
-    if (progressData.watch_time_seconds !== undefined) updateData.watch_time_seconds = progressData.watch_time_seconds;
-    if (progressData.is_completed !== undefined) updateData.is_completed = progressData.is_completed;
-    if (progressData.last_position_seconds !== undefined) updateData.last_position_seconds = progressData.last_position_seconds;
-    if (progressData.notes !== undefined) updateData.notes = progressData.notes;
-    if (progressData.quiz_score !== undefined) updateData.quiz_score = progressData.quiz_score;
-    if (progressData.quiz_attempts !== undefined) updateData.quiz_attempts = progressData.quiz_attempts;
-    if (progressData.last_quiz_attempt_at !== undefined) updateData.last_quiz_attempt_at = progressData.last_quiz_attempt_at;
-    if (progressData.video_watch_count !== undefined) updateData.video_watch_count = progressData.video_watch_count;
-    if (progressData.last_video_watch_at !== undefined) updateData.last_video_watch_at = progressData.last_video_watch_at;
-    if (progressData.is_completed) updateData.completed_at = new Date().toISOString();
-
-    console.log('Final update data (isLessonBased:', isLessonBased, '):', updateData);
-
-    // Mevcut satırı bul: lesson veya section bazlı
-    let existingQuery = supabase
-      .from('myuni_event_user_progress')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (isLessonBased) {
-      existingQuery = existingQuery.eq('lesson_id', lessonId!);
-    } else {
-      existingQuery = existingQuery.eq('section_id', realSectionId!).is('lesson_id', null);
-    }
-
-    const { data: existingRow } = await existingQuery.single();
-
-    let data, error;
-
-    if (existingRow?.id) {
-      ({ data, error } = await supabase
-        .from('myuni_event_user_progress')
-        .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', existingRow.id)
-        .select()
-        .single());
-    } else {
-      ({ data, error } = await supabase
-        .from('myuni_event_user_progress')
-        .insert(updateData)
-        .select()
-        .single());
-    }
-
-    if (error) {
-      const pgError = error as any;
-      // Note: .single() might return an error (like PGRST116) even if the database operation 
-      // succeeded, usually because RLS policies prevent reading the record back.
-      console.warn('⚠️ Event progress update notice:', {
-        message: pgError.message || 'No message',
-        code: pgError.code,
-        isLessonBased,
-        lessonId,
-        realSectionId
-      });
-
-      // If it's a real error (not just a return data visibility issue), return null.
-      // PGRST116 is "JSON object requested, but no rows returned".
-      if (pgError.code !== 'PGRST116') {
-        return null;
-      }
-    }
-
-    console.log('✅ Successfully updated user event progress:', data);
-    return data;
-  } catch (err) {
-    console.error('❌ Exception in updateUserEventProgress:', err);
-    return null;
-  }
+  return apiUpdateUserEventProgress(userId, sectionId, progressData);
 }
-
-
 
 // ========================================
 // EVENT MANAGEMENT
@@ -1021,41 +810,11 @@ export async function enrollUserToEvent(userId: string, eventId: string) {
 // ========================================
 
 export async function markEventLessonCompleted(userId: string, sectionId: string, watchTimeSeconds?: number) {
-  try {
-    const progressData: Record<string, unknown> = { is_completed: true };
-    if (watchTimeSeconds !== undefined) {
-      progressData.watch_time_seconds = watchTimeSeconds;
-    }
-    return await updateUserEventProgress(userId, sectionId, progressData);
-  } catch (error) {
-    console.error('Error marking event lesson completed:', error);
-    throw error;
-  }
+  return apiMarkEventLessonCompleted(userId, sectionId, watchTimeSeconds);
 }
 
 export async function getEventCompletionStats(userId: string, eventId: string) {
-  try {
-    const progressData = await getUserEventProgress(userId, eventId);
-
-    const totalLessons = progressData.length;
-    const completedLessons = progressData.filter(p => p.is_completed).length;
-    const totalWatchTime = progressData.reduce((acc, p) => acc + (p.watch_time_seconds || 0), 0);
-
-    const completionPercentage = totalLessons > 0 ?
-      Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
-
-    return {
-      totalLessons,
-      completedLessons,
-      completionPercentage,
-      totalWatchTimeSeconds: totalWatchTime,
-      totalWatchTimeMinutes: Math.round(totalWatchTime / 60),
-      lastActiveDate: null
-    };
-  } catch (error) {
-    console.error('Error getting event completion stats:', error);
-    throw error;
-  }
+  return apiGetEventCompletionStats(userId, eventId);
 }
 
 // ========================================
@@ -1064,124 +823,35 @@ export async function getEventCompletionStats(userId: string, eventId: string) {
 
 export async function getUserEventAnalytics(userId: string, eventId: string) {
   try {
-    console.log('Fetching user event analytics for:', { userId, eventId });
+    const [progress, analytics] = await Promise.all([
+      apiGetUserEventProgress(userId, eventId),
+      apiGetEventAnalytics(userId, eventId),
+    ]);
 
-    // Get user's event progress
-    const progress = await getUserEventProgress(userId, eventId);
+    let enrollment = null;
+    try {
+      const res = await fetch(`/api/event-enrollments/me?eventId=${encodeURIComponent(eventId)}`);
+      const json = await res.json();
+      if (res.ok && json.success) {
+        enrollment = json.enrollment || json.data || null;
+      }
+    } catch {
+      enrollment = null;
+    }
 
-    // Get user's enrollment info
-    const enrollment = await getUserEventEnrollment(userId, eventId);
-
-    // Generate analytics data
-    const analytics = await generateUserEventAnalytics(userId, eventId);
-
-    return {
-      analytics,
-      progress,
-      enrollment
-    };
+    return { analytics, progress, enrollment };
   } catch (error) {
     console.error('Error fetching user event analytics:', error);
     throw error;
   }
 }
 
-async function generateUserEventAnalytics(userId: string, eventId: string) {
-  try {
-    // Get direct progress data from new table
-    const { data: progressData, error: progressError } = await supabase
-      .from('myuni_event_user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('event_id', eventId)
-      .order('updated_at', { ascending: false });
-
-    if (progressError) {
-      console.warn('Error fetching progress for analytics:', progressError);
-      return [];
-    }
-
-    // Generate daily analytics for the last 30 days
-    const analytics = [];
-    const today = new Date();
-
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
-
-      // Find progress updates for this day
-      const dayProgress = progressData?.filter(p => {
-        const progressDate = new Date(p.updated_at || p.created_at).toISOString().split('T')[0];
-        return progressDate === dateString;
-      }) || [];
-
-      // Calculate daily metrics
-      const totalWatchTimeMinutes = dayProgress.reduce((acc, p) =>
-        acc + Math.floor((p.watch_time_seconds || 0) / 60), 0
-      );
-
-      const lessonsCompleted = dayProgress.filter(p =>
-        p.is_completed && p.completed_at &&
-        new Date(p.completed_at).toISOString().split('T')[0] === dateString
-      ).length;
-
-      const notesCreated = dayProgress.filter(p =>
-        p.notes && p.notes.trim().length > 0
-      ).length;
-
-      analytics.push({
-        session_date: dateString,
-        user_id: userId,
-        event_id: eventId,
-        total_watch_time_minutes: totalWatchTimeMinutes,
-        lessons_completed: lessonsCompleted,
-        videos_watched: 0, // No videos for events
-        quizzes_attempted: 0, // No quizzes for events
-        quizzes_passed: 0,
-        quizzes_failed: 0,
-        quiz_time_minutes: 0,
-        notes_created: notesCreated,
-        session_count: dayProgress.length > 0 ? 1 : 0,
-        avg_quiz_score: 0
-      });
-    }
-
-    return analytics.filter(a => a.session_count > 0);
-  } catch (error) {
-    console.error('Error generating user event analytics:', error);
-    return [];
-  }
-}
-
 // ========================================
-// QUIZ FUNCTIONS FOR EVENTS (if needed in the future)
+// QUIZ FUNCTIONS FOR EVENTS
 // ========================================
 
 export async function getLatestEventQuizResult(userId: string, sectionId: string) {
-  try {
-    console.log('Fetching latest event quiz result for:', { userId, sectionId });
-
-    const { data, error } = await supabase
-      .from('myuni_event_user_progress')
-      .select('quiz_score, quiz_attempts, last_quiz_attempt_at, is_completed')
-      .eq('user_id', userId)
-      .eq('section_id', sectionId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-
-    if (!data || data.quiz_score === null) return null;
-
-    return {
-      score: data.quiz_score,
-      attempts: data.quiz_attempts || 1,
-      completed_at: data.last_quiz_attempt_at
-    };
-  } catch (error) {
-    console.error('Error fetching latest event quiz result:', error);
-    return null;
-  }
+  return apiGetLatestEventQuizResult(userId, sectionId);
 }
 
 export async function saveEventQuizResult(
@@ -1190,34 +860,7 @@ export async function saveEventQuizResult(
   quickId: string,
   score: number
 ) {
-  try {
-    console.log('Saving event quiz result:', { userId, sectionId, quickId, score });
-
-    // Get current progress
-    const { data: currentProgress } = await supabase
-      .from('myuni_event_user_progress')
-      .select('quiz_attempts, quiz_score')
-      .eq('user_id', userId)
-      .eq('section_id', sectionId)
-      .single();
-
-    const attempts = (currentProgress?.quiz_attempts || 0) + 1;
-    const passingScore = 70; // Default passing score for events
-    const isPassed = score >= passingScore;
-
-    // Update progress with quiz result
-    await updateUserEventProgress(userId, sectionId, {
-      quiz_score: score,
-      quiz_attempts: attempts,
-      last_quiz_attempt_at: new Date().toISOString(),
-      is_completed: isPassed
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error saving event quiz result:', error);
-    throw error;
-  }
+  return apiSaveEventQuizResult(userId, sectionId, quickId, score);
 }
 
 // ========================================

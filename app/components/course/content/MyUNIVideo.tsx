@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, RotateCcw, CheckCircle, AlertCircle, ArrowRight, Repeat } from 'lucide-react';
 import supabase from '../../../_services/supabaseClient';
+import { getUserLessonProgress, updateUserProgress } from '@/lib/progressApi';
 
 // Tip tanımlamaları
 interface VimeoEventData {
@@ -158,17 +159,7 @@ export function MyUNIVideo({
 
     try {
       console.log('🔄 Loading user progress for lesson:', lessonId);
-      
-      const { data, error } = await supabase
-        .from('myuni_user_progress')
-        .select('watch_time_seconds, last_position_seconds, is_completed, completed_at, video_watch_count, last_video_watch_at')
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(error.message);
-      }
+      const data = await getUserLessonProgress(userId, lessonId);
 
       if (data) {
         console.log('✅ Found existing progress:', data);
@@ -181,7 +172,6 @@ export function MyUNIVideo({
           last_video_watch_at: data.last_video_watch_at,
         });
       } else {
-        // No progress found, set default values for this lesson
         console.log('📝 No progress found, setting defaults for lesson:', lessonId);
         setUserProgress({
           watch_time_seconds: 0,
@@ -192,7 +182,6 @@ export function MyUNIVideo({
       }
     } catch (error) {
       console.error('❌ Progress load error:', error);
-      // Set default values on error for this specific lesson
       setUserProgress({
         watch_time_seconds: 0,
         last_position_seconds: 0,
@@ -212,81 +201,40 @@ export function MyUNIVideo({
     try {
       const currentWatchCount = userProgress?.video_watch_count || 0;
       const currentCompletionStatus = userProgress?.is_completed || false;
-      
-      // If video was already completed, don't override the completion status unless explicitly completing again
       const finalCompletionStatus = currentCompletionStatus ? true : isCompleted;
-      
+
       const progressData = {
-        user_id: userId,
-        lesson_id: lessonId,
         last_position_seconds: Math.floor(position),
         watch_time_seconds: Math.floor(position),
         is_completed: finalCompletionStatus,
-        completed_at: finalCompletionStatus ? (userProgress?.completed_at || new Date().toISOString()) : null,
         video_watch_count: currentWatchCount + (isCompleted && !currentCompletionStatus ? 1 : 0),
-        last_video_watch_at: new Date().toISOString()
+        last_video_watch_at: new Date().toISOString(),
       };
 
       console.log('Attempting to save progress to database:', progressData);
+      await updateUserProgress(userId, lessonId, progressData);
 
-      const { data, error } = await supabase
-        .from('myuni_user_progress')
-        .upsert(progressData, {
-          onConflict: 'user_id,lesson_id'
-        })
-        .select();
+      setUserProgress((prev) => ({
+        ...prev,
+        last_position_seconds: Math.floor(position),
+        watch_time_seconds: Math.floor(position),
+        is_completed: finalCompletionStatus,
+        completed_at: finalCompletionStatus
+          ? prev?.completed_at || new Date().toISOString()
+          : prev?.completed_at,
+        video_watch_count: currentWatchCount + (isCompleted && !currentCompletionStatus ? 1 : 0),
+        last_video_watch_at: new Date().toISOString(),
+      }));
 
-      if (error) {
-        console.error('❌ Supabase error saving progress:', error);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        console.error('Error hint:', error.hint);
-        console.error('Error code:', error.code);
-      } else {
-        console.log('✅ Progress saved successfully to database!');
-        console.log('Saved data:', progressData);
-        console.log('Database response:', data);
-
-        // Update local state to reflect the saved progress
-        setUserProgress(prev => {
-          if (!prev) {
-            return {
-              watch_time_seconds: Math.floor(position),
-              last_position_seconds: Math.floor(position),
-              is_completed: finalCompletionStatus,
-              completed_at: finalCompletionStatus ? new Date().toISOString() : undefined,
-              video_watch_count: currentWatchCount + (isCompleted && !currentCompletionStatus ? 1 : 0),
-              last_video_watch_at: new Date().toISOString()
-            };
-          }
-          return {
-            ...prev,
-            last_position_seconds: Math.floor(position),
-            watch_time_seconds: Math.floor(position),
-            is_completed: finalCompletionStatus,
-            completed_at: finalCompletionStatus ? (prev.completed_at || new Date().toISOString()) : prev.completed_at,
-            video_watch_count: currentWatchCount + (isCompleted && !currentCompletionStatus ? 1 : 0),
-            last_video_watch_at: new Date().toISOString()
-          };
-        });
-
-        // Trigger sidebar progress update if completion status changed
-        if (isCompleted && !currentCompletionStatus && onProgress) {
-          console.log('🔄 Triggering sidebar progress update after completion');
-          // Trigger parent component to update progress
-          setTimeout(() => {
-            if (onProgress) {
-              onProgress(100); // Force 100% completion
-            }
-          }, 500);
-        }
+      if (isCompleted && !currentCompletionStatus && onProgress) {
+        setTimeout(() => {
+          onProgress(100);
+        }, 500);
       }
     } catch (error) {
-      console.error('❌ Exception while saving progress:', error);
-      console.error('Exception details:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('Exception stack:', error instanceof Error ? error.stack : 'No stack');
+      console.error('❌ Progress save error:', error);
     }
-  }, [userId, lessonId, userProgress?.video_watch_count, userProgress?.is_completed, userProgress?.completed_at]);
+  }, [userId, lessonId, userProgress, onProgress]);
 
   // Initialize Vimeo Player - only when needed
   const initializePlayer = useCallback(async () => {

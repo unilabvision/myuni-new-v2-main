@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import supabase from '@/app/_services/supabaseClient';
+import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { sendClubApplicationConfirmationEmail, sendNewClubApplicationNotificationEmail } from '@/app/email_enrolment_services/kulupApplicationEmailService.js';
 
 export async function POST(request: NextRequest) {

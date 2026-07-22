@@ -4,6 +4,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, RotateCcw, CheckCircle, AlertCircle, ArrowRight, Repeat, Users, Calendar } from 'lucide-react';
 import supabase from '../../../_services/supabaseClient';
+import { getUserLessonProgress, updateUserProgress } from '@/lib/progressApi';
+import { getUserEventLessonProgress, updateUserEventProgress } from '@/lib/eventProgressApi';
 
 // Tip tanımlamaları
 interface VimeoEventData {
@@ -271,76 +273,25 @@ export function MyUNIVideo({
     if (!userId || !currentVideo) return;
 
     try {
-      const { progressTable } = getTableNames();
+      const data =
+        type === 'course'
+          ? await getUserLessonProgress(userId, contentId)
+          : await getUserEventLessonProgress(userId, contentId);
 
-      if (type === 'course') {
-        // Course progress query
-        const { data, error } = await supabase
-          .from(progressTable)
-          .select('watch_time_seconds, last_position_seconds, is_completed, completed_at, video_watch_count, last_video_watch_at')
-          .eq('user_id', userId)
-          .eq('lesson_id', contentId)
-          .single();
-
-        if (error && error.code !== 'PGRST116') {
-          throw new Error(error.message);
-        }
-
-        if (data) {
-          setUserProgress({
-            watch_time_seconds: data.watch_time_seconds || 0,
-            last_position_seconds: data.last_position_seconds || 0,
-            is_completed: data.is_completed || false,
-            completed_at: data.completed_at,
-            video_watch_count: data.video_watch_count || 0,
-            last_video_watch_at: data.last_video_watch_at,
-          });
-        }
-      } else {
-        // Event progress query
-        // contentId'nin lesson.id mi yoksa section.id mi olduğunu tespit et
-        const { data: lessonCheck } = await supabase
-          .from('myuni_event_lessons')
-          .select('id')
-          .eq('id', contentId)
-          .single();
-
-        const isLessonBased = !!lessonCheck;
-
-        let progressQuery = supabase
-          .from(progressTable)
-          .select('watch_time_seconds, last_position_seconds, is_completed, completed_at, video_watch_count, last_video_watch_at')
-          .eq('user_id', userId);
-
-        if (isLessonBased) {
-          // Yeni event: lesson_id ile ara
-          progressQuery = progressQuery.eq('lesson_id', contentId);
-        } else {
-          // Eski event: section_id ile ara, lesson_id NULL olmalı
-          progressQuery = progressQuery.eq('section_id', contentId).is('lesson_id', null);
-        }
-
-        const { data, error } = await progressQuery.single();
-
-        if (error && error.code !== 'PGRST116') {
-          throw new Error(error.message);
-        }
-
-        if (data) {
-          setUserProgress({
-            watch_time_seconds: data.watch_time_seconds || 0,
-            last_position_seconds: data.last_position_seconds || 0,
-            is_completed: data.is_completed || false,
-            completed_at: data.completed_at,
-            video_watch_count: data.video_watch_count || 0,
-            last_video_watch_at: data.last_video_watch_at,
-          });
-        }
+      if (data) {
+        setUserProgress({
+          watch_time_seconds: data.watch_time_seconds || 0,
+          last_position_seconds: data.last_position_seconds || 0,
+          is_completed: data.is_completed || false,
+          completed_at: data.completed_at,
+          video_watch_count: data.video_watch_count || 0,
+          last_video_watch_at: data.last_video_watch_at,
+        });
       }
     } catch (error) {
       console.error('Progress load error:', error);
     }
-  }, [userId, currentVideo, contentId, type, getTableNames]);
+  }, [userId, currentVideo, contentId, type]);
 
   // Save progress to database
   const saveProgressToDb = useCallback(async (position: number, isCompleted: boolean = false) => {
@@ -350,141 +301,30 @@ export function MyUNIVideo({
     }
 
     try {
-      const { progressTable } = getTableNames();
       const currentWatchCount = userProgress?.video_watch_count || 0;
+      const progressPayload = {
+        last_position_seconds: Math.floor(position),
+        watch_time_seconds: Math.floor(position),
+        is_completed: isCompleted,
+        video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
+        last_video_watch_at: new Date().toISOString(),
+      };
 
       if (type === 'course') {
-        // Course progress data
-        const progressData = {
-          user_id: userId,
-          lesson_id: contentId,
-          last_position_seconds: Math.floor(position),
-          watch_time_seconds: Math.floor(position),
-          is_completed: isCompleted,
-          completed_at: isCompleted ? new Date().toISOString() : null,
-          video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
-          last_video_watch_at: new Date().toISOString()
-        };
-
-        console.log('Attempting to save course progress to database:', progressData);
-
-        const { data, error } = await supabase
-          .from(progressTable)
-          .upsert(progressData, {
-            onConflict: 'user_id,lesson_id'
-          })
-          .select();
-
-        if (error) {
-          console.error('❌ Supabase error saving course progress:', error);
-        } else {
-          console.log('✅ Course progress saved successfully to database!');
-          setUserProgress(prev => ({
-            ...prev,
-            last_position_seconds: Math.floor(position),
-            watch_time_seconds: Math.floor(position),
-            is_completed: isCompleted,
-            completed_at: isCompleted ? new Date().toISOString() : prev.completed_at,
-            video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
-            last_video_watch_at: new Date().toISOString()
-          }));
-        }
+        await updateUserProgress(userId, contentId, progressPayload);
       } else {
-        // Event video progress
-        // contentId lesson.id (yeni event) veya section.id (eski event) olabilir
-        // myuni_event_lessons tablosunda ara → lesson bazlı mı?
-        const { data: lessonCheck } = await supabase
-          .from('myuni_event_lessons')
-          .select('section_id')
-          .eq('id', contentId)
-          .single();
-
-        const isLessonBased = !!lessonCheck?.section_id;
-        let eventId: string | null = null;
-
-        if (isLessonBased) {
-          // Yeni event: lesson.id → parent section → event_id
-          const { data: sectionData } = await supabase
-            .from('myuni_event_sections')
-            .select('event_id')
-            .eq('id', lessonCheck.section_id)
-            .single();
-          eventId = sectionData?.event_id || null;
-        } else {
-          // Eski event: contentId doğrudan section.id
-          const { data: sectionData } = await supabase
-            .from('myuni_event_sections')
-            .select('event_id')
-            .eq('id', contentId)
-            .single();
-          eventId = sectionData?.event_id || null;
-        }
-
-        if (!eventId) {
-          console.warn('⚠️ Could not resolve event_id for contentId:', contentId);
-          return;
-        }
-
-        const progressData = {
-          user_id: userId,
-          event_id: eventId,
-          section_id: isLessonBased ? null : contentId,   // eski event: section_id dolu
-          lesson_id: isLessonBased ? contentId : null,    // yeni event: lesson_id dolu
-          last_position_seconds: Math.floor(position),
-          watch_time_seconds: Math.floor(position),
-          is_completed: isCompleted,
-          completed_at: isCompleted ? new Date().toISOString() : null,
-          video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
-          last_video_watch_at: new Date().toISOString()
-        };
-
-        console.log('Saving event progress (isLessonBased:', isLessonBased, '):', progressData);
-
-        // Mevcut satırı bul
-        let existingQuery = supabase
-          .from(progressTable)
-          .select('id')
-          .eq('user_id', userId);
-
-        if (isLessonBased) {
-          existingQuery = existingQuery.eq('lesson_id', contentId);
-        } else {
-          existingQuery = existingQuery.eq('section_id', contentId).is('lesson_id', null);
-        }
-
-        const { data: existingRow } = await existingQuery.single();
-
-        let data, error;
-        if (existingRow?.id) {
-          ({ data, error } = await supabase
-            .from(progressTable)
-            .update(progressData)
-            .eq('id', existingRow.id)
-            .select()
-            .single());
-        } else {
-          ({ data, error } = await supabase
-            .from(progressTable)
-            .insert(progressData)
-            .select()
-            .single());
-        }
-
-        if (error) {
-          console.error('❌ Supabase error saving event progress:', error);
-        } else {
-          console.log('✅ Event progress saved successfully!');
-          setUserProgress(prev => ({
-            ...prev,
-            last_position_seconds: Math.floor(position),
-            watch_time_seconds: Math.floor(position),
-            is_completed: isCompleted,
-            completed_at: isCompleted ? new Date().toISOString() : prev.completed_at,
-            video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
-            last_video_watch_at: new Date().toISOString()
-          }));
-        }
+        await updateUserEventProgress(userId, contentId, progressPayload);
       }
+
+      setUserProgress((prev) => ({
+        ...prev,
+        last_position_seconds: Math.floor(position),
+        watch_time_seconds: Math.floor(position),
+        is_completed: isCompleted,
+        completed_at: isCompleted ? new Date().toISOString() : prev.completed_at,
+        video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
+        last_video_watch_at: new Date().toISOString(),
+      }));
 
     } catch (error) {
       console.error('❌ Exception while saving progress:', error);

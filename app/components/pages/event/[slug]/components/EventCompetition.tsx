@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../../../../../lib/supabase';
-import { updateUserEventProgress } from '../../../../../../lib/eventService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -247,36 +245,24 @@ export const EventCompetitionContainer: React.FC<{
     const fetchCompetition = async () => {
       try {
         setLoading(true);
-        // lessonId'ye bağlı yarışmayı getir
-        const { data, error } = await supabase
-          .from('myuni_event_competitions')
-          .select('*')
-          .eq('lesson_id', lessonId)
-          .eq('is_active', true)
-          .single();
+        const res = await fetch(
+          `/api/event-competitions?lessonId=${encodeURIComponent(lessonId)}`
+        );
+        const json = await res.json().catch(() => ({}));
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            setError('Bu bölüm için tanımlanmış aktif bir test/yarışma bulunamadı.');
-          } else {
-            setError('Yarışma yüklenirken bir hata oluştu: ' + error.message);
-          }
-        } else if (data) {
-          setCompetition(data);
+        if (!res.ok || !json.success) {
+          setError(json.error || 'Yarışma yüklenirken bir hata oluştu');
+          return;
+        }
 
-          // Daha önce bu yarışmaya katılmış mı kontrol et
-          if (userId) {
-            const { data: previousResult } = await supabase
-              .from('myuni_event_competition_results')
-              .select('id')
-              .eq('competition_id', data.id)
-              .eq('user_id', userId)
-              .maybeSingle();
+        if (!json.competition) {
+          setError('Bu bölüm için tanımlanmış aktif bir test/yarışma bulunamadı.');
+          return;
+        }
 
-            if (previousResult) {
-              setHasCompleted(true);
-            }
-          }
+        setCompetition(json.competition);
+        if (json.hasCompleted) {
+          setHasCompleted(true);
         }
       } catch (err: any) {
         setError('Sistem hatası: ' + err.message);
@@ -346,42 +332,21 @@ export const EventCompetitionContainer: React.FC<{
       questions={questions}
       onComplete={async (score, timeTaken, answers) => {
         try {
-          // Puanı kabaca hesaplayalım (gerçekte güvenliği sunucuda sağlanmalı)
-          let calculatedScore = 0;
-          questions.forEach((q: any) => {
-            if (answers[q.id] === q.correct_option_id) {
-              calculatedScore += (q.points || 10);
-            }
+          const res = await fetch('/api/event-competition-results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              competitionId: competition.id,
+              lessonId,
+              timeTakenSeconds: timeTaken,
+              answers,
+            }),
           });
+          const json = await res.json().catch(() => ({}));
 
-          // Sonucu veritabanına kaydet
-          const { error: insertError } = await supabase.from('myuni_event_competition_results').insert({
-            competition_id: competition.id,
-            user_id: userId || null, // Boş string yerine null gönder (UUID format hatasını önlemek için)
-            score: calculatedScore,
-            time_taken_seconds: timeTaken,
-            user_answers: answers,
-            started_at: new Date(Date.now() - timeTaken * 1000).toISOString(),
-            completed_at: new Date().toISOString()
-          });
-
-          if (insertError) {
-            console.error('Veritabanına yazarken hata oluştu:', insertError);
-            alert('Sonuç kaydedilirken bir hata oluştu: ' + insertError.message);
-            // Hata olursa kaydetme, return yap
+          if (!res.ok || !json.success) {
+            alert('Sonuç kaydedilirken bir hata oluştu: ' + (json.error || res.status));
             return;
-          }
-
-          // Ana eğitim ilerleme (progress) tablosunu %'yi artırmak için güncelle
-          if (userId) {
-            try {
-              await updateUserEventProgress(userId, lessonId, {
-                is_completed: true,
-                watch_time_seconds: timeTaken
-              });
-            } catch (progressError) {
-              console.error('İlerleme verisi güncellenirken hata oluştu:', progressError);
-            }
           }
 
           setHasCompleted(true);
