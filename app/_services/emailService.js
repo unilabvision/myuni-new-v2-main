@@ -33,6 +33,25 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const isProduct = courseType === 'product'; // Koleksiyon dijital ürünü
     const isCart = courseType === 'cart'; // Sepet alımı
     const isPackage = courseType === 'package'; // Eğitim paketi
+    const purchaseItems = Array.isArray(courseInfo?.items) ? courseInfo.items : [];
+    const hasPurchaseItems = purchaseItems.length > 0;
+    const listTotal = orderInfo.listTotal != null ? Number(orderInfo.listTotal) : null;
+    const discountAmount = orderInfo.discountAmount != null ? Number(orderInfo.discountAmount) : 0;
+    const discountCodes = orderInfo.discountCodes || '';
+    const formatMoney = (value) => {
+      const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (Number.isNaN(n)) return String(value ?? '');
+      return n.toLocaleString(isTurkish ? 'tr-TR' : 'en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    };
+    const typeLabel = (item) => {
+      if (item.type === 'product') return isTurkish ? 'Dijital Ürün' : 'Product';
+      if (item.type === 'package') return isTurkish ? 'Eğitim Paketi' : 'Training Package';
+      if (item.type === 'tier') return isTurkish ? 'Paket / Seviye' : 'Tier';
+      return isTurkish ? 'Kurs' : 'Course';
+    };
     
     // Determine if this is an event certificate (from orderInfo.itemType)
     const isEventCertificate = orderInfo.itemType === 'event';
@@ -357,30 +376,44 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         ${courseReady}
       </div>
       
-      ${isCart && courseInfo.items ? `
+      ${hasPurchaseItems ? `
       <div style="margin: 25px 0; padding: 20px; background-color: #fcfcfc; border: 1px solid #eeeeee; border-radius: 8px; text-align: left;">
         <h3 style="font-size: 15px; font-weight: 600; color: #000000; margin-bottom: 12px; border-bottom: 1px solid #eeeeee; padding-bottom: 8px;">
           ${isTurkish ? '--- SATIN ALINAN ÜRÜNLER ---' : '--- PURCHASED ITEMS ---'}
         </h3>
         <ul style="list-style: none; padding-left: 0; margin: 0;">
-          ${courseInfo.items.map(item => {
-            const isItemPackage = item.type === 'package' || 
-              (item.title && (item.title.toLowerCase().includes('paket') || item.title.toLowerCase().includes('package')));
-            const isItemProduct = item.type === 'product';
+          ${purchaseItems.map(item => {
+            const listPrice = item.listPrice != null ? Number(item.listPrice) : (item.price != null ? Number(item.price) : null);
+            const paidPrice = item.paidPrice != null ? Number(item.paidPrice) : listPrice;
+            const showListStrike = listPrice != null && paidPrice != null && paidPrice < listPrice - 0.009;
             return `
-            <li style="font-size: 14px; color: #000000; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-              <span style="text-align: left;">• <strong>${item.title}</strong></span>
-              <span style="font-size: 12px; color: #666666; background-color: #f0f0f0; padding: 2px 8px; border-radius: 4px; font-weight: 500; margin-left: 10px; flex-shrink: 0;">
-                ${isItemProduct 
-                  ? (isTurkish ? 'Dijital Ürün' : 'Product') 
-                  : isItemPackage
-                    ? (isTurkish ? 'Eğitim Paketi' : 'Training Package')
-                    : (isTurkish ? 'Kurs' : 'Course')}
-              </span>
+            <li style="font-size: 14px; color: #000000; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                <div style="text-align: left;">
+                  <div>• <strong>${item.title || ''}</strong></div>
+                  <div style="font-size: 12px; color: #666666; margin-top: 4px;">${typeLabel(item)}</div>
+                </div>
+                <div style="text-align: right; flex-shrink: 0;">
+                  ${showListStrike ? `<div style="font-size: 12px; color: #999; text-decoration: line-through;">${formatMoney(listPrice)} ${isTurkish ? '₺' : '$'}</div>` : ''}
+                  <div style="font-weight: 600;">${paidPrice != null ? `${formatMoney(paidPrice)} ${isTurkish ? '₺' : '$'}` : ''}</div>
+                </div>
+              </div>
             </li>
             `;
           }).join('')}
         </ul>
+        ${discountAmount > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 13px; color: #166534; margin-top: 8px;">
+          <span>${isTurkish ? 'İndirim' : 'Discount'}${discountCodes ? ` (${discountCodes})` : ''}</span>
+          <span>-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}</span>
+        </div>
+        ` : ''}
+        ${listTotal != null && listTotal > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 6px;">
+          <span>${isTurkish ? 'Liste toplamı' : 'List total'}</span>
+          <span>${formatMoney(listTotal)} ${isTurkish ? '₺' : '$'}</span>
+        </div>
+        ` : ''}
       </div>
       ` : `
       <div class="course-title">
@@ -406,7 +439,9 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       <div class="details-section">
         <div class="detail-row">
           <div class="detail-label">${contentTypeLabel}:</div>
-          <div class="detail-value">${isCart ? (isTurkish ? 'Sepet Alımı' : 'Cart Purchase') : courseInfo.title}</div>
+          <div class="detail-value">${hasPurchaseItems && (isCart || purchaseItems.length > 1)
+            ? (isTurkish ? `Sepet (${purchaseItems.length} kalem)` : `Cart (${purchaseItems.length} items)`)
+            : (courseInfo.title || (purchaseItems[0] && purchaseItems[0].title) || '-')}</div>
         </div>
         <div class="detail-row">
           <div class="detail-label">${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}:</div>
@@ -421,9 +456,15 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           <div class="detail-value">${userInfo.email}</div>
         </div>
         ${!isCertificate ? `
+        ${discountAmount > 0 ? `
         <div class="detail-row">
-          <div class="detail-label">${isCart ? (isTurkish ? 'Toplam Tutar' : 'Total Amount') : (isTurkish ? 'Tutar' : 'Amount')}:</div>
-          <div class="detail-value">${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${orderInfo.amount} ${isTurkish ? '₺' : '$'}`}</div>
+          <div class="detail-label">${isTurkish ? 'İndirim' : 'Discount'}:</div>
+          <div class="detail-value">-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}${discountCodes ? ` (${discountCodes})` : ''}</div>
+        </div>
+        ` : ''}
+        <div class="detail-row">
+          <div class="detail-label">${isTurkish ? 'Ödenen Tutar' : 'Amount Paid'}:</div>
+          <div class="detail-value"><strong>${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${formatMoney(orderInfo.amount)} ${isTurkish ? '₺' : '$'}`}</strong></div>
         </div>
         ` : ''}
       </div>
@@ -512,25 +553,22 @@ ${thankYou}
 ${courseReady}
 
 --- ${isCertificate ? (isTurkish ? 'SERTİFİKA DETAYLARI' : 'CERTIFICATE DETAILS') : (isTurkish ? 'SİPARİŞ DETAYLARI' : 'ORDER DETAILS')} ---
-${isCart ? (isTurkish ? 'İçerik Türü: Sepet Alımı' : 'Content Type: Cart Purchase') : `${contentTypeLabel}: ${courseInfo.title}`}
-${isCart && courseInfo.items ? `
+${hasPurchaseItems && (isCart || purchaseItems.length > 1)
+  ? (isTurkish ? `İçerik Türü: Sepet (${purchaseItems.length} kalem)` : `Content Type: Cart (${purchaseItems.length} items)`)
+  : `${contentTypeLabel}: ${courseInfo.title || (purchaseItems[0] && purchaseItems[0].title) || '-'}`}
+${hasPurchaseItems ? `
 --- ${isTurkish ? 'SATIN ALINAN ÜRÜNLER' : 'PURCHASED ITEMS'} ---
-${courseInfo.items.map((item, idx) => {
-  const isItemPackage = item.type === 'package' || 
-    (item.title && (item.title.toLowerCase().includes('paket') || item.title.toLowerCase().includes('package')));
-  const isItemProduct = item.type === 'product';
-  const typeLabel = isItemProduct 
-    ? (isTurkish ? 'Dijital Ürün' : 'Product') 
-    : isItemPackage 
-      ? (isTurkish ? 'Eğitim Paketi' : 'Training Package') 
-      : (isTurkish ? 'Kurs' : 'Course');
-  return `${idx + 1}. ${item.title} (${typeLabel})`;
+${purchaseItems.map((item, idx) => {
+  const listPrice = item.listPrice != null ? Number(item.listPrice) : (item.price != null ? Number(item.price) : null);
+  const paidPrice = item.paidPrice != null ? Number(item.paidPrice) : listPrice;
+  return `${idx + 1}. ${item.title} (${typeLabel(item)}) — ${paidPrice != null ? `${formatMoney(paidPrice)} ${isTurkish ? '₺' : '$'}` : ''}${listPrice != null && paidPrice != null && paidPrice < listPrice - 0.009 ? ` (liste: ${formatMoney(listPrice)} ${isTurkish ? '₺' : '$'})` : ''}`;
 }).join('\n')}
+${discountAmount > 0 ? `${isTurkish ? 'İndirim' : 'Discount'}${discountCodes ? ` (${discountCodes})` : ''}: -${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}` : ''}
 ` : ''}
 ${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}: ${orderInfo.orderId}
 ${isTurkish ? 'Tarih' : 'Date'}: ${new Date().toLocaleDateString(isTurkish ? 'tr-TR' : 'en-US')}
 ${isTurkish ? 'E-posta' : 'Email'}: ${userInfo.email}
-${!isCertificate ? `${isCart ? (isTurkish ? 'Toplam Tutar' : 'Total Amount') : (isTurkish ? 'Tutar' : 'Amount')}: ${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${orderInfo.amount} ${isTurkish ? '₺' : '$'}`}` : ''}
+${!isCertificate ? `${isTurkish ? 'Ödenen Tutar' : 'Amount Paid'}: ${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${formatMoney(orderInfo.amount)} ${isTurkish ? '₺' : '$'}`}` : ''}
 
 ${isCertificate 
   ? `${isTurkish ? 'Sertifikanızı görüntülemek için' : 'View your certificate'}: ${courseUrl}`

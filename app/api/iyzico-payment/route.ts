@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
+import {
+  buildOrderSnapshot,
+  resolveEmailCourseType,
+} from '@/lib/orderSnapshot';
 import Iyzipay from 'iyzipay';
 
 interface CartItemInput {
@@ -54,22 +58,43 @@ function getTierActivePrice(tier: {
   return Number(tier.price) || 0;
 }
 
-// Ücretsiz kayıt e-postası gönderme
-async function sendFreeEnrollmentEmail(
-  courseData: any, 
-  userInfo: { name: string; email: string }, 
-  orderId: string, 
-  locale: string, 
-  courseType: string = 'online'
-) {
+// Ücretsiz / ücretli ortak onay e-postası
+async function sendOrderConfirmationEmail(params: {
+  userName: string;
+  email: string;
+  orderId: string;
+  locale: string;
+  snapshot: ReturnType<typeof buildOrderSnapshot>;
+  cartMode: boolean;
+  isFree?: boolean;
+  paidAmount?: number | string;
+}) {
   try {
     const { sendPurchaseConfirmationEmail } = await import('../../_services/emailService');
-    const userInfoForEmail = { name: userInfo.name, email: userInfo.email };
-    const courseInfo = { title: courseData.title, description: courseData.description || '', slug: courseData.slug };
-    const orderInfo = { orderId: orderId, amount: '0.00', isFree: true };
+    const courseType = resolveEmailCourseType(params.snapshot, params.cartMode);
+    const title =
+      params.cartMode || params.snapshot.items.length > 1
+        ? 'Sepet Alımı'
+        : params.snapshot.items[0]?.title || 'Sipariş';
 
-    const emailResult = await sendPurchaseConfirmationEmail(userInfoForEmail, courseInfo, orderInfo, locale, courseType);
-    return { success: emailResult.success };
+    await sendPurchaseConfirmationEmail(
+      { name: params.userName, email: params.email },
+      {
+        title,
+        items: params.snapshot.items,
+      },
+      {
+        orderId: params.orderId,
+        amount: params.isFree ? '0.00' : String(params.paidAmount ?? params.snapshot.paidTotal),
+        isFree: !!params.isFree,
+        listTotal: params.snapshot.listTotal,
+        discountAmount: params.snapshot.discountAmount,
+        discountCodes: params.snapshot.discountCodes,
+      },
+      params.locale,
+      courseType
+    );
+    return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -105,6 +130,8 @@ async function saveOrderToDatabase(orderData: any) {
           tierId: orderData.tierId || null,
           cartMode: orderData.cartMode || false,
           cartItems: orderData.cartItems || [],
+          orderSnapshot: orderData.orderSnapshot || null,
+          listTotal: orderData.listTotal ?? null,
         },
         discountcode: orderData.discountCodes,
         discountamount: orderData.totalDiscount || 0,
@@ -499,6 +526,12 @@ export async function POST(request: Request) {
     // Sipariş bilgilerini kaydet
     const isEventCertificateOrder = !isCartMode && body.itemType === 'event_certificate';
 
+    const orderSnapshot = buildOrderSnapshot(validatedItems, {
+      paidTotal: finalAmount,
+      discountAmount: totalDiscount,
+      discountCodes: body.discountCodes || '',
+    });
+
     const orderData = {
       orderId,
       courseId: isCartMode ? 'CART' : (isTierPurchase ? body.courseId : validatedItems[0].id),
@@ -524,7 +557,9 @@ export async function POST(request: Request) {
       siteApplicationId: isEventCertificateOrder ? body.courseId : undefined,
       eventSlug: isEventCertificateOrder ? (body.eventSlug || validatedItems[0]?.slug) : undefined,
       cartMode: isCartMode,
-      cartItems: validatedItems,
+      cartItems: orderSnapshot.items,
+      orderSnapshot,
+      listTotal: orderSnapshot.listTotal,
     };
 
     const saveResult = await saveOrderToDatabase(orderData);
@@ -555,11 +590,13 @@ export async function POST(request: Request) {
               .single();
 
             if (!existingPurchase) {
+              const paidShare =
+                orderSnapshot.items.find((line) => line.id === item.id)?.paidPrice ?? 0;
               await supabase.from('myuni_products_purchases').insert({
                 user_id: userIdForEnrollment,
                 product_id: item.id,
                 purchased_at: new Date().toISOString(),
-                price_paid: 0
+                price_paid: paidShare
               });
             }
           } else if (item.type === 'package') {
@@ -613,18 +650,21 @@ export async function POST(request: Request) {
           await createRewardCodeAfterPayment(userIdForEnrollment);
         } catch (e) {}
         
-        // E-posta gönderimi (İlk sıradaki kurs veya sepet özeti için)
+        // E-posta: sepet / paket / ürün / tier dahil tüm ücretsiz siparişler
         try {
-          if (!isCartMode && validatedItems[0].type === 'course' && validatedItems[0].fullData) {
-            await sendFreeEnrollmentEmail(
-              validatedItems[0].fullData, 
-              { name: body.name, email: buyerEmail }, 
-              orderId, 
-              body.locale || 'tr', 
-              validatedItems[0].course_type || 'online'
-            );
-          }
-        } catch (e) {}
+          await sendOrderConfirmationEmail({
+            userName: body.name,
+            email: buyerEmail,
+            orderId,
+            locale: body.locale || 'tr',
+            snapshot: orderSnapshot,
+            cartMode: isCartMode,
+            isFree: true,
+            paidAmount: '0.00',
+          });
+        } catch (e) {
+          console.error('Free order confirmation email error:', e);
+        }
 
         const successRedirectUrl = `${baseUrl}/${body.locale || 'tr'}/payment-success?free=true&orderId=${orderId}&names=${encodeURIComponent(enrolledItemsDetails.join(', '))}`;
         

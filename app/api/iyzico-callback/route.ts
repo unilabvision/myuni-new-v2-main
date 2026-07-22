@@ -4,6 +4,10 @@ import {
   markSiteApplicationPaid,
   notifyUniboardPaymentConfirm,
 } from '@/lib/siteApplications/applicationPayments';
+import {
+  buildOrderSnapshot,
+  resolveEmailCourseType,
+} from '@/lib/orderSnapshot';
 import Iyzipay from 'iyzipay';
 
 export async function POST(request: Request) {
@@ -56,6 +60,42 @@ export async function POST(request: Request) {
                 const locale = order.custom_data?.locale || 'tr';
                 const isCartMode = order.custom_data?.cartMode === true;
                 const cartItems = order.custom_data?.cartItems || [];
+                const paidPriceNum = result.paidPrice
+                  ? parseFloat(result.paidPrice)
+                  : Number(order.amount) || 0;
+
+                const orderSnapshot =
+                  order.custom_data?.orderSnapshot &&
+                  Array.isArray(order.custom_data.orderSnapshot.items) &&
+                  order.custom_data.orderSnapshot.items.length > 0
+                    ? {
+                        ...order.custom_data.orderSnapshot,
+                        paidTotal: paidPriceNum,
+                      }
+                    : buildOrderSnapshot(
+                        cartItems.length > 0
+                          ? cartItems.map((item: any) => ({
+                              ...item,
+                              price: item.listPrice ?? item.price ?? 0,
+                            }))
+                          : [
+                              {
+                                id: order.courseid,
+                                title: order.coursename,
+                                price: Number(order.amount) || paidPriceNum,
+                                type: order.custom_data?.itemType || 'course',
+                              },
+                            ],
+                        {
+                          paidTotal: paidPriceNum,
+                          discountAmount: Number(order.discountamount || order.custom_data?.totalDiscount || 0),
+                          discountCodes: order.discountcode || order.custom_data?.discountCodes || '',
+                        }
+                      );
+
+                const snapshotById = new Map(
+                  orderSnapshot.items.map((item) => [item.id, item] as const)
+                );
                 
                 let firstEnrollmentId: string | undefined;
                 let deliveredItemsDetails: string[] = [];
@@ -78,7 +118,7 @@ export async function POST(request: Request) {
                                         user_id: userId,
                                         product_id: item.id,
                                         purchased_at: new Date().toISOString(),
-                                        price_paid: item.price
+                                        price_paid: snapshotById.get(item.id)?.paidPrice ?? item.paidPrice ?? item.price ?? 0,
                                     })
                                     .select()
                                     .single();
@@ -266,8 +306,14 @@ export async function POST(request: Request) {
                     enrolled: true, 
                     enrollmentid: firstEnrollmentId || null,
                     updated_at: new Date().toISOString(),
+                    amount: paidPriceNum,
                     custom_data: {
                         ...order.custom_data,
+                        orderSnapshot: {
+                          ...orderSnapshot,
+                          paidTotal: paidPriceNum,
+                          iyzicoPaidPrice: result.paidPrice,
+                        },
                         iyzico_paymentId: result.paymentId,
                         iyzico_authCode: result.authCode
                     }
@@ -282,45 +328,33 @@ export async function POST(request: Request) {
                   console.error("Referral update error", e);
                 }
                 
-                // Email Gönderimi
+                // Email Gönderimi — sipariş snapshot (kalemler + ödenen tutar)
                 try {
                   const { sendPurchaseConfirmationEmail } = await import('../../_services/emailService');
-                  const userName = order.useremail.split('@')[0];
-                  
-                  if (isCartMode && cartItems.length > 0) {
-                      // Sepet modu için tüm ürünleri içeren TEK bir e-posta gönderimi
-                      await sendPurchaseConfirmationEmail(
-                        { name: order.custom_data?.userName || userName, email: order.useremail },
-                        { title: 'Sepet Alımı', items: cartItems },
-                        { orderId: orderId, amount: result.paidPrice, isFree: false },
-                        locale,
-                        'cart'
-                      );
-                  } else {
-                      // Tekil ürün onay e-postası
-                      const itemType = order.custom_data?.itemType || 'course';
-                      let emailItemData: { title: string; description?: string; slug?: string; course_type?: string } | null = null;
-                      
-                      if (itemType === 'product') {
-                        const { data: productForEmail } = await supabase
-                          .from('myuni_products').select('title, description, slug').eq('id', order.courseid).single();
-                        emailItemData = productForEmail;
-                      } else {
-                        const { data: courseForEmail } = await supabase
-                          .from('myuni_courses').select('title, description, slug, course_type').eq('id', order.courseid).single();
-                        emailItemData = courseForEmail;
-                      }
+                  const userName = order.custom_data?.userName || order.useremail.split('@')[0];
+                  const courseType = resolveEmailCourseType(orderSnapshot, isCartMode);
+                  const emailTitle =
+                    isCartMode || orderSnapshot.items.length > 1
+                      ? 'Sepet Alımı'
+                      : orderSnapshot.items[0]?.title || order.coursename || 'Sipariş';
 
-                      if (emailItemData) {
-                        await sendPurchaseConfirmationEmail(
-                          { name: order.custom_data?.userName || userName, email: order.useremail },
-                          { title: emailItemData.title, description: emailItemData.description || '', slug: emailItemData.slug || '' },
-                          { orderId: orderId, amount: result.paidPrice, isFree: false },
-                          locale,
-                          itemType === 'product' ? 'product' : (emailItemData.course_type || 'online')
-                        );
-                      }
-                  }
+                  await sendPurchaseConfirmationEmail(
+                    { name: userName, email: order.useremail },
+                    {
+                      title: emailTitle,
+                      items: orderSnapshot.items,
+                    },
+                    {
+                      orderId: orderId,
+                      amount: paidPriceNum,
+                      isFree: paidPriceNum <= 0,
+                      listTotal: orderSnapshot.listTotal,
+                      discountAmount: orderSnapshot.discountAmount,
+                      discountCodes: orderSnapshot.discountCodes,
+                    },
+                    locale,
+                    courseType
+                  );
                 } catch (e) {
                   console.error("Email sending error", e);
                 }
