@@ -6,7 +6,6 @@ import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
 import { ChevronRight, Calendar, ArrowLeft, Tag, Copy, Share2, Clock, Users, Gift, Percent } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import PageLayout from '@/app/components/layout/PageLayout';
 
 type SupportedLocale = 'tr' | 'en';
@@ -73,67 +72,27 @@ function createSlug(name: string | null | undefined): string {
     .trim();
 }
 
-async function getCampaignBySlug(slug: string): Promise<Campaign | null> {
+async function fetchCampaignBySlug(
+  slug: string
+): Promise<{ campaign: Campaign; related: Campaign[] } | null> {
   try {
-    const bySlug = await supabase
-      .from('discount_codes')
-      .select('*')
-      .eq('is_campaign', true)
-      .eq('campaign_slug', slug)
-      .limit(1)
-      .maybeSingle();
-
-    if (bySlug.error && bySlug.error.code !== 'PGRST116') {
-      console.error('Error fetching campaign by campaign_slug:', bySlug.error);
+    const response = await fetch(
+      `/api/campaigns/by-slug?slug=${encodeURIComponent(slug)}&relatedLimit=3`
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      console.error('Error fetching campaign by slug:', response.statusText);
       return null;
     }
-
-    if (bySlug.data) {
-      return bySlug.data as unknown as Campaign;
-    }
-
-    const { data: campaigns, error } = await supabase
-      .from('discount_codes')
-      .select('*')
-      .eq('is_campaign', true)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching campaigns for fallback:', error);
-      return null;
-    }
-
-    const fallback = campaigns?.find(c => {
-      if (!c.campaign_name) return false;
-      return createSlug(c.campaign_name) === slug;
-    });
-
-    return fallback || null;
+    const json = await response.json();
+    if (!json.success || !json.data?.campaign) return null;
+    return {
+      campaign: json.data.campaign as Campaign,
+      related: (json.data.related || []) as Campaign[],
+    };
   } catch (error) {
-    console.error('Error in getCampaignBySlug:', error);
+    console.error('Error in fetchCampaignBySlug:', error);
     return null;
-  }
-}
-
-async function getRelatedCampaigns(currentCampaignId: string, limit: number = 3): Promise<Campaign[]> {
-  try {
-    const { data: campaigns, error } = await supabase
-      .from('discount_codes')
-      .select('*')
-      .eq('is_campaign', true)
-      .neq('id', currentCampaignId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      console.error('Error fetching related campaigns:', error);
-      return [];
-    }
-
-    return campaigns || [];
-  } catch (error) {
-    console.error('Error in getRelatedCampaigns:', error);
-    return [];
   }
 }
 
@@ -170,14 +129,13 @@ export default function CampaignDetailPage({
     async function loadCampaignData() {
       try {
         setLoading(true);
-        const campaignData = await getCampaignBySlug(slug);
-        if (!campaignData) {
+        const result = await fetchCampaignBySlug(slug);
+        if (!result) {
           notFound();
           return;
         }
-        setCampaign(campaignData);
-        const relatedData = await getRelatedCampaigns(campaignData.id);
-        setRelatedCampaigns(relatedData);
+        setCampaign(result.campaign);
+        setRelatedCampaigns(result.related);
       } catch (error) {
         console.error('Error loading campaign data:', error);
         notFound();

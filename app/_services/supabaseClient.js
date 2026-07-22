@@ -264,49 +264,22 @@ export const dbHelpers = {
   },
 
   // İndirim kodlarını al
-  async getDiscountCodes(activeOnly = true) {
-    let query = supabase
-      .from('discount_codes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (activeOnly) {
-      const today = new Date().toISOString().split('T')[0];
-      query = query.gte('valid_until', today);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error('Error fetching discount codes:', error);
-      return [];
-    }
-    
-    return data || [];
+  // DEPRECATED: discount_codes is locked behind RLS. Use POST /api/discount-codes/validate
+  // or GET /api/discount-codes/mine / GET /api/campaigns instead of anon client access.
+  async getDiscountCodes(_activeOnly = true) {
+    console.warn(
+      '[supabaseClient.getDiscountCodes] Deprecated: do not query discount_codes with anon key. Use /api/discount-codes/*'
+    );
+    return [];
   },
 
   // İndirim kodu doğrula
-  async validateDiscountCode(code, courseId = null) {
-    const { data, error } = await supabase
-      .from('discount_codes')
-      .select('*')
-      .eq('code', code.toUpperCase())
-      .gte('valid_until', new Date().toISOString().split('T')[0])
-      .single();
-    
-    if (error) {
-      console.error('Error validating discount code:', error);
-      return { valid: false, error: 'Invalid discount code' };
-    }
-    
-    // Kurs spesifik kontrol
-    if (courseId && data.applicable_courses && data.applicable_courses.length > 0) {
-      if (!data.applicable_courses.includes(courseId)) {
-        return { valid: false, error: 'Discount code not applicable for this course' };
-      }
-    }
-    
-    return { valid: true, data };
+  // DEPRECATED: use POST /api/discount-codes/validate
+  async validateDiscountCode(_code, _courseId = null) {
+    console.warn(
+      '[supabaseClient.validateDiscountCode] Deprecated: use POST /api/discount-codes/validate'
+    );
+    return { valid: false, error: 'Use /api/discount-codes/validate' };
   },
 
   // Kurs istatistiklerini al

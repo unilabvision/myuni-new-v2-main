@@ -402,12 +402,19 @@ function DashboardContent({ locale }: { locale: string }) {
         // Event Enrollments
         getUserEventEnrollments(userId),
 
-        // Discount Codes
-        supabase
-          .from('discount_codes')
-          .select('*')
-          .eq('owner_id', userId)
-          .order('created_at', { ascending: false }),
+        // Discount Codes (owner) — server API + Clerk auth
+        fetch('/api/discount-codes/mine')
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({ success: false, data: [] }));
+            if (!res.ok || !json.success) {
+              return { data: null, error: json.error || `HTTP ${res.status}` };
+            }
+            return { data: json.data || [], error: null };
+          })
+          .catch((err) => {
+            console.error('Error fetching discount codes:', err);
+            return { data: null, error: err };
+          }),
 
         // Product Purchases (Koleksiyon) - Server-side API'den çekerek RLS'yi aş
         fetch(`/api/collection/my-purchased-products`).then(res => res.json()).catch(err => {

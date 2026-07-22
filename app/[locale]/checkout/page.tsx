@@ -11,7 +11,6 @@ import Image from 'next/image';
 import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
 import supabase from '../../_services/supabaseClient.js';
 import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
-import { resolveDiscountRestrictions } from '../../../lib/discountRestrictions';
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -257,7 +256,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState('');
   const [appliedDiscounts, setAppliedDiscounts] = useState<AppliedDiscount[]>([]);
-  const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([]);
   
   // Referral states
   const [referralCode, setReferralCode] = useState('');
@@ -265,6 +263,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const [referralError, setReferralError] = useState('');
   const [appliedReferral, setAppliedReferral] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const affiliateAutoAppliedRef = React.useRef(false);
   
   // Form states
   const [formData, setFormData] = useState<FormData>({
@@ -493,56 +492,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
   }, [locale, router, t.error]);
 
-  // Bugünün tarihi yerel saatte (YYYY-MM-DD) - indirim kodları geçerlilik karşılaştırması için
-  const getTodayLocalDateString = useCallback(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }, []);
-
-  const fetchDiscountCodes = useCallback(async () => {
-    try {
-      console.log('Fetching discount codes from the database...');
-      const todayLocal = getTodayLocalDateString();
-      const { data, error: supabaseError } = await supabase
-        .from('discount_codes')
-        .select('*')
-        .eq('is_referral', false) // Sadece referral olmayan kodları getir
-        .gte('valid_until', todayLocal); // Geçerlilik tarihi bugün veya sonrası olan kodlar
-      
-      if (supabaseError) {
-        console.error('Error fetching discount codes:', supabaseError);
-        return false;
-      }
-
-      const mappedCodes = data.map(code => ({
-        code: code.code,
-        discountAmount: code.discount_amount,
-        type: code.discount_type,
-        validUntil: code.valid_until,
-        applicableCourses: code.applicable_courses || [],
-        max_usage: code.max_usage,
-        usage_count: code.usage_count,
-        is_referral: code.is_referral,
-        has_balance_limit: !!code.has_balance_limit,
-        // IMPORTANT: don't use `|| null` or you'll lose 0 balances.
-        remaining_balance: code.remaining_balance ?? null,
-        owner_id: code.owner_id || null,
-        minimum_order_amount: code.minimum_order_amount ?? null,
-        full_course_only: !!code.full_course_only,
-      }));
-      
-      console.log(`Successfully fetched ${mappedCodes.length} discount codes (excluding referral codes)`);
-      setDiscountCodes(mappedCodes);
-      return true;
-    } catch (fetchError) {
-      console.error('Failed to fetch discount codes:', fetchError);
-      return false;
-    }
-  }, [getTodayLocalDateString]);
-
   useEffect(() => {
     if (isLoaded && !user) {
       router.push(`/${locale}/login`);
@@ -645,25 +594,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       }
     }
     
-    // Setup an async function to handle everything in sequence
-    const initializePageData = async () => {
-      console.log('Initializing checkout page data...');
-      
-      const codesLoaded = await fetchDiscountCodes();
-      console.log('Discount codes loaded:', codesLoaded);
-      
-      if (typeof window !== 'undefined') {
-        const affiliateCode = localStorage.getItem('myuni_affiliate_code');
-        if (affiliateCode && codesLoaded) {
-          setDiscountCode(affiliateCode);
-          validateDiscountCodeWithValue(affiliateCode);
-        }
-      }
-    };
-    
-    initializePageData();
-    
-  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchTierData, fetchDiscountCodes]);
+  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchTierData]);
 
   // Early bird countdown timer
   useEffect(() => {
@@ -719,67 +650,73 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     console.log('Starting discount code validation...');
     setDiscountLoading(true);
     setDiscountError('');
-    
-    // Check if discount codes have been loaded
-    if (discountCodes.length === 0) {
-      console.error('Discount codes not loaded yet - cannot validate');
-      setDiscountError('Sistem indirim kodlarını henüz yükleyemedi. Lütfen tekrar deneyin.');
-      setDiscountLoading(false);
-      return;
-    }
-    
-    console.log('Available discount codes:', discountCodes);
-    const foundCode = discountCodes.find(
-      code => code.code.toLowerCase() === codeValue.trim().toLowerCase()
-    );
-    
-    if (!foundCode) {
-      console.log(`Code not found in available discount codes. Looking for: "${codeValue.trim().toLowerCase()}"`);
-      console.log('Available codes:', discountCodes.map(c => c.code.toLowerCase()));
+
+    let foundCode: DiscountCode;
+    let fullCourseOnly: boolean;
+    let minimumOrderAmount: number;
+
+    try {
+      const validateRes = await fetch(`/api/discount-codes/validate?locale=${locale}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: codeValue.trim(),
+          courseId: !isCartMode && courseData ? courseData.id : null,
+          itemType: isCartMode ? 'cart' : itemType,
+          isFullCourse: isCartMode
+            ? cartItems.some(
+                (ci) =>
+                  cartIdsParam.split(',').includes(ci.id) &&
+                  ci.type === 'tier' &&
+                  ci.isFullCourse
+              )
+            : !!courseData?.isFullCourse,
+          coursePrice: !isCartMode && courseData ? getActivePrice(courseData) : undefined,
+          locale,
+        }),
+      });
+
+      const validateJson = await validateRes.json();
+      if (!validateJson.success || !validateJson.data) {
+        setDiscountError(validateJson.error || t.invalidDiscount);
+        setDiscountLoading(false);
+        return;
+      }
+
+      const d = validateJson.data;
+      foundCode = {
+        code: d.code,
+        discountAmount: Number(d.discountAmount),
+        type: d.type,
+        validUntil: d.validUntil,
+        applicableCourses: d.applicableCourses || [],
+        max_usage: Number(d.max_usage) || 0,
+        usage_count: Number(d.usage_count) || 0,
+        is_referral: false,
+        has_balance_limit: !!d.has_balance_limit,
+        remaining_balance: d.remaining_balance ?? null,
+        owner_id: d.owner_id || null,
+        minimum_order_amount: d.minimum_order_amount ?? null,
+        full_course_only: !!d.full_course_only,
+      };
+      fullCourseOnly = Boolean(d.fullCourseOnly);
+      minimumOrderAmount = Number(d.minimumOrderAmount) || 0;
+      console.log('Validated discount code via API:', foundCode);
+    } catch (err) {
+      console.error('Discount validate API error:', err);
       setDiscountError(t.invalidDiscount);
       setDiscountLoading(false);
       return;
     }
-    
-    console.log('Found matching discount code:', foundCode);
-    // valid_until = "geçerli olduğu günün sonu" (o gün 23:59:59'a kadar geçerli)
-    const validUntilEndOfDay = new Date(foundCode.validUntil);
-    validUntilEndOfDay.setHours(23, 59, 59, 999);
-    const now = new Date();
-    
-    if (validUntilEndOfDay < now) {
-      console.log('Code expired (valid_until end of day passed), showing error');
-      setDiscountError(t.discountExpired);
-      setDiscountLoading(false);
-      return;
-    }
-    
-    if (!isCartMode && foundCode.applicableCourses.length > 0 && courseData && !foundCode.applicableCourses.includes(courseData.id)) {
-      console.log('Code not applicable for this course, showing error');
-      setDiscountError(t.discountNotApplicable);
-      setDiscountLoading(false);
-      return;
-    }
 
-    // Tam eğitim + min tutar: DB bayrakları VE 2000₺+ fixed otomatik kuralları
-    const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions({
-      type: foundCode.type,
-      discountAmount: foundCode.discountAmount,
-      has_balance_limit: foundCode.has_balance_limit,
-      minimum_order_amount: foundCode.minimum_order_amount,
-      full_course_only: foundCode.full_course_only,
-    });
-
-    if (fullCourseOnly) {
-      if (isCartMode) {
-        const activeCartItemsForFull = cartItems.filter(ci => cartIdsParam.split(',').includes(ci.id));
-        const hasFullCourseItem = activeCartItemsForFull.some(ci => ci.type === 'tier' && ci.isFullCourse);
-        if (!hasFullCourseItem) {
-          setDiscountError(t.discountFullCourseOnly);
-          setDiscountLoading(false);
-          return;
-        }
-      } else if (itemType !== 'tier' || !courseData?.isFullCourse) {
+    if (fullCourseOnly && isCartMode) {
+      const activeCartItemsForFull = cartItems.filter((ci) =>
+        cartIdsParam.split(',').includes(ci.id)
+      );
+      const hasFullCourseItem = activeCartItemsForFull.some(
+        (ci) => ci.type === 'tier' && ci.isFullCourse
+      );
+      if (!hasFullCourseItem) {
         setDiscountError(t.discountFullCourseOnly);
         setDiscountLoading(false);
         return;
@@ -973,6 +910,19 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     console.log('Discount code successfully applied');
     setDiscountLoading(false);
   };
+
+  // Affiliate kod: sayfa hazır olunca tek seferde validate API ile uygula
+  useEffect(() => {
+    if (pageLoading || appliedDiscounts.length > 0 || affiliateAutoAppliedRef.current) return;
+    if (typeof window === 'undefined') return;
+    const affiliateCode = localStorage.getItem('myuni_affiliate_code');
+    if (!affiliateCode) return;
+    if (!isCartMode && !courseData) return;
+    affiliateAutoAppliedRef.current = true;
+    setDiscountCode(affiliateCode);
+    void validateDiscountCodeWithValue(affiliateCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot affiliate apply when page ready
+  }, [pageLoading, courseData, isCartMode]);
 
   const validateDiscountCode = async () => {
     await validateDiscountCodeWithValue(discountCode);
