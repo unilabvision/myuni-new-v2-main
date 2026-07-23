@@ -7,6 +7,8 @@ import {
 import {
   buildOrderSnapshot,
   resolveEmailCourseType,
+  rescaleSnapshotForActualPaid,
+  type OrderSnapshot,
 } from '@/lib/orderSnapshot';
 import Iyzipay from 'iyzipay';
 
@@ -55,6 +57,39 @@ export async function POST(request: Request) {
                     resolve(NextResponse.redirect(new URL('/tr/payment-failed?error=order_not_found', baseUrl), 303));
                     return;
                 }
+
+                // Idempotency guard: Iyzico may retry/replay the callback (or the
+                // buyer may resubmit the same token/hit back-button), and two
+                // such requests can race each other concurrently. Atomically
+                // claim the order by requiring it be in a fresh state
+                // ('pending' or 'failed') — this excludes BOTH 'completed' AND
+                // 'processing', so only ONE concurrent request can ever win the
+                // claim; every other (replayed or racing) request affects zero
+                // rows here and is redirected without re-running enrollment /
+                // referral rewards / emails again.
+                const { data: claimedOrder, error: claimError } = await supabase
+                    .from('orders')
+                    .update({ status: 'processing', updated_at: new Date().toISOString() })
+                    .eq('orderid', orderId)
+                    .in('status', ['pending', 'failed'])
+                    .select()
+                    .maybeSingle();
+
+                if (claimError || !claimedOrder) {
+                    const dupLocale = order.custom_data?.locale || 'tr';
+                    const dupIsCartMode = order.custom_data?.cartMode === true;
+                    const successUrl = new URL(`/${dupLocale}/payment-success`, baseUrl);
+                    successUrl.searchParams.set('orderId', orderId);
+                    successUrl.searchParams.set('enrolled', 'true');
+                    if (dupIsCartMode) {
+                        successUrl.searchParams.set('cartMode', 'true');
+                    } else {
+                        successUrl.searchParams.set('courseId', order.courseid);
+                        successUrl.searchParams.set('type', order.custom_data?.itemType || 'course');
+                    }
+                    resolve(NextResponse.redirect(successUrl, 303));
+                    return;
+                }
                 
                 const userId = order.custom_data?.userId || order.useremail;
                 const locale = order.custom_data?.locale || 'tr';
@@ -64,14 +99,20 @@ export async function POST(request: Request) {
                   ? parseFloat(result.paidPrice)
                   : Number(order.amount) || 0;
 
-                const orderSnapshot =
+                // If a snapshot was already persisted at checkout-initiation time,
+                // reconcile it with the amount Iyzico/the bank actually charged —
+                // rescaling every line item's paidPrice proportionally (instead of
+                // only overwriting the top-level paidTotal) so the parts still sum
+                // to the whole, and recording any installment-commission surplus
+                // separately rather than silently inflating recorded revenue.
+                const orderSnapshot: OrderSnapshot =
                   order.custom_data?.orderSnapshot &&
                   Array.isArray(order.custom_data.orderSnapshot.items) &&
                   order.custom_data.orderSnapshot.items.length > 0
-                    ? {
-                        ...order.custom_data.orderSnapshot,
-                        paidTotal: paidPriceNum,
-                      }
+                    ? rescaleSnapshotForActualPaid(
+                        order.custom_data.orderSnapshot as OrderSnapshot,
+                        paidPriceNum
+                      )
                     : buildOrderSnapshot(
                         cartItems.length > 0
                           ? cartItems.map((item: any) => ({
@@ -118,7 +159,8 @@ export async function POST(request: Request) {
                                         user_id: userId,
                                         product_id: item.id,
                                         purchased_at: new Date().toISOString(),
-                                        price_paid: snapshotById.get(item.id)?.paidPrice ?? item.paidPrice ?? item.price ?? 0,
+                                        // snapshotById already reflects the commission-rescaled allocation.
+                                    price_paid: snapshotById.get(item.id)?.paidPrice ?? item.paidPrice ?? item.price ?? 0,
                                     })
                                     .select()
                                     .single();
@@ -211,8 +253,13 @@ export async function POST(request: Request) {
                             status: 'completed',
                             enrolled: false,
                             updated_at: new Date().toISOString(),
+                            // Record the actual (possibly installment-commission-inflated)
+                            // charged amount — this branch previously left `amount` frozen
+                            // at the pre-charge quote forever.
+                            amount: paidPriceNum,
                             custom_data: {
                                 ...order.custom_data,
+                                orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
                                 iyzico_paymentId: result.paymentId,
                                 iyzico_authCode: result.authCode,
                             },
@@ -246,7 +293,10 @@ export async function POST(request: Request) {
                                     user_id: userId,
                                     product_id: order.courseid,
                                     purchased_at: new Date().toISOString(),
-                                    price_paid: result.paidPrice ? parseFloat(result.paidPrice) : (order.amount || 0),
+                                    // Use the same (commission-rescaled) snapshot allocation as the
+                                    // cart-mode path below, instead of the raw gateway paidPrice, so
+                                    // price_paid is recorded consistently regardless of purchase mode.
+                                    price_paid: snapshotById.get(order.courseid)?.paidPrice ?? paidPriceNum,
                                 })
                                 .select()
                                 .single();
@@ -309,11 +359,9 @@ export async function POST(request: Request) {
                     amount: paidPriceNum,
                     custom_data: {
                         ...order.custom_data,
-                        orderSnapshot: {
-                          ...orderSnapshot,
-                          paidTotal: paidPriceNum,
-                          iyzicoPaidPrice: result.paidPrice,
-                        },
+                        // orderSnapshot.paidTotal/items[].paidPrice are already reconciled
+                        // with paidPriceNum (see rescaleSnapshotForActualPaid above).
+                        orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
                         iyzico_paymentId: result.paymentId,
                         iyzico_authCode: result.authCode
                     }
@@ -351,6 +399,7 @@ export async function POST(request: Request) {
                       listTotal: orderSnapshot.listTotal,
                       discountAmount: orderSnapshot.discountAmount,
                       discountCodes: orderSnapshot.discountCodes,
+                      commissionAmount: orderSnapshot.commissionAmount || 0,
                     },
                     locale,
                     courseType

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
+import { resolveDiscountRestrictions } from '@/lib/discountRestrictions';
 import {
   buildOrderSnapshot,
   resolveEmailCourseType,
@@ -58,6 +60,125 @@ function getTierActivePrice(tier: {
   return Number(tier.price) || 0;
 }
 
+interface DiscountableItem {
+  id: string;
+  price: number;
+  type: string;
+  courseId?: string;
+  isFullCourse?: boolean;
+}
+
+/**
+ * Server-side, single source of truth for discount amounts.
+ * NEVER trust a client-supplied discount/total figure — always recompute
+ * from the `discount_codes` table against server-validated item prices.
+ * Mirrors the eligibility rules enforced in /api/discount-codes/validate.
+ */
+async function computeServerDiscount(
+  discountCodesCsv: string,
+  items: DiscountableItem[]
+): Promise<{ discount: number; appliedCode: string | null; codeId: string | null }> {
+  const rawCode = String(discountCodesCsv || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)[0];
+
+  if (!rawCode || items.length === 0) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  const { data: rows, error } = await supabase
+    .from('discount_codes')
+    .select(
+      'id, code, discount_amount, discount_type, valid_until, applicable_courses, max_usage, usage_count, is_used, is_referral, has_balance_limit, remaining_balance, minimum_order_amount, full_course_only'
+    )
+    .eq('is_referral', false)
+    .ilike('code', rawCode)
+    .limit(5);
+
+  if (error || !rows) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  const codeRow = rows.find(
+    (r) => String(r.code || '').toLowerCase() === rawCode.toLowerCase()
+  );
+  if (!codeRow) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  // Expiry
+  const validUntilStr = codeRow.valid_until as string | null;
+  if (validUntilStr) {
+    const validUntilEnd = new Date(validUntilStr);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(validUntilStr)) {
+      validUntilEnd.setHours(23, 59, 59, 999);
+    }
+    if (validUntilEnd < new Date()) {
+      return { discount: 0, appliedCode: null, codeId: null };
+    }
+  }
+
+  // Usage limits
+  const maxUsage = Number(codeRow.max_usage ?? 0);
+  const usageCount = Number(codeRow.usage_count ?? 0);
+  if (maxUsage > 0 && usageCount >= maxUsage) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+  if (maxUsage <= 1 && codeRow.is_used === true) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions(codeRow);
+  const applicableCourses: string[] = (codeRow.applicable_courses as string[]) || [];
+
+  let eligibleItems = items;
+  if (applicableCourses.length > 0) {
+    eligibleItems = eligibleItems.filter((it) => {
+      const productId = it.type === 'tier' ? it.courseId || it.id : it.id;
+      return applicableCourses.includes(productId);
+    });
+  }
+  if (fullCourseOnly) {
+    eligibleItems = eligibleItems.filter((it) => it.type === 'tier' && it.isFullCourse);
+  }
+
+  if (eligibleItems.length === 0) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  const eligibleTotal = eligibleItems.reduce((sum, it) => sum + (Number(it.price) || 0), 0);
+
+  if (minimumOrderAmount > 0 && eligibleTotal < minimumOrderAmount) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  if (
+    codeRow.has_balance_limit &&
+    codeRow.remaining_balance !== null &&
+    Number(codeRow.remaining_balance) <= 0
+  ) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  let discountValue = 0;
+  if (
+    codeRow.has_balance_limit &&
+    codeRow.remaining_balance !== null &&
+    codeRow.remaining_balance !== undefined
+  ) {
+    discountValue = Math.min(Number(codeRow.remaining_balance), eligibleTotal);
+  } else if (String(codeRow.discount_type).toLowerCase() === 'percentage') {
+    discountValue = (eligibleTotal * Number(codeRow.discount_amount || 0)) / 100;
+  } else {
+    discountValue = Math.min(Number(codeRow.discount_amount || 0), eligibleTotal);
+  }
+
+  discountValue = Math.max(0, Math.round(discountValue * 100) / 100);
+
+  return { discount: discountValue, appliedCode: codeRow.code, codeId: codeRow.id };
+}
+
 // Ücretsiz / ücretli ortak onay e-postası
 async function sendOrderConfirmationEmail(params: {
   userName: string;
@@ -90,6 +211,7 @@ async function sendOrderConfirmationEmail(params: {
         listTotal: params.snapshot.listTotal,
         discountAmount: params.snapshot.discountAmount,
         discountCodes: params.snapshot.discountCodes,
+        commissionAmount: params.snapshot.commissionAmount || 0,
       },
       params.locale,
       courseType
@@ -170,8 +292,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "Gerekli parametreler eksik (email, name)" }, { status: 400 });
     }
 
-    const clerkUserId = body.clerkUserId || body.userId;
     const isCartMode = body.cartMode === true;
+    // Event certificate purchases are a guest flow tied to a pre-existing site
+    // application (identified by applicationId + email), not to a Clerk session.
+    // Every other purchase path enrolls a userId, so it MUST be backed by an
+    // authenticated Clerk session — never trust body.clerkUserId / body.userId,
+    // otherwise a caller could enroll an arbitrary account for free/cheap items.
+    const isEventCertificateItemType = !isCartMode && body.itemType === 'event_certificate';
+
+    let clerkUserId: string | undefined;
+    if (!isEventCertificateItemType) {
+      const { userId: sessionUserId } = await auth();
+      if (!sessionUserId) {
+        return NextResponse.json(
+          { success: false, message: 'Bu işlem için giriş yapmanız gerekiyor.' },
+          { status: 401 }
+        );
+      }
+      clerkUserId = sessionUserId;
+    }
+
     const buyerEmail = body.email;
     const buyerPhone = body.phone || "+905555555555";
     const buyerName = body.name.split(' ')[0] || body.name;
@@ -188,7 +328,10 @@ export async function POST(request: Request) {
 
     let validatedItems: any[] = [];
     let originalTotalAmount = 0;
-    let totalDiscount = body.totalDiscount || 0;
+    // NEVER trust body.totalDiscount — it is recomputed server-side below from
+    // discount_codes against the server-validated item prices.
+    let totalDiscount = 0;
+    let appliedDiscountCode: string | null = null;
     let finalAmount = 0;
     let orderName = '';
     
@@ -239,7 +382,7 @@ export async function POST(request: Request) {
         } else if (item.type === 'tier') {
           const { data: tierData } = await supabase
             .from('myuni_course_tiers')
-            .select('id, title, price, early_bird_price, early_bird_deadline, course_id, myuni_courses(slug, title)')
+            .select('id, title, price, early_bird_price, early_bird_deadline, course_id, is_full_course, myuni_courses(slug, title)')
             .eq('id', item.id)
             .eq('is_active', true)
             .single();
@@ -255,6 +398,7 @@ export async function POST(request: Request) {
               slug: courseInfo?.slug || item.slug,
               courseId: tierData.course_id,
               tierId: tierData.id,
+              isFullCourse: !!(tierData as { is_full_course?: boolean }).is_full_course,
             });
             originalTotalAmount += activePrice;
           }
@@ -294,6 +438,10 @@ export async function POST(request: Request) {
       if (validatedItems.length === 0) {
         return NextResponse.json({ success: false, message: "Sepetteki ürünler geçerli değil veya aktif değil" }, { status: 400 });
       }
+
+      const discountResult = await computeServerDiscount(body.discountCodes || '', validatedItems);
+      totalDiscount = discountResult.discount;
+      appliedDiscountCode = discountResult.appliedCode;
 
       finalAmount = Math.max(0, originalTotalAmount - totalDiscount);
       orderName = `Sepet Siparişi (${validatedItems.length} Ürün)`;
@@ -480,6 +628,7 @@ export async function POST(request: Request) {
           tierId: tierData.id,
           course_type: courseInfo.course_type,
           fullData: courseInfo,
+          isFullCourse: !!(tierData as { is_full_course?: boolean }).is_full_course,
         });
         originalTotalAmount = activePrice;
       } else {
@@ -515,6 +664,12 @@ export async function POST(request: Request) {
         originalTotalAmount = activePrice;
       }
 
+      if (!isEventCertificateItemType) {
+        const discountResult = await computeServerDiscount(body.discountCodes || '', validatedItems);
+        totalDiscount = discountResult.discount;
+        appliedDiscountCode = discountResult.appliedCode;
+      }
+
       finalAmount = Math.max(0, originalTotalAmount - totalDiscount);
       orderName = validatedItems[0].title;
     }
@@ -529,7 +684,7 @@ export async function POST(request: Request) {
     const orderSnapshot = buildOrderSnapshot(validatedItems, {
       paidTotal: finalAmount,
       discountAmount: totalDiscount,
-      discountCodes: body.discountCodes || '',
+      discountCodes: appliedDiscountCode || '',
     });
 
     const orderData = {
@@ -544,7 +699,7 @@ export async function POST(request: Request) {
       clerkUserId,
       userId: userIdForEnrollment,
       locale: body.locale || 'tr',
-      discountCodes: body.discountCodes || '',
+      discountCodes: appliedDiscountCode || '',
       totalDiscount: totalDiscount,
       userPhone: buyerPhone,
       userName: body.name,

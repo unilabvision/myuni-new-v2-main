@@ -38,6 +38,11 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const listTotal = orderInfo.listTotal != null ? Number(orderInfo.listTotal) : null;
     const discountAmount = orderInfo.discountAmount != null ? Number(orderInfo.discountAmount) : 0;
     const discountCodes = orderInfo.discountCodes || '';
+    // Extra amount the issuing bank added on top of the quoted price (e.g. when
+    // the buyer chose to pay in installments). This is never merchant revenue —
+    // shown as its own line so "Amount Paid" doesn't look like an unexplained
+    // overcharge relative to "List total − Discount".
+    const commissionAmount = orderInfo.commissionAmount != null ? Number(orderInfo.commissionAmount) : 0;
     const formatMoney = (value) => {
       const n = typeof value === 'string' ? parseFloat(value) : Number(value);
       if (Number.isNaN(n)) return String(value ?? '');
@@ -414,6 +419,12 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           <span>${formatMoney(listTotal)} ${isTurkish ? '₺' : '$'}</span>
         </div>
         ` : ''}
+        ${commissionAmount > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 6px;">
+          <span>${isTurkish ? 'Taksit komisyonu (banka)' : 'Installment commission (bank)'}</span>
+          <span>+${formatMoney(commissionAmount)} ${isTurkish ? '₺' : '$'}</span>
+        </div>
+        ` : ''}
       </div>
       ` : `
       <div class="course-title">
@@ -460,6 +471,12 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'İndirim' : 'Discount'}:</div>
           <div class="detail-value">-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}${discountCodes ? ` (${discountCodes})` : ''}</div>
+        </div>
+        ` : ''}
+        ${commissionAmount > 0 ? `
+        <div class="detail-row">
+          <div class="detail-label">${isTurkish ? 'Taksit komisyonu' : 'Installment commission'}:</div>
+          <div class="detail-value">+${formatMoney(commissionAmount)} ${isTurkish ? '₺' : '$'}</div>
         </div>
         ` : ''}
         <div class="detail-row">
@@ -568,6 +585,7 @@ ${discountAmount > 0 ? `${isTurkish ? 'İndirim' : 'Discount'}${discountCodes ? 
 ${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}: ${orderInfo.orderId}
 ${isTurkish ? 'Tarih' : 'Date'}: ${new Date().toLocaleDateString(isTurkish ? 'tr-TR' : 'en-US')}
 ${isTurkish ? 'E-posta' : 'Email'}: ${userInfo.email}
+${!isCertificate && commissionAmount > 0 ? `${isTurkish ? 'Taksit komisyonu' : 'Installment commission'}: +${formatMoney(commissionAmount)} ${isTurkish ? '₺' : '$'}` : ''}
 ${!isCertificate ? `${isTurkish ? 'Ödenen Tutar' : 'Amount Paid'}: ${orderInfo.isFree ? (isTurkish ? 'Ücretsiz' : 'Free') : `${formatMoney(orderInfo.amount)} ${isTurkish ? '₺' : '$'}`}` : ''}
 
 ${isCertificate 

@@ -33,6 +33,13 @@ export type OrderSnapshot = {
   discountAmount: number;
   paidTotal: number;
   discountCodes: string;
+  /**
+   * Extra amount charged on top of the originally quoted paidTotal — e.g. a
+   * bank's installment commission/interest added when the buyer pays in
+   * multiple installments. The merchant never receives this portion, so it
+   * must stay separate from discountAmount/listTotal bookkeeping.
+   */
+  commissionAmount?: number;
 };
 
 function roundMoney(n: number): number {
@@ -97,6 +104,46 @@ export function buildOrderSnapshot(
     paidTotal,
     discountCodes: String(opts.discountCodes || '').trim(),
   };
+}
+
+/**
+ * Reconciles an already-persisted snapshot (built at checkout-initiation
+ * time, before the amount actually charged is known) with the ACTUAL amount
+ * charged by the payment gateway. When the buyer pays in installments, the
+ * issuing bank can add its own commission on top of the quoted paidTotal —
+ * this rescales every line item's paidPrice proportionally so
+ * `sum(items[].paidPrice) === actualPaidTotal` always holds, and records the
+ * surplus as `commissionAmount` for transparent display/bookkeeping.
+ * listTotal/discountAmount are left untouched — they describe catalog price
+ * and the discount actually granted, independent of bank fees.
+ */
+export function rescaleSnapshotForActualPaid(
+  snapshot: OrderSnapshot,
+  actualPaidTotal: number
+): OrderSnapshot {
+  const targetPaid = roundMoney(Math.max(0, actualPaidTotal));
+  const originalPaid = roundMoney(snapshot.paidTotal);
+  const commissionAmount = roundMoney(Math.max(0, targetPaid - originalPaid));
+
+  if (Math.abs(targetPaid - originalPaid) < 0.01 || snapshot.items.length === 0) {
+    return { ...snapshot, paidTotal: targetPaid, commissionAmount };
+  }
+
+  let allocated = 0;
+  const items = snapshot.items.map((item, index) => {
+    let paidPrice: number;
+    if (originalPaid <= 0) {
+      paidPrice = index === 0 ? targetPaid : 0;
+    } else if (index === snapshot.items.length - 1) {
+      paidPrice = roundMoney(targetPaid - allocated);
+    } else {
+      paidPrice = roundMoney((item.paidPrice / originalPaid) * targetPaid);
+      allocated = roundMoney(allocated + paidPrice);
+    }
+    return { ...item, paidPrice };
+  });
+
+  return { ...snapshot, items, paidTotal: targetPaid, commissionAmount };
 }
 
 export function resolveEmailCourseType(
