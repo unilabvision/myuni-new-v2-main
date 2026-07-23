@@ -390,7 +390,9 @@ export async function POST(request: Request) {
     // least logging it, since Iyzico's fraud engine can flag many distinct
     // cardholders sharing one identity number as a fraud ring.
     const suppliedIdentityNumber = String(body.identityNumber || '').trim();
-    const isValidIdentityNumber = /^\d{10,11}$/.test(suppliedIdentityNumber);
+    // TCKN (11-digit Turkish national ID) or a foreign passport number
+    // (alphanumeric). Keep this in sync with the checkout form's validation.
+    const isValidIdentityNumber = /^\d{10,11}$/.test(suppliedIdentityNumber) || /^[A-Za-z0-9]{6,20}$/.test(suppliedIdentityNumber);
     if (!isValidIdentityNumber) {
       console.warn(
         `Iyzico payment: no valid buyer identityNumber supplied for ${buyerEmail}; falling back to placeholder TCKN. Checkout form should collect this field.`
