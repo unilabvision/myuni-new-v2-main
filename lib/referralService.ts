@@ -325,139 +325,142 @@ export async function handleReferralUsage(code: string, userId: string): Promise
   }
 }
 
-// Ödeme tamamlandığında kullanılan kodların usage_count'unu artır
-export async function incrementUsageCountAfterPayment(userId: string): Promise<{ success: boolean; error?: string }> {
+function roundMoney(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/**
+ * Consumes the discount code applied to a specific completed order —
+ * incrementing usage_count and decrementing remaining_balance (for
+ * balance-limited codes) atomically.
+ *
+ * This REPLACES the previous `incrementUsageCountAfterPayment(userId)`,
+ * which had two independent, serious bugs:
+ *  1. It only ever looked at codes where `is_used = true`, but the normal
+ *     (non-referral) checkout discount path never set `is_used`, so
+ *     ordinary single-use/balance-limited codes were never actually
+ *     consumed — they could be reused without limit.
+ *  2. Even when it did find a code, it "guessed" which order to pull the
+ *     discount amount from by scanning the last 20 completed orders
+ *     globally and matching on userId — under concurrent traffic this could
+ *     easily attribute the wrong order's discount to a balance-limited code.
+ *
+ * This version is keyed directly to the order that just completed via the
+ * `discountCodeId` recorded on it at checkout time (see
+ * `app/api/iyzico-payment/route.ts`), and uses an optimistic
+ * compare-and-swap update (`.eq('usage_count', currentUsage)`) so two orders
+ * racing to consume the same code can never both succeed — the loser's
+ * conditional UPDATE affects zero rows and retries against fresh state
+ * instead of silently double-spending the code's usage limit / balance.
+ */
+export async function consumeDiscountCodeForOrder(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('=== USAGE COUNT ARTIRMA BAŞLADI ===');
-    console.log('User ID:', userId);
-
-    // Sadece indirim kodları için usage_count artır (referral kodları değil)
-    // Ayrıca bakiye limiti olan kodlar için balance bilgisini de al
-    const { data: usedDiscountCodes, error: findError } = await supabase
-      .from('discount_codes')
-      .select('id, usage_count, code, is_referral, has_balance_limit, remaining_balance')
-      .eq('used_by', userId)
-      .eq('is_used', true)
-      .eq('is_referral', false); // Sadece indirim kodları
-
-    if (findError) {
-      throw findError;
-    }
-
-    if (!usedDiscountCodes || usedDiscountCodes.length === 0) {
-      console.log('No discount codes found for user:', userId);
-      return { success: true }; // Kullanılan indirim kodu yok, hata değil
-    }
-
-    console.log(`Found ${usedDiscountCodes.length} discount codes to update usage count for user:`, userId);
-
-    // Orders tablosundan kullanılan indirim kodunu ve indirim miktarını al
-    // userid yerine custom_data içindeki clerkUserId veya userId ile eşleştir
-    const { data: orderDataList, error: orderError } = await supabase
+    const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('discountcode, discountamount, custom_data, created_at, status')
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(20);
+      .select('discountamount, custom_data')
+      .eq('orderid', orderId)
+      .maybeSingle();
 
-    // En son tamamlanmış siparişi bul (custom_data içinde userId veya clerkUserId ile eşleşen)
-    let orderData = null;
-    if (!orderError && orderDataList) {
-      orderData = orderDataList.find(order => {
-        const orderUserId = order.custom_data?.clerkUserId || order.custom_data?.userId;
-        return orderUserId === userId;
-      });
-      
-      // Eğer bulunamazsa, userid kolonunu da dene (eğer varsa)
-      if (!orderData) {
-        const { data: orderByUserId, error: userIdError } = await supabase
-          .from('orders')
-          .select('discountcode, discountamount, custom_data, created_at, status')
-          .eq('status', 'completed')
-          .eq('userid', userId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (!userIdError && orderByUserId) {
-          orderData = orderByUserId;
-        }
+    if (orderError || !order) {
+      return { success: false, error: orderError?.message || 'Sipariş bulunamadı' };
+    }
+
+    const customData = (order.custom_data || {}) as Record<string, unknown>;
+
+    // Idempotency: a retried/replayed delivery for the same order (e.g. after
+    // the callback recovers a `payment_error` order) must never consume the
+    // code twice.
+    if (customData.discountConsumedAt) {
+      return { success: true };
+    }
+
+    const codeId = customData.discountCodeId as string | null | undefined;
+    if (!codeId) {
+      return { success: true }; // Bu siparişte indirim kodu kullanılmadı
+    }
+
+    const discountAmount =
+      parseFloat(
+        order.discountamount?.toString() ||
+          (customData.totalDiscount as string | number | undefined)?.toString() ||
+          '0'
+      ) || 0;
+
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const { data: codeRow, error: codeError } = await supabase
+        .from('discount_codes')
+        .select('id, usage_count, max_usage, has_balance_limit, remaining_balance, is_referral')
+        .eq('id', codeId)
+        .maybeSingle();
+
+      if (codeError) {
+        return { success: false, error: codeError.message };
       }
-    }
+      if (!codeRow) {
+        // Code was deleted after checkout — nothing to consume.
+        break;
+      }
+      if (codeRow.is_referral) {
+        // Referral codes have unlimited usage; their reward bookkeeping is
+        // handled separately by createRewardCodeAfterPayment.
+        break;
+      }
 
-    let discountCodeString = '';
-    let discountAmount = 0;
-    if (orderData) {
-      // discountcode kolonundan veya custom_data'dan al
-      discountCodeString = orderData.discountcode || orderData.custom_data?.discountCodes || '';
-      discountAmount = parseFloat(orderData.discountamount?.toString() || orderData.custom_data?.totalDiscount?.toString() || '0') || 0;
-    }
+      const currentUsage = Number(codeRow.usage_count) || 0;
+      const maxUsage = Number(codeRow.max_usage) || 0;
+      if (maxUsage > 0 && currentUsage >= maxUsage) {
+        console.warn(`Discount code ${codeId} already at its usage limit; order ${orderId} will not decrement it further.`);
+        break;
+      }
 
-    console.log('=== BALANCE UPDATE DEBUG ===');
-    console.log('User ID:', userId);
-    console.log('Order discount info:', { discountCodeString, discountAmount, orderError });
-    console.log('Used discount codes:', usedDiscountCodes.map(c => ({ code: c.code, has_balance_limit: c.has_balance_limit, remaining_balance: c.remaining_balance })));
-
-    // Her kullanılan indirim kodu için usage_count'u artır ve bakiyeyi azalt
-    for (const code of usedDiscountCodes) {
-      console.log(`Updating usage count for discount code: ${code.code}`);
-      
-      const updateData: Record<string, unknown> = {
-        usage_count: code.usage_count + 1
-      };
-
-      // Eğer bakiye limiti aktifse, bakiyeyi gerçek kullanılan indirim miktarı kadar azalt
-      if (code.has_balance_limit && code.remaining_balance !== null && discountAmount > 0) {
-        // Discount code eşleşmesi - tam eşleşme veya içeriyor mu kontrol et
-        const codeMatches = discountCodeString && (
-          discountCodeString === code.code || 
-          discountCodeString.includes(code.code) ||
-          discountCodeString.split(',').map(c => c.trim()).includes(code.code)
+      const updateData: Record<string, unknown> = { usage_count: currentUsage + 1 };
+      if (codeRow.has_balance_limit && codeRow.remaining_balance !== null) {
+        updateData.remaining_balance = Math.max(
+          0,
+          roundMoney(Number(codeRow.remaining_balance) - discountAmount)
         );
-        
-        if (codeMatches) {
-          const newBalance = code.remaining_balance - discountAmount;
-          updateData.remaining_balance = Math.max(0, newBalance); // Negatif olamaz
-          console.log(`✅ Balance updated for code ${code.code}: ${code.remaining_balance} - ${discountAmount} = ${newBalance}`);
-        } else {
-          console.log(`⚠️ Code mismatch: order code="${discountCodeString}", discount code="${code.code}"`);
-        }
-      } else {
-        console.log(`ℹ️ Skipping balance update for code ${code.code}: has_balance_limit=${code.has_balance_limit}, remaining_balance=${code.remaining_balance}, discountAmount=${discountAmount}`);
       }
-      
-      const { error: updateError } = await supabase
+      if (maxUsage <= 1) {
+        updateData.is_used = true;
+      }
+
+      const { data: updated, error: updateError } = await supabase
         .from('discount_codes')
         .update(updateData)
-        .eq('id', code.id);
+        .eq('id', codeId)
+        .eq('usage_count', currentUsage) // compare-and-swap guard
+        .select('id');
 
       if (updateError) {
-        console.error('Error updating discount code:', code.id, updateError);
-        // Bir kodda hata olsa bile diğerlerini güncellemeye devam et
-      } else {
-        console.log(`Successfully updated discount code: ${code.code}`);
+        return { success: false, error: updateError.message };
       }
+      if (updated && updated.length > 0) {
+        break; // Successfully consumed
+      }
+      // Someone else updated usage_count concurrently — retry against fresh state.
     }
 
-    // Referral kodları için ayrı log
-    const { data: usedReferralCodes, error: referralError } = await supabase
-      .from('discount_codes')
-      .select('id, code, is_referral')
-      .eq('used_by', userId)
-      .eq('is_used', true)
-      .eq('is_referral', true);
+    // Mark the order so a future retry never re-consumes this code.
+    const { error: markError } = await supabase
+      .from('orders')
+      .update({
+        custom_data: { ...customData, discountConsumedAt: new Date().toISOString() },
+      })
+      .eq('orderid', orderId);
 
-    if (!referralError && usedReferralCodes && usedReferralCodes.length > 0) {
-      console.log(`Found ${usedReferralCodes.length} referral codes used by user (usage_count not updated):`, usedReferralCodes.map(c => c.code));
+    if (markError) {
+      console.error('Failed to mark discount code as consumed on order:', orderId, markError);
     }
 
-    console.log('=== USAGE COUNT ARTIRMA TAMAMLANDI ===');
     return { success: true };
   } catch (error) {
-    console.error('Error incrementing usage count after payment:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Usage count güncellenemedi' 
+    console.error('Error consuming discount code for order:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'İndirim kodu tüketilemedi',
     };
   }
 }

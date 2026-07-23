@@ -1,6 +1,20 @@
 // app/_services/emailService.js - Updated with Event Support
 import nodemailer from 'nodemailer';
 
+// Buyer-supplied strings (name, cart item titles, discount codes) are
+// interpolated into this HTML email — which is sent to the buyer AND
+// BCC'd to internal staff via NOTIFICATION_EMAILS — so they must be
+// escaped to prevent HTML/link injection into staff inboxes.
+const escapeHtml = (value) => {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 // Send course purchase confirmation email or event certificate email
 const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, locale = 'tr', courseType = 'online') => {
   try {
@@ -373,7 +387,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     
     <div class="content">
       <div class="greeting">
-        ${greeting},
+        ${escapeHtml(greeting)},
       </div>
       
       <div class="message">
@@ -395,7 +409,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
             <li style="font-size: 14px; color: #000000; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
                 <div style="text-align: left;">
-                  <div>• <strong>${item.title || ''}</strong></div>
+                  <div>• <strong>${escapeHtml(item.title || '')}</strong></div>
                   <div style="font-size: 12px; color: #666666; margin-top: 4px;">${typeLabel(item)}</div>
                 </div>
                 <div style="text-align: right; flex-shrink: 0;">
@@ -409,7 +423,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         </ul>
         ${discountAmount > 0 ? `
         <div style="display: flex; justify-content: space-between; font-size: 13px; color: #166534; margin-top: 8px;">
-          <span>${isTurkish ? 'İndirim' : 'Discount'}${discountCodes ? ` (${discountCodes})` : ''}</span>
+          <span>${isTurkish ? 'İndirim' : 'Discount'}${discountCodes ? ` (${escapeHtml(discountCodes)})` : ''}</span>
           <span>-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}</span>
         </div>
         ` : ''}
@@ -428,7 +442,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
       </div>
       ` : `
       <div class="course-title">
-        ${courseInfo.title}
+        ${escapeHtml(courseInfo.title)}
       </div>
       `}
       
@@ -452,7 +466,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
           <div class="detail-label">${contentTypeLabel}:</div>
           <div class="detail-value">${hasPurchaseItems && (isCart || purchaseItems.length > 1)
             ? (isTurkish ? `Sepet (${purchaseItems.length} kalem)` : `Cart (${purchaseItems.length} items)`)
-            : (courseInfo.title || (purchaseItems[0] && purchaseItems[0].title) || '-')}</div>
+            : escapeHtml(courseInfo.title || (purchaseItems[0] && purchaseItems[0].title) || '-')}</div>
         </div>
         <div class="detail-row">
           <div class="detail-label">${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}:</div>
@@ -464,13 +478,13 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         </div>
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'E-posta' : 'Email'}:</div>
-          <div class="detail-value">${userInfo.email}</div>
+          <div class="detail-value">${escapeHtml(userInfo.email)}</div>
         </div>
         ${!isCertificate ? `
         ${discountAmount > 0 ? `
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'İndirim' : 'Discount'}:</div>
-          <div class="detail-value">-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}${discountCodes ? ` (${discountCodes})` : ''}</div>
+          <div class="detail-value">-${formatMoney(discountAmount)} ${isTurkish ? '₺' : '$'}${discountCodes ? ` (${escapeHtml(discountCodes)})` : ''}</div>
         </div>
         ` : ''}
         ${commissionAmount > 0 ? `

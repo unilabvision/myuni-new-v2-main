@@ -37,6 +37,14 @@ interface PaymentRequestBody {
   referralCode?: string;
   notes?: string;
   locale?: string;
+  // TCKN for Turkish buyers, passport number for foreign buyers. Iyzico
+  // requires this field; sending the SAME placeholder for every real
+  // transaction (as this used to do) is a textbook fraud-ring signal to
+  // their risk engine and can get transactions declined or the merchant
+  // account reviewed. Collect it from the buyer once the checkout form is
+  // updated to ask for it — until then we fall back to the placeholder but
+  // log every fallback so this can be prioritized.
+  identityNumber?: string;
   clerkUserId?: string;
   userId?: string;
   tierId?: string;
@@ -47,15 +55,32 @@ interface PaymentRequestBody {
   cartItems?: CartItemInput[];
 }
 
+// Extends a date-only (YYYY-MM-DD) deadline to the end of that day so
+// "deadline day" behaves the way a buyer expects. Without this, `new
+// Date('2026-08-01')` parses as UTC midnight — 03:00 Turkey time — so an
+// early-bird price could silently expire up to 3 hours earlier than
+// intended. This mirrors the expiry handling already used for discount
+// codes (`computeServerDiscount` below) so the two don't disagree.
+function endOfDeadlineDay(deadline: string): Date {
+  const d = new Date(deadline);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+    d.setHours(23, 59, 59, 999);
+  }
+  return d;
+}
+
+function isEarlyBirdActive(deadline?: string | null): boolean {
+  if (!deadline) return false;
+  return new Date() < endOfDeadlineDay(deadline);
+}
+
 function getTierActivePrice(tier: {
   price: number;
   early_bird_price?: number | null;
   early_bird_deadline?: string | null;
 }): number {
-  if (tier.early_bird_price != null && tier.early_bird_deadline) {
-    const now = new Date();
-    const deadline = new Date(tier.early_bird_deadline);
-    if (now < deadline) return Number(tier.early_bird_price);
+  if (tier.early_bird_price != null && isEarlyBirdActive(tier.early_bird_deadline)) {
+    return Number(tier.early_bird_price);
   }
   return Number(tier.price) || 0;
 }
@@ -240,6 +265,7 @@ async function saveOrderToDatabase(orderData: any) {
           userId: orderData.userId,
           locale: orderData.locale,
           discountCodes: orderData.discountCodes,
+          discountCodeId: orderData.discountCodeId || null,
           totalDiscount: orderData.totalDiscount,
           userPhone: orderData.userPhone,
           userName: orderData.userName,
@@ -274,13 +300,31 @@ export async function POST(request: Request) {
   try {
     const body: PaymentRequestBody = await request.json();
 
+    // Fail fast instead of silently constructing the Iyzico client with empty
+    // credentials — that used to defer the failure to a confusing, opaque
+    // error deep inside the gateway call. Also make it impossible to miss in
+    // logs when IYZICO_BASE_URL isn't explicitly set, since it silently
+    // defaults to the LIVE endpoint — a misconfigured staging deploy without
+    // this variable would otherwise transact against production Iyzico.
+    const iyzicoApiKey = process.env.IYZICO_API_KEY;
+    const iyzicoSecretKey = process.env.IYZICO_SECRET_KEY;
+    const iyzicoBaseUrl = process.env.IYZICO_BASE_URL || 'https://api.iyzipay.com';
+
+    if (!iyzicoApiKey || !iyzicoSecretKey) {
+      console.error('CRITICAL: IYZICO_API_KEY / IYZICO_SECRET_KEY is not configured. Refusing to initiate payment.');
+      return NextResponse.json({ success: false, message: "Ödeme altyapısı yapılandırılmamış." }, { status: 500 });
+    }
+    if (!process.env.IYZICO_BASE_URL) {
+      console.warn(`IYZICO_BASE_URL is not set — defaulting to the LIVE Iyzico endpoint (${iyzicoBaseUrl}). If this is not production, set IYZICO_BASE_URL to the sandbox URL.`);
+    }
+
     let iyzipay;
     try {
       const IyzipayClass = (Iyzipay as any).default || Iyzipay;
       iyzipay = new IyzipayClass({
-        apiKey: process.env.IYZICO_API_KEY || '',
-        secretKey: process.env.IYZICO_SECRET_KEY || '',
-        uri: process.env.IYZICO_BASE_URL || 'https://api.iyzipay.com'
+        apiKey: iyzicoApiKey,
+        secretKey: iyzicoSecretKey,
+        uri: iyzicoBaseUrl
       });
     } catch (e: any) {
       console.error("Iyzipay initialization error:", e);
@@ -318,13 +362,41 @@ export async function POST(request: Request) {
     const buyerSurname = body.name.split(' ').slice(1).join(' ') || buyerName;
     const userIdForEnrollment = clerkUserId && !clerkUserId.includes('@') ? clerkUserId : buyerEmail;
 
-    const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                     request.headers.get('x-real-ip') || 
-                     request.headers.get('cf-connecting-ip') || 
-                     '85.34.78.112';
-                     
-    const validIpAddress = (ipAddress === 'unknown' || ipAddress === '::1' || ipAddress === '127.0.0.1') ? '85.34.78.112' : ipAddress;
+    // Iyzico requires a plausible buyer IP for its fraud/risk scoring, so we
+    // still need SOME fallback when the real client IP can't be determined
+    // (e.g. local dev, or a proxy that strips these headers) — but sending
+    // the exact same fixed IP for every such buyer is itself a fraud-ring
+    // signal to that engine. Check the widest set of common proxy/CDN
+    // headers first, and log loudly whenever we actually fall back so this
+    // is visible/monitorable rather than silent in production.
+    const FALLBACK_IP = '85.34.78.112';
+    const rawIpAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                     request.headers.get('x-real-ip') ||
+                     request.headers.get('cf-connecting-ip') ||
+                     request.headers.get('true-client-ip') ||
+                     request.headers.get('fastly-client-ip') ||
+                     request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||
+                     null;
+
+    const isUnusableIp = !rawIpAddress || rawIpAddress === 'unknown' || rawIpAddress === '::1' || rawIpAddress === '127.0.0.1';
+    if (isUnusableIp) {
+      console.warn(`Iyzico payment: could not determine real client IP for ${buyerEmail}; falling back to placeholder IP ${FALLBACK_IP}. This should be rare in production — frequent occurrences risk tripping Iyzico's fraud engine (many distinct buyers sharing one IP).`);
+    }
+    const validIpAddress = isUnusableIp ? FALLBACK_IP : (rawIpAddress as string);
     const userAgent = request.headers.get('user-agent') || 'unknown';
+
+    // Use the buyer's real identity/passport number when supplied; never fall
+    // back to a fixed shared placeholder for real transactions without at
+    // least logging it, since Iyzico's fraud engine can flag many distinct
+    // cardholders sharing one identity number as a fraud ring.
+    const suppliedIdentityNumber = String(body.identityNumber || '').trim();
+    const isValidIdentityNumber = /^\d{10,11}$/.test(suppliedIdentityNumber);
+    if (!isValidIdentityNumber) {
+      console.warn(
+        `Iyzico payment: no valid buyer identityNumber supplied for ${buyerEmail}; falling back to placeholder TCKN. Checkout form should collect this field.`
+      );
+    }
+    const buyerIdentityNumber = isValidIdentityNumber ? suppliedIdentityNumber : '11111111111';
 
     let validatedItems: any[] = [];
     let originalTotalAmount = 0;
@@ -332,6 +404,7 @@ export async function POST(request: Request) {
     // discount_codes against the server-validated item prices.
     let totalDiscount = 0;
     let appliedDiscountCode: string | null = null;
+    let appliedDiscountCodeId: string | null = null;
     let finalAmount = 0;
     let orderName = '';
     
@@ -341,15 +414,28 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, message: "Sepet boş olamaz" }, { status: 400 });
       }
 
-      // Sepetteki tüm ürünleri veritabanından doğrula
+      // Sepetteki tüm ürünleri veritabanından doğrula. Bulunamayan/pasif bir
+      // kalem artık sessizce atlanmıyor — hangi kalemin sorunlu olduğunu
+      // topluyoruz ve tüm sepeti reddediyoruz, aksi halde alıcı 3 ürün
+      // seçtiğini sanırken sessizce 2'sinin ücretini öder ve hiçbir uyarı
+      // görmez. `.maybeSingle()` kullanıyoruz ki 0 satır (bulunamadı) ile
+      // gerçek bir DB hatası birbirinden ayırt edilip loglanabilsin —
+      // `.single()` ikisini de aynı şekilde "hata" olarak döndürüp
+      // sessizce yutulmasına yol açıyordu.
+      const skippedItems: { id: string; type: string }[] = [];
+
       for (const item of body.cartItems) {
         if (item.type === 'product') {
-          const { data: pData } = await supabase
+          const { data: pData, error: pError } = await supabase
             .from('myuni_products')
             .select('id, title, price, description, slug')
             .eq('id', item.id)
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+          if (pError) {
+            console.error('Cart product lookup error:', item.id, pError);
+          }
 
           if (pData) {
             validatedItems.push({
@@ -360,14 +446,20 @@ export async function POST(request: Request) {
               slug: pData.slug
             });
             originalTotalAmount += pData.price;
+          } else {
+            skippedItems.push({ id: item.id, type: 'product' });
           }
         } else if (item.type === 'package') {
-          const { data: pData } = await supabase
+          const { data: pData, error: pError } = await supabase
             .from('myuni_packages')
             .select('id, title, price, description, slug')
             .eq('id', item.id)
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+          if (pError) {
+            console.error('Cart package lookup error:', item.id, pError);
+          }
 
           if (pData) {
             validatedItems.push({
@@ -378,48 +470,61 @@ export async function POST(request: Request) {
               slug: pData.slug
             });
             originalTotalAmount += pData.price;
+          } else {
+            skippedItems.push({ id: item.id, type: 'package' });
           }
         } else if (item.type === 'tier') {
-          const { data: tierData } = await supabase
+          const { data: tierData, error: tierError } = await supabase
             .from('myuni_course_tiers')
             .select('id, title, price, early_bird_price, early_bird_deadline, course_id, is_full_course, myuni_courses(slug, title)')
             .eq('id', item.id)
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+          if (tierError) {
+            console.error('Cart tier lookup error:', item.id, tierError);
+          }
 
           if (tierData) {
             const activePrice = getTierActivePrice(tierData);
             const courseInfo = tierData.myuni_courses as { slug?: string; title?: string } | null;
+            // NEVER take title/slug from the client-supplied cart item — unlike
+            // every other branch here, this used to prefer `item.title`, which
+            // let a caller inject an arbitrary string that would flow into the
+            // Iyzico basket, the persisted order snapshot, and the (unescaped)
+            // confirmation email. Always derive from the server-fetched row.
             validatedItems.push({
               id: tierData.id,
-              title: item.title || `${courseInfo?.title || 'Kurs'} — ${tierData.title}`,
+              title: `${courseInfo?.title || 'Kurs'} — ${tierData.title}`,
               price: activePrice,
               type: 'tier',
-              slug: courseInfo?.slug || item.slug,
+              slug: courseInfo?.slug || '',
               courseId: tierData.course_id,
               tierId: tierData.id,
               isFullCourse: !!(tierData as { is_full_course?: boolean }).is_full_course,
             });
             originalTotalAmount += activePrice;
+          } else {
+            skippedItems.push({ id: item.id, type: 'tier' });
           }
         } else {
           // course
-          const { data: cData } = await supabase
+          const { data: cData, error: cError } = await supabase
             .from('myuni_courses')
             .select('id, title, price, description, slug, early_bird_price, early_bird_deadline, course_type')
             .eq('id', item.id)
             .eq('is_active', true)
-            .single();
+            .maybeSingle();
+
+          if (cError) {
+            console.error('Cart course lookup error:', item.id, cError);
+          }
 
           if (cData) {
             // Erken kayıt fiyatı geçerli mi kontrol et
             let activePrice = cData.price;
-            if (cData.early_bird_price && cData.early_bird_deadline) {
-              const now = new Date();
-              const deadline = new Date(cData.early_bird_deadline);
-              if (now < deadline) {
-                activePrice = cData.early_bird_price;
-              }
+            if (cData.early_bird_price && isEarlyBirdActive(cData.early_bird_deadline)) {
+              activePrice = cData.early_bird_price;
             }
 
             validatedItems.push({
@@ -431,8 +536,18 @@ export async function POST(request: Request) {
               course_type: cData.course_type
             });
             originalTotalAmount += activePrice;
+          } else {
+            skippedItems.push({ id: item.id, type: 'course' });
           }
         }
+      }
+
+      if (skippedItems.length > 0) {
+        return NextResponse.json({
+          success: false,
+          message: "Sepetteki bazı ürünler artık geçerli değil veya aktif değil. Lütfen sepetinizi güncelleyip tekrar deneyin.",
+          skippedItems,
+        }, { status: 409 });
       }
 
       if (validatedItems.length === 0) {
@@ -442,6 +557,7 @@ export async function POST(request: Request) {
       const discountResult = await computeServerDiscount(body.discountCodes || '', validatedItems);
       totalDiscount = discountResult.discount;
       appliedDiscountCode = discountResult.appliedCode;
+      appliedDiscountCodeId = discountResult.codeId;
 
       finalAmount = Math.max(0, originalTotalAmount - totalDiscount);
       orderName = `Sepet Siparişi (${validatedItems.length} Ürün)`;
@@ -471,6 +587,20 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         if (appError || !application) {
+          return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 });
+        }
+
+        // This is an unauthenticated guest flow (no Clerk session), so the only
+        // proof of ownership available is knowing the email the application was
+        // submitted with. Without this check, anyone who merely guesses/finds an
+        // applicationId (e.g. from a shared URL) could enumerate another
+        // person's application state via the distinct error responses below,
+        // and even trigger the "cancel open pending orders" side effect further
+        // down. Returning the SAME generic 404 as "application not found" keeps
+        // this indistinguishable from a wrong ID, closing the enumeration hole.
+        const applicationEmail = String(application.email || '').trim().toLowerCase();
+        const requestEmail = String(body.email || '').trim().toLowerCase();
+        if (!applicationEmail || applicationEmail !== requestEmail) {
           return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 });
         }
 
@@ -556,13 +686,16 @@ export async function POST(request: Request) {
         });
         originalTotalAmount = packagePrice;
       } else if (isProduct) {
-        const { data: productData } = await supabase
+        const { data: productData, error: productError } = await supabase
           .from('myuni_products')
           .select('id, title, price, description, slug')
           .eq('id', body.courseId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
+        if (productError) {
+          console.error('Product lookup error:', body.courseId, productError);
+        }
         if (!productData) {
           return NextResponse.json({ success: false, message: "Ürün bulunamadı veya aktif değil" }, { status: 404 });
         }
@@ -575,13 +708,16 @@ export async function POST(request: Request) {
         });
         originalTotalAmount = productData.price;
       } else if (isPackage) {
-        const { data: packageData } = await supabase
+        const { data: packageData, error: packageError } = await supabase
           .from('myuni_packages')
           .select('id, title, price, description, slug')
           .eq('id', body.courseId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
+        if (packageError) {
+          console.error('Package lookup error:', body.courseId, packageError);
+        }
         if (!packageData) {
           return NextResponse.json({ success: false, message: "Paket bulunamadı veya aktif değil" }, { status: 404 });
         }
@@ -598,14 +734,17 @@ export async function POST(request: Request) {
           return NextResponse.json({ success: false, message: 'Paket ID belirtilmelidir' }, { status: 400 });
         }
 
-        const { data: tierData } = await supabase
+        const { data: tierData, error: tierError } = await supabase
           .from('myuni_course_tiers')
           .select('*, myuni_courses(id, title, slug, course_type, description, is_active)')
           .eq('id', body.tierId)
           .eq('course_id', body.courseId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
+        if (tierError) {
+          console.error('Tier lookup error:', body.tierId, tierError);
+        }
         if (!tierData) {
           return NextResponse.json({ success: false, message: 'Paket bulunamadı veya aktif değil' }, { status: 404 });
         }
@@ -632,24 +771,23 @@ export async function POST(request: Request) {
         });
         originalTotalAmount = activePrice;
       } else {
-        const { data: courseData } = await supabase
+        const { data: courseData, error: courseError } = await supabase
           .from('myuni_courses')
           .select('*')
           .eq('id', body.courseId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
+        if (courseError) {
+          console.error('Course lookup error:', body.courseId, courseError);
+        }
         if (!courseData) {
           return NextResponse.json({ success: false, message: "Kurs bulunamadı veya aktif değil" }, { status: 404 });
         }
 
         let activePrice = courseData.price;
-        if (courseData.early_bird_price && courseData.early_bird_deadline) {
-          const now = new Date();
-          const deadline = new Date(courseData.early_bird_deadline);
-          if (now < deadline) {
-            activePrice = courseData.early_bird_price;
-          }
+        if (courseData.early_bird_price && isEarlyBirdActive(courseData.early_bird_deadline)) {
+          activePrice = courseData.early_bird_price;
         }
 
         validatedItems.push({
@@ -668,6 +806,7 @@ export async function POST(request: Request) {
         const discountResult = await computeServerDiscount(body.discountCodes || '', validatedItems);
         totalDiscount = discountResult.discount;
         appliedDiscountCode = discountResult.appliedCode;
+        appliedDiscountCodeId = discountResult.codeId;
       }
 
       finalAmount = Math.max(0, originalTotalAmount - totalDiscount);
@@ -700,6 +839,7 @@ export async function POST(request: Request) {
       userId: userIdForEnrollment,
       locale: body.locale || 'tr',
       discountCodes: appliedDiscountCode || '',
+      discountCodeId: appliedDiscountCodeId,
       totalDiscount: totalDiscount,
       userPhone: buyerPhone,
       userName: body.name,
@@ -724,6 +864,50 @@ export async function POST(request: Request) {
 
     // ---- 3. ÜCRETSİZ SİPARİŞ MANTIĞI (%100 İndirim Kodu / Bakiye) ----
     if (finalAmount <= 0) {
+      // Idempotency guard: unlike the paid flow (where Iyzico's callback claims
+      // the SAME orderId atomically), a free order is delivered directly here,
+      // and `orderId` is freshly generated per HTTP request — so a double
+      // click / client-side retry creates a second, distinct order row and
+      // would otherwise re-run enrollment, discount-code consumption, and
+      // referral rewards a second time for the same purchase. Look for
+      // another order from this exact buyer, for this exact item/amount,
+      // created moments ago, and short-circuit instead of delivering twice.
+      // (This narrows the race but doesn't fully close it — a proper fix
+      // needs a client-supplied idempotency key; see conversation notes.)
+      const dedupeWindowStart = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data: duplicateOrder, error: dedupeError } = await supabase
+        .from('orders')
+        .select('orderid')
+        .eq('useremail', buyerEmail)
+        .eq('courseid', orderData.courseId)
+        .eq('amount', finalAmount)
+        .neq('orderid', orderId)
+        .gte('created_at', dedupeWindowStart)
+        .in('status', ['completed', 'processing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (dedupeError) {
+        console.error('Free order dedupe check failed (continuing without it):', dedupeError);
+      }
+
+      if (duplicateOrder) {
+        await supabase
+          .from('orders')
+          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+          .eq('orderid', orderId);
+
+        const successRedirectUrl = `${baseUrl}/${body.locale || 'tr'}/payment-success?free=true&orderId=${duplicateOrder.orderid}`;
+        return NextResponse.json({
+          success: true,
+          redirectToDirect: true,
+          redirectUrl: successRedirectUrl,
+          orderId: duplicateOrder.orderid,
+          userIdUsed: userIdForEnrollment,
+        }, { status: 200 });
+      }
+
       try {
         // Siparişi tamamlandı olarak güncelle
         await supabase.from('orders').update({ 
@@ -737,12 +921,16 @@ export async function POST(request: Request) {
         // Her bir ürünü tek tek teslim et (enroll / purchase)
         for (const item of validatedItems) {
           if (item.type === 'product') {
-            const { data: existingPurchase } = await supabase
+            const { data: existingPurchase, error: existingPurchaseError } = await supabase
               .from('myuni_products_purchases')
               .select('id')
               .eq('user_id', userIdForEnrollment)
               .eq('product_id', item.id)
-              .single();
+              .maybeSingle();
+
+            if (existingPurchaseError) {
+              console.error('Existing purchase lookup error:', item.id, existingPurchaseError);
+            }
 
             if (!existingPurchase) {
               const paidShare =
@@ -767,12 +955,16 @@ export async function POST(request: Request) {
             }
           } else {
             // course
-            const { data: existingEnrollment } = await supabase
+            const { data: existingEnrollment, error: existingEnrollmentError } = await supabase
               .from('myuni_enrollments')
               .select('id, is_active')
               .eq('user_id', userIdForEnrollment)
               .eq('course_id', item.id)
-              .single();
+              .maybeSingle();
+
+            if (existingEnrollmentError) {
+              console.error('Existing enrollment lookup error:', item.id, existingEnrollmentError);
+            }
 
             if (!existingEnrollment) {
               await supabase.from('myuni_enrollments').insert({
@@ -798,12 +990,14 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString() 
         }).eq('orderid', orderId);
 
-        // Affiliate / Referral Ödül ve Limitleri Tetikle
+        // İndirim kodu tüketimi + Affiliate / Referral Ödül ve Limitleri Tetikle
         try {
-          const { incrementUsageCountAfterPayment, createRewardCodeAfterPayment } = await import('../../../lib/referralService');
-          await incrementUsageCountAfterPayment(userIdForEnrollment);
+          const { consumeDiscountCodeForOrder, createRewardCodeAfterPayment } = await import('../../../lib/referralService');
+          await consumeDiscountCodeForOrder(orderId);
           await createRewardCodeAfterPayment(userIdForEnrollment);
-        } catch (e) {}
+        } catch (e) {
+          console.error('Free order discount/referral consumption error:', e);
+        }
         
         // E-posta: sepet / paket / ürün / tier dahil tüm ücretsiz siparişler
         try {
@@ -866,7 +1060,7 @@ export async function POST(request: Request) {
         surname: buyerSurname,
         gsmNumber: buyerPhone,
         email: buyerEmail,
-        identityNumber: "11111111111", 
+        identityNumber: buyerIdentityNumber,
         lastLoginDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
         registrationDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
         registrationAddress: body.address || "Belirtilmedi",
@@ -892,7 +1086,7 @@ export async function POST(request: Request) {
       basketItems: iyzicoBasketItems
     };
 
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       iyzipay.checkoutFormInitialize.create(iyzicoRequest, function (err: any, result: any) {
         if (err) {
           console.error("Iyzico Error:", err);

@@ -50,20 +50,6 @@ function getHeroContent(locale: string) {
     hoverText: locale === 'tr'
       ? 'Bilim ve Teknolojiyle Geleceği Şekillendiriyoruz'
       : 'Shaping the Future with Science and Technology',
-    stats: locale === 'tr'
-      ? [
-        { value: "1000+", label: "Kursiyer" },
-        { value: "5", label: "Aktif İçerik" },
-        { value: "%92", label: "Memnuniyet" }
-      ]
-      : [
-        { value: "1000+", label: "Trainee" },
-        { value: "4", label: "Active Content" },
-        { value: "92%", label: "Satisfaction" }
-      ],
-    discountCode: locale === 'tr'
-      ? { text: "İlk kayıtta %15 indirim:", code: "HOŞGELDİN15" }
-      : { text: "15% discount on first registration:", code: "HOŞGELDİN15" },
     imageOverlays: locale === 'tr'
       ? ["Eğitimde Kalite ve Yenilik", "Hedefinize Adım Adım Ulaşın"]
       : ["Quality and Innovation in Education", "Reach Your Goal Step by Step"]
@@ -193,38 +179,6 @@ export default function HeroSection({ locale, activeCourseCount }: HeroSectionPr
     );
   };
 
-  const DiscountCode = () => {
-    const [showCopied, setShowCopied] = useState(false);
-
-    const handleCopyCode = () => {
-      navigator.clipboard.writeText(content.discountCode.code);
-      setShowCopied(true);
-      setTimeout(() => setShowCopied(false), 2000);
-    };
-
-    return (
-      <div className="mb-8 relative">
-        <div
-          onClick={handleCopyCode}
-          className="inline-flex items-center gap-2 border-b border-dashed border-neutral-300 dark:border-neutral-600 pb-1 cursor-pointer hover:border-neutral-600 dark:hover:border-neutral-400 transition-colors group"
-        >
-          <span className="text-sm text-neutral-600 dark:text-neutral-400">{content.discountCode.text}</span>
-          <span className="font-medium text-neutral-900 dark:text-neutral-100 tracking-wide">{content.discountCode.code}</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-neutral-100 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-        </div>
-
-        {/* Copy Notification */}
-        {showCopied && (
-          <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs px-2 py-1 rounded opacity-100 transition-opacity duration-300 pointer-events-none">
-            {locale === 'tr' ? 'Kopyalandı' : 'Copied'}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   if (!isLoaded) {
     return (
       <section className="relative py-20 lg:py-32 overflow-hidden">
@@ -267,25 +221,6 @@ export default function HeroSection({ locale, activeCourseCount }: HeroSectionPr
               <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 max-w-2xl">
                 {content.description}
               </p>
-
-              {/* Statistics */}
-              <div className="flex space-x-8 mb-8 text-neutral-700 dark:text-neutral-300 text-sm md:text-base">
-                {content.stats.map((stat, index) => {
-                  const isContentStat = stat.label === "Aktif İçerik" || stat.label === "Active Content";
-                  const displayValue = isContentStat && activeCourseCount !== undefined
-                    ? activeCourseCount
-                    : stat.value;
-                  return (
-                    <div key={index} className="flex flex-col items-start transition-all duration-300 hover:font-bold">
-                      <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{displayValue}</span>
-                      <span>{stat.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Discount Code */}
-              <DiscountCode />
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4">
