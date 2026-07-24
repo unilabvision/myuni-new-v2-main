@@ -61,7 +61,18 @@ export async function getVisibleSiteApplicationForms(
     for (const row of data as FormWithEvent[]) {
       const slug = isEn ? row.slug_en : row.slug_tr;
 
+      // Event forms never belong in About Us / team nav
       if (row.event_id) {
+        continue;
+      }
+      const blob = `${row.slug_tr || ''} ${row.slug_en || ''} ${row.title_tr || ''} ${row.title_en || ''}`;
+      if (/(?:^|[\s_-])(etkinlik|event)(?:[\s_-]|$)/i.test(blob)) {
+        continue;
+      }
+      if (
+        /etkinlik-basvuru|event-application/i.test(String(row.slug_tr || '')) ||
+        /etkinlik-basvuru|event-application/i.test(String(row.slug_en || ''))
+      ) {
         continue;
       }
 
