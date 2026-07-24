@@ -14,7 +14,11 @@ export async function GET(
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+      },
+    });
   } catch (err) {
     console.error('Public form by event error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

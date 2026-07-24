@@ -1,6 +1,9 @@
 import EventApplicationPage from '@/app/components/pages/applications/EventApplicationPage';
 import type { RegistrationTier } from '@/lib/siteApplications/packages';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface PageProps {
   params: Promise<{ locale: string; slug: string }>;
   searchParams: Promise<{ tier?: string }>;

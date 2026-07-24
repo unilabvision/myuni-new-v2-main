@@ -176,6 +176,8 @@ export default function DynamicSiteApplicationForm({
   };
 
   useEffect(() => {
+    // SSR may pass a cached initialForm — show it immediately, then always
+    // re-fetch with no-store so Uniboard publish updates appear on the live site.
     if (initialForm) {
       setFormConfig(initialForm);
       setLoading(false);
@@ -185,26 +187,28 @@ export default function DynamicSiteApplicationForm({
           event_name: prev.event_name || initialForm.event_title || '',
         }));
       }
-      return;
     }
 
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
+      if (!eventSlug && !formSlug) {
+        if (!initialForm && !cancelled) {
+          setFormConfig(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!initialForm) setLoading(true);
       try {
         const url = eventSlug
           ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
           : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
 
-        if (!eventSlug && !formSlug) {
-          if (!cancelled) setFormConfig(null);
-          return;
-        }
-
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) {
-          if (!cancelled) setFormConfig(null);
+          if (!cancelled && !initialForm) setFormConfig(null);
           return;
         }
         const data = await res.json();
@@ -220,7 +224,7 @@ export default function DynamicSiteApplicationForm({
           }));
         }
       } catch {
-        if (!cancelled) setFormConfig(null);
+        if (!cancelled && !initialForm) setFormConfig(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
