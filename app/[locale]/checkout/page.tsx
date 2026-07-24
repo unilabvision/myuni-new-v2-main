@@ -121,11 +121,11 @@ const texts = {
     processing: "İşleniyor...",
     securePayment: "Güvenli Ödeme",
     paymentInfo: "Ödeme işleminiz güvenli iyzico altyapısı üzerinden gerçekleştirilecektir.",
-    privacyNoteBefore: "Ödemeye geçerek ",
-    privacyPolicyLink: "Gizlilik Politikamızı",
+    agreeToTerms: "Kabul ediyorum:",
+    privacyPolicyLink: "Gizlilik Politikası",
     privacyNoteAnd: " ve ",
-    termsLink: "Kullanım Koşullarımızı",
-    privacyNoteAfter: " kabul etmiş olursunuz.",
+    termsLink: "Kullanım Koşulları",
+    termsError: "Devam etmek için Gizlilik Politikası ve Kullanım Koşullarını kabul etmelisiniz.",
     privacyUrl: "/tr/gizlilik",
     termsUrl: "/tr/sartlar-ve-kosullar",
     required: "zorunludur",
@@ -187,11 +187,11 @@ const texts = {
     processing: "Processing...",
     securePayment: "Secure Payment",
     paymentInfo: "Your payment will be processed through secure iyzico infrastructure.",
-    privacyNoteBefore: "By proceeding to payment, you accept our ",
+    agreeToTerms: "I agree to the",
     privacyPolicyLink: "Privacy Policy",
     privacyNoteAnd: " and ",
     termsLink: "Terms of Use",
-    privacyNoteAfter: ".",
+    termsError: "You must accept the Privacy Policy and Terms of Use to continue.",
     privacyUrl: "/en/privacy",
     termsUrl: "/en/terms",
     required: "is required",
@@ -290,6 +290,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   });
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsError, setTermsError] = useState('');
   
   // Early bird countdown state
   const [countdown, setCountdown] = useState<{
@@ -1054,6 +1056,12 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+
+    if (!agreedToTerms) {
+      setTermsError(t.termsError);
+      return;
+    }
+    setTermsError('');
     
     setLoading(true);
     setError('');
@@ -1736,11 +1744,54 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                 {t.paymentInfo}
               </p>
             </div>
+
+            {/* Gizlilik ve Kullanım Koşulları Onayı */}
+            <div className="space-y-2">
+              <div className="flex items-start">
+                <input
+                  id="checkout-terms"
+                  name="checkout-terms"
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => {
+                    setAgreedToTerms(e.target.checked);
+                    if (e.target.checked) setTermsError('');
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:bg-neutral-800"
+                />
+                <label
+                  htmlFor="checkout-terms"
+                  className="ml-3 text-sm text-neutral-700 dark:text-neutral-300"
+                >
+                  {t.agreeToTerms}{' '}
+                  <Link
+                    href={t.termsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-neutral-900 dark:hover:text-neutral-100"
+                  >
+                    {t.termsLink}
+                  </Link>
+                  {t.privacyNoteAnd}
+                  <Link
+                    href={t.privacyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-neutral-900 dark:hover:text-neutral-100"
+                  >
+                    {t.privacyPolicyLink}
+                  </Link>
+                </label>
+              </div>
+              {termsError && (
+                <p className="text-xs text-red-500">{termsError}</p>
+              )}
+            </div>
             
             {/* Ödeme Butonu */}
             <button
               onClick={proceedToPayment}
-              disabled={loading}
+              disabled={loading || !agreedToTerms}
               className="w-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 py-3 px-4 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >
               {loading ? (
@@ -1759,29 +1810,6 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                 </span>
               )}
             </button>
-            
-            {/* Gizlilik Bildirimi */}
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 text-center mt-4">
-              {t.privacyNoteBefore}
-              <Link
-                href={t.privacyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-neutral-300 dark:hover:text-neutral-300"
-              >
-                {t.privacyPolicyLink}
-              </Link>
-              {t.privacyNoteAnd}
-              <Link
-                href={t.termsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-neutral-300 dark:hover:text-neutral-300"
-              >
-                {t.termsLink}
-              </Link>
-              {t.privacyNoteAfter}
-            </p>
             
             {/* Güvenli Ödeme Logoları */}
             <div className="mt-6 text-center">
