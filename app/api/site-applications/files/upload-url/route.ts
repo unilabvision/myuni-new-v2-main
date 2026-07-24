@@ -34,14 +34,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Event not found' }, { status: 404 });
       }
 
-      const { data, error } = await supabase
+      const { data: forms, error } = await supabase
         .from(siteApplicationsDb.forms)
         .select('id, allows_attachment, slug_tr, slug_en')
         .eq('event_id', event.id)
         .eq('is_active', true)
-        .eq('show_on_website', true)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
+      const data = forms?.[0];
       if (error || !data) {
         return NextResponse.json({ error: 'Form not found' }, { status: 404 });
       }

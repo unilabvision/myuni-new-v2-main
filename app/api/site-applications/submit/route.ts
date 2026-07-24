@@ -32,14 +32,15 @@ async function resolveForm(
 
     if (!event) return { error: 'Event not found', status: 404 as const };
 
-    const { data: form, error } = await supabase
+    const { data: forms, error } = await supabase
       .from(siteApplicationsDb.forms)
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
-      .eq('show_on_website', true)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
+    const form = forms?.[0];
     if (error || !form) {
       return { error: 'Form not found or inactive', status: 404 as const };
     }

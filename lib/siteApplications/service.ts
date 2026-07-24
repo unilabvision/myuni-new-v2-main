@@ -96,15 +96,19 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
     return null;
   }
 
-  const { data: form, error: formError } = await supabase
+  const { data: forms, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
     .select('*')
     .eq('event_id', event.id)
     .eq('is_active', true)
-    .eq('show_on_website', true)
-    .maybeSingle();
+    .order('updated_at', { ascending: false })
+    .limit(1);
 
-  if (formError || !form) {
+  if (formError) {
+    return null;
+  }
+  const form = forms?.[0];
+  if (!form) {
     return null;
   }
 
@@ -114,13 +118,13 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
     .eq('form_id', form.id)
     .order('order_index', { ascending: true });
 
-  if (fieldsError || !fields?.length) {
+  if (fieldsError) {
     return null;
   }
 
   const publicForm = toPublicForm(
     form as SiteApplicationForm,
-    fields as SiteApplicationFormField[],
+    (fields ?? []) as SiteApplicationFormField[],
     locale
   );
 
@@ -150,24 +154,19 @@ export async function getEventApplicationSummary(eventSlug: string, locale: stri
     return null;
   }
 
-  const { data: form, error: formError } = await supabase
+  const { data: forms, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
     .select('id, title_tr, title_en, package_settings')
     .eq('event_id', event.id)
     .eq('is_active', true)
-    .eq('show_on_website', true)
-    .maybeSingle();
+    .order('updated_at', { ascending: false })
+    .limit(1);
 
-  if (formError || !form) {
+  if (formError) {
     return null;
   }
-
-  const { count, error: countError } = await supabase
-    .from(siteApplicationsDb.formFields)
-    .select('id', { count: 'exact', head: true })
-    .eq('form_id', form.id);
-
-  if (countError || !count) {
+  const form = forms?.[0];
+  if (!form) {
     return null;
   }
 

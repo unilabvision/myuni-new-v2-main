@@ -236,7 +236,7 @@ export default function HeroSection({ locale, activeCourseCount }: HeroSectionPr
                 <Link href={content.servicesLink}>
                   <Button
                     variant="secondary"
-                    className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium w-full"
+                    className="bg-tra nsparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium w-full"
                   >
                     {content.secondaryCta}
                   </Button>
