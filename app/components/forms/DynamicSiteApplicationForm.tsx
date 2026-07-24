@@ -20,6 +20,11 @@ import {
   PartyPopper,
   Heart,
   Clock,
+  Star,
+  Check,
+  CheckSquare,
+  Circle,
+  CloudUpload,
 } from 'lucide-react';
 import type { RegistrationTier } from '@/lib/siteApplications/packages';
 import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
@@ -100,8 +105,14 @@ const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
   textarea: AlignLeft,
   number: Hash,
   date: Calendar,
+  time: Clock,
   url: Link2,
-  select: List,
+  select: Circle,
+  checkbox: CheckSquare,
+  dropdown: List,
+  linear_scale: Hash,
+  rating: Star,
+  file: CloudUpload,
 };
 
 const inputClass =
@@ -239,9 +250,31 @@ export default function DynamicSiteApplicationForm({
     if (!formConfig) return 0;
     const required = formConfig.fields.filter((f) => f.required);
     if (required.length === 0) return 100;
-    const filled = required.filter((f) => values[f.field_key]?.trim()).length;
+    const filled = required.filter((f) => {
+      const raw = values[f.field_key]?.trim() || '';
+      if (!raw) return false;
+      if (f.field_type === 'checkbox') {
+        try {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) && parsed.length > 0;
+        } catch {
+          return false;
+        }
+      }
+      return true;
+    }).length;
     return Math.round((filled / required.length) * 100);
   }, [formConfig, values]);
+
+  const updateValue = (fieldKey: string, value: string) => {
+    setValues((prev) => ({ ...prev, [fieldKey]: value }));
+    setErrors((prev) => {
+      if (!prev[fieldKey]) return prev;
+      const next = { ...prev };
+      delete next[fieldKey];
+      return next;
+    });
+  };
 
   const validateClient = () => {
     if (!formConfig) return false;
@@ -249,6 +282,19 @@ export default function DynamicSiteApplicationForm({
 
     for (const field of formConfig.fields) {
       const value = values[field.field_key]?.trim() || '';
+      if (field.field_type === 'checkbox') {
+        let selected: string[] = [];
+        try {
+          const parsed = JSON.parse(values[field.field_key] || '[]');
+          selected = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          selected = [];
+        }
+        if (field.required && selected.length === 0) {
+          nextErrors[field.field_key] = t.required;
+        }
+        continue;
+      }
       if (field.required && !value) {
         nextErrors[field.field_key] = t.required;
       }
@@ -548,9 +594,13 @@ export default function DynamicSiteApplicationForm({
 
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
+                const inputId = `field-${field.field_key}`;
                 return (
                   <div key={field.field_key} className="group">
-                    <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    <label
+                      htmlFor={inputId}
+                      className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
+                    >
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#990000]/8 text-[#990000] group-focus-within:bg-[#990000]/15 transition-colors">
                         <Icon className="w-3.5 h-3.5" />
                       </span>
@@ -560,20 +610,97 @@ export default function DynamicSiteApplicationForm({
 
                     {field.field_type === 'textarea' ? (
                       <textarea
+                        id={inputId}
                         rows={4}
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         placeholder={field.placeholder || ''}
                         className={inputClass}
                       />
                     ) : field.field_type === 'select' ? (
+                      <div className="space-y-2" role="radiogroup" aria-labelledby={inputId}>
+                        {(field.options || []).map((opt) => {
+                          const checked = values[field.field_key] === opt.value;
+                          return (
+                            <label
+                              key={opt.value}
+                              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#990000] bg-[#990000]/5'
+                                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={field.field_key}
+                                className="sr-only"
+                                checked={checked}
+                                onChange={() => updateValue(field.field_key, opt.value)}
+                              />
+                              <span
+                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                  checked ? 'border-[#990000]' : 'border-neutral-300'
+                                }`}
+                              >
+                                {checked && <span className="w-2 h-2 rounded-full bg-[#990000]" />}
+                              </span>
+                              <span className="text-sm text-neutral-800 dark:text-neutral-200">
+                                {opt.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : field.field_type === 'checkbox' ? (
+                      <div className="space-y-2">
+                        {(field.options || []).map((opt) => {
+                          let selected: string[] = [];
+                          try {
+                            const parsed = JSON.parse(values[field.field_key] || '[]');
+                            selected = Array.isArray(parsed) ? parsed : [];
+                          } catch {
+                            selected = [];
+                          }
+                          const checked = selected.includes(opt.value);
+                          return (
+                            <label
+                              key={opt.value}
+                              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#990000] bg-[#990000]/5'
+                                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={checked}
+                                onChange={() => {
+                                  const next = checked
+                                    ? selected.filter((v) => v !== opt.value)
+                                    : [...selected, opt.value];
+                                  updateValue(field.field_key, JSON.stringify(next));
+                                }}
+                              />
+                              <span
+                                className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                  checked ? 'border-[#990000] bg-[#990000]' : 'border-neutral-300'
+                                }`}
+                              >
+                                {checked && <Check className="w-3 h-3 text-white" />}
+                              </span>
+                              <span className="text-sm text-neutral-800 dark:text-neutral-200">
+                                {opt.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : field.field_type === 'dropdown' ? (
                       <select
+                        id={inputId}
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         className={inputClass}
                       >
                         <option value="">{t.select}</option>
@@ -583,8 +710,78 @@ export default function DynamicSiteApplicationForm({
                           </option>
                         ))}
                       </select>
+                    ) : field.field_type === 'linear_scale' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] text-neutral-400 px-1">
+                          <span>{locale === 'en' ? 'Low' : 'Düşük'}</span>
+                          <span>{locale === 'en' ? 'High' : 'Yüksek'}</span>
+                        </div>
+                        <div className="relative flex items-center justify-between gap-1 px-1 py-1">
+                          <div
+                            aria-hidden
+                            className="absolute left-4 right-4 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200 dark:bg-neutral-600 rounded-full"
+                          />
+                          {(field.options?.length
+                            ? field.options
+                            : [1, 2, 3, 4, 5].map((n) => ({
+                                value: String(n),
+                                label: String(n),
+                              }))
+                          ).map((opt) => {
+                            const active = values[field.field_key] === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => updateValue(field.field_key, opt.value)}
+                                className={`relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all ${
+                                  active
+                                    ? 'border-[#990000] bg-[#990000] text-white scale-105 shadow-md'
+                                    : 'border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:border-[#990000]/60'
+                                }`}
+                                aria-pressed={active}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : field.field_type === 'rating' ? (
+                      <div className="flex items-center gap-1" role="radiogroup">
+                        {(field.options?.length
+                          ? field.options
+                          : [1, 2, 3, 4, 5].map((n) => ({
+                              value: String(n),
+                              label: String(n),
+                            }))
+                        ).map((opt) => {
+                          const selected = Number(values[field.field_key] || 0);
+                          const valueNum = Number(opt.value);
+                          const filled = selected > 0 && valueNum <= selected;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => updateValue(field.field_key, opt.value)}
+                              className="p-1 rounded-lg transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#990000]/40"
+                              aria-label={`${opt.label} / ${(field.options?.length || 5)}`}
+                              aria-pressed={values[field.field_key] === opt.value}
+                            >
+                              <Star
+                                className={`w-8 h-8 transition-colors ${
+                                  filled
+                                    ? 'text-amber-400 fill-amber-400'
+                                    : 'text-neutral-300 dark:text-neutral-600'
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
                     ) : (
                       <input
+                        id={inputId}
                         type={
                           field.field_type === 'email'
                             ? 'email'
@@ -594,14 +791,14 @@ export default function DynamicSiteApplicationForm({
                                 ? 'number'
                                 : field.field_type === 'date'
                                   ? 'date'
-                                  : field.field_type === 'url'
-                                    ? 'url'
-                                    : 'text'
+                                  : field.field_type === 'time'
+                                    ? 'time'
+                                    : field.field_type === 'url'
+                                      ? 'url'
+                                      : 'text'
                         }
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         placeholder={field.placeholder || ''}
                         className={inputClass}
                       />

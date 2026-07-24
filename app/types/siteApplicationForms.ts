@@ -5,8 +5,14 @@ export type SiteApplicationFieldType =
   | 'textarea'
   | 'number'
   | 'date'
+  | 'time'
   | 'url'
-  | 'select';
+  | 'select'
+  | 'checkbox'
+  | 'dropdown'
+  | 'linear_scale'
+  | 'rating'
+  | 'file';
 
 export interface SiteApplicationFormFieldOption {
   value: string;

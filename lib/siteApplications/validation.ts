@@ -13,7 +13,7 @@ export function normalizeFieldValue(
   const str = String(raw).trim();
   if (!str) return null;
 
-  if (field.field_type === 'number') {
+  if (field.field_type === 'number' || field.field_type === 'linear_scale' || field.field_type === 'rating') {
     const num = Number(str);
     return Number.isFinite(num) ? num : null;
   }
@@ -29,7 +29,39 @@ export function validateSubmissionFields(
   const normalized: Record<string, unknown> = {};
 
   for (const field of fields) {
-    const value = normalizeFieldValue(field, values[field.field_key]);
+    const raw = values[field.field_key];
+
+    if (field.field_type === 'checkbox') {
+      let selected: string[] = [];
+      if (typeof raw === 'string' && raw.trim()) {
+        try {
+          const parsed = JSON.parse(raw);
+          selected = Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch {
+          selected = [];
+        }
+      } else if (Array.isArray(raw)) {
+        selected = raw.map(String);
+      }
+
+      if (field.required && selected.length === 0) {
+        errors[field.field_key] = 'required';
+        continue;
+      }
+
+      const allowed = normalizeFieldOptions(field.options).map((o) => o.value);
+      if (allowed.length > 0 && selected.some((v) => !allowed.includes(v))) {
+        errors[field.field_key] = 'invalid_option';
+        continue;
+      }
+
+      if (selected.length > 0) {
+        normalized[field.field_key] = selected;
+      }
+      continue;
+    }
+
+    const value = normalizeFieldValue(field, raw);
 
     if (field.required && (value === null || value === '')) {
       errors[field.field_key] = 'required';
@@ -52,9 +84,16 @@ export function validateSubmissionFields(
       }
     }
 
-    if (field.field_type === 'select' && typeof value === 'string') {
+    if (
+      (field.field_type === 'select' ||
+        field.field_type === 'dropdown' ||
+        field.field_type === 'linear_scale' ||
+        field.field_type === 'rating') &&
+      (typeof value === 'string' || typeof value === 'number')
+    ) {
       const allowed = normalizeFieldOptions(field.options).map((o) => o.value);
-      if (allowed.length > 0 && !allowed.includes(value)) {
+      const asString = String(value);
+      if (allowed.length > 0 && !allowed.includes(asString)) {
         errors[field.field_key] = 'invalid_option';
         continue;
       }
