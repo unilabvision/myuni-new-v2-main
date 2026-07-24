@@ -7,7 +7,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
-import CampaignAuthPromo from '@/app/components/CampaignAuthPromo';
 
 // Next.js sayfa props interface'i - Promise olarak tanımlandı
 interface AuthPageProps {
@@ -253,7 +252,7 @@ const translations: TranslationsType = useMemo(
         privacy: 'Gizlilik Politikası',
         accept: '\'nı kabul etmiş olursunuz.'
       },
-      urls: { terms: '/tr/kullanim-kosullari', privacy: '/tr/gizlilik-politikasi' },
+      urls: { terms: '/tr/sartlar-ve-kosullar', privacy: '/tr/gizlilik' },
       backToHome: 'Ana Sayfaya Dön',
       welcomeSignup: 'MyUNI\'ye Hoş Geldin!',
       signupDescription: 'MyUNI ile öğren, geliş, takip et!'
@@ -317,7 +316,7 @@ const translations: TranslationsType = useMemo(
         privacy: 'Privacy Policy',
         accept: '.'
       },
-      urls: { terms: '/en/terms-of-service', privacy: '/en/privacy-policy' },
+      urls: { terms: '/en/terms', privacy: '/en/privacy' },
       backToHome: 'Back to Home',
       welcomeSignup: 'Welcome to MyUNI!',
       signupDescription: 'Learn, grow, and track your progress with MyUNI!'
@@ -954,7 +953,6 @@ const translations: TranslationsType = useMemo(
         <div className="mx-auto w-full max-w-md">
           <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t.title}</h2>
           <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{t.subtitle}</p>
-          <CampaignAuthPromo locale={normalizedLocale} />
           {messageFromUrl === 'account_created' && (
             <div className="mt-4 p-4 bg-green-50 rounded-md dark:bg-green-900/20">
               <div className="flex">

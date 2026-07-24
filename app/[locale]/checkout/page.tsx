@@ -121,7 +121,13 @@ const texts = {
     processing: "İşleniyor...",
     securePayment: "Güvenli Ödeme",
     paymentInfo: "Ödeme işleminiz güvenli iyzico altyapısı üzerinden gerçekleştirilecektir.",
-    privacyNote: "Ödemeye geçerek Gizlilik Politikamızı ve Mesafeli Satış Sözleşmemizi kabul etmiş olursunuz.",
+    privacyNoteBefore: "Ödemeye geçerek ",
+    privacyPolicyLink: "Gizlilik Politikamızı",
+    privacyNoteAnd: " ve ",
+    termsLink: "Kullanım Koşullarımızı",
+    privacyNoteAfter: " kabul etmiş olursunuz.",
+    privacyUrl: "/tr/gizlilik",
+    termsUrl: "/tr/sartlar-ve-kosullar",
     required: "zorunludur",
     currency: "₺",
     loading: "Yükleniyor...",
@@ -181,7 +187,13 @@ const texts = {
     processing: "Processing...",
     securePayment: "Secure Payment",
     paymentInfo: "Your payment will be processed through secure iyzico infrastructure.",
-    privacyNote: "By proceeding to payment, you accept our Privacy Policy and Distance Sales Agreement.",
+    privacyNoteBefore: "By proceeding to payment, you accept our ",
+    privacyPolicyLink: "Privacy Policy",
+    privacyNoteAnd: " and ",
+    termsLink: "Terms of Use",
+    privacyNoteAfter: ".",
+    privacyUrl: "/en/privacy",
+    termsUrl: "/en/terms",
     required: "is required",
     currency: "$",
     loading: "Loading...",
@@ -1750,7 +1762,25 @@ function CheckoutContent({ params }: CheckoutPageProps) {
             
             {/* Gizlilik Bildirimi */}
             <p className="text-xs text-neutral-400 dark:text-neutral-500 text-center mt-4">
-              {t.privacyNote}
+              {t.privacyNoteBefore}
+              <Link
+                href={t.privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-neutral-300 dark:hover:text-neutral-300"
+              >
+                {t.privacyPolicyLink}
+              </Link>
+              {t.privacyNoteAnd}
+              <Link
+                href={t.termsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-neutral-300 dark:hover:text-neutral-300"
+              >
+                {t.termsLink}
+              </Link>
+              {t.privacyNoteAfter}
             </p>
             
             {/* Güvenli Ödeme Logoları */}
