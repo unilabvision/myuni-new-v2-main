@@ -7,6 +7,7 @@ import {
   EVENT_BANNER_HEIGHT,
   EVENT_BANNER_WIDTH,
 } from '@/lib/events/banner';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import Image from 'next/image';
 import { 
   Calendar, 
@@ -265,13 +266,11 @@ const EventHeroSection: React.FC<EventHeroSectionProps> = ({
     }
   };
 
-  const isRegistrationOpen = (eventData: Event): boolean => {
-    if (!eventData.is_registration_open) return false;
-    if (eventData.registration_deadline) {
-      return new Date() < new Date(eventData.registration_deadline);
-    }
-    return true;
-  };
+  const isRegistrationOpen = (eventData: Event): boolean =>
+    isEventRegistrationOpen({
+      is_registration_open: eventData.is_registration_open,
+      registration_deadline: eventData.registration_deadline,
+    });
 
   const isEventFull = (eventData: Event): boolean => {
     return eventData.max_attendees ? eventData.current_attendees >= eventData.max_attendees : false;

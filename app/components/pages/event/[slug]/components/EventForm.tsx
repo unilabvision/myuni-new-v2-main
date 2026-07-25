@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { supabase } from '../../../../../../lib/supabase';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import { Check, AlertCircle, Loader2 } from 'lucide-react';
 
 interface Event {
@@ -62,6 +63,11 @@ const EventForm: React.FC<EventFormProps> = ({
   const [isRegistered, setIsRegistered] = useState(false);
   const [checkingRegistration, setCheckingRegistration] = useState(true);
 
+  const registrationOpen = isEventRegistrationOpen({
+    is_registration_open: event.is_registration_open,
+    registration_deadline: event.registration_deadline,
+  });
+
   React.useEffect(() => {
     if (isSignedIn && user && event.id) {
       checkRegistrationStatus();
@@ -102,6 +108,12 @@ const EventForm: React.FC<EventFormProps> = ({
   };
 
   const handleRegistration = async () => {
+    // Always enforce registration gate before form redirect or free enroll
+    if (!registrationOpen) {
+      onError?.(locale === 'tr' ? 'Kayıt alımı sona ermiştir.' : 'Registration is closed.');
+      return;
+    }
+
     if (applicationFormUrl) {
       router.push(buildApplicationFormUrl(applicationFormUrl, registrationTier));
       return;
@@ -111,12 +123,6 @@ const EventForm: React.FC<EventFormProps> = ({
       const currentPath = window.location.pathname;
       const redirectUrl = `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
       router.push(redirectUrl);
-      return;
-    }
-
-    // Check if registration is still open
-    if (!event.is_registration_open) {
-      onError?.(locale === 'tr' ? 'Kayıt alımı sona ermiştir.' : 'Registration is closed.');
       return;
     }
 
@@ -365,8 +371,8 @@ const EventForm: React.FC<EventFormProps> = ({
     );
   }
 
-  // Registration closed state
-  if (!event.is_registration_open) {
+  // Registration closed state (flag off or deadline passed)
+  if (!registrationOpen) {
     return (
       <div className="space-y-2">
         <button 

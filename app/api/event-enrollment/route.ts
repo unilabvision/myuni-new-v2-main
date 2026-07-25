@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,12 +45,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event not found or inactive' }, { status: 404 });
     }
 
-    if (!event.is_registration_open) {
+    if (
+      !isEventRegistrationOpen({
+        is_registration_open: event.is_registration_open,
+        registration_deadline: event.registration_deadline,
+      })
+    ) {
       return NextResponse.json({ error: 'Registration is closed for this event' }, { status: 400 });
-    }
-
-    if (event.registration_deadline && new Date(event.registration_deadline) < new Date()) {
-      return NextResponse.json({ error: 'Registration deadline has passed' }, { status: 400 });
     }
 
     const { count: currentCount, error: countError } = await supabaseAdmin

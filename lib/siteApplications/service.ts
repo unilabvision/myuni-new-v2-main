@@ -98,7 +98,7 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
 
   const { data: event, error: eventError } = await supabase
     .from('myuni_events')
-    .select('id, slug, title, is_active')
+    .select('id, slug, title, is_active, is_registration_open, registration_deadline')
     .eq('slug', eventSlug)
     .eq('is_active', true)
     .single();
@@ -145,6 +145,13 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
       event_id: event.id,
       event_slug: event.slug,
       event_title: event.title,
+    },
+    event: {
+      id: event.id,
+      slug: event.slug,
+      title: event.title,
+      is_registration_open: event.is_registration_open ?? true,
+      registration_deadline: event.registration_deadline ?? null,
     },
     locale,
   };

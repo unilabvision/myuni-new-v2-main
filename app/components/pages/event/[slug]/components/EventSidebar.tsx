@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { getAllEvents } from '../../../../../../lib/eventService';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
 import { supabase } from '../../../../../../lib/supabase';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import type { PublicRegistrationPackage } from '@/app/types/siteApplicationForms';
 import EventForm from './EventForm';
 import EventRegistrationPackages from './EventRegistrationPackages';
@@ -377,12 +378,11 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
   };
 
   // Check registration conditions
-  const isRegistrationOpen = () => {
-    if (!event.registration_deadline) return event.is_registration_open;
-    const deadline = new Date(event.registration_deadline);
-    const now = new Date();
-    return event.is_registration_open && now < deadline;
-  };
+  const isRegistrationOpen = () =>
+    isEventRegistrationOpen({
+      is_registration_open: event.is_registration_open,
+      registration_deadline: event.registration_deadline,
+    });
 
   const isEventFull = () => {
     return event.max_attendees && attendeeCountLocal >= event.max_attendees;

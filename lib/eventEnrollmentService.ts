@@ -1,6 +1,7 @@
 // lib/eventEnrollmentService.ts
 import 'server-only';
 import { supabaseAdmin as supabase } from './supabaseAdmin';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 
 export interface EventEnrollment {
   id: string;
@@ -258,18 +259,15 @@ export async function enrollUserInEvent(userId: string, eventId: string): Promis
     console.log('Event found:', event);
 
     // Check if registration is still open
-    if (!event.is_registration_open) {
+    if (
+      !isEventRegistrationOpen({
+        is_registration_open: event.is_registration_open,
+        registration_deadline: event.registration_deadline,
+      })
+    ) {
       return {
         success: false,
         message: 'Registration is closed for this event'
-      };
-    }
-
-    // Check if registration deadline has passed
-    if (event.registration_deadline && new Date(event.registration_deadline) < new Date()) {
-      return {
-        success: false,
-        message: 'Registration deadline has passed'
       };
     }
 

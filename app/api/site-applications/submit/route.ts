@@ -15,6 +15,7 @@ import {
 } from '@/lib/siteApplications/packages';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 
 async function resolveForm(
   supabase: ReturnType<typeof getSiteApplicationsSupabase>,
@@ -25,7 +26,7 @@ async function resolveForm(
   if (eventSlug) {
     const { data: event } = await supabase
       .from('myuni_events')
-      .select('id, slug, title, is_active')
+      .select('id, slug, title, is_active, is_registration_open, registration_deadline')
       .eq('slug', eventSlug)
       .eq('is_active', true)
       .single();
@@ -90,6 +91,24 @@ export async function POST(request: NextRequest) {
 
     const { form, event } = resolved;
     const packageSettings = parsePackageSettings(form.package_settings);
+
+    if (
+      event &&
+      !isEventRegistrationOpen({
+        is_registration_open: event.is_registration_open,
+        registration_deadline: event.registration_deadline,
+      })
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            locale === 'en'
+              ? 'Registration is closed for this event'
+              : 'Bu etkinlik için kayıt alımı kapalı',
+        },
+        { status: 403 }
+      );
+    }
 
     if (!isValidRegistrationTier(registrationTierInput, packageSettings)) {
       return NextResponse.json({ error: 'Invalid registration package' }, { status: 400 });

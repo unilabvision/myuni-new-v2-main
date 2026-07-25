@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Calendar, MapPin, Users, Clock, AlertCircle, Star } from 'lucide-react';
 import { getEventBySlug, mapEventTypeToLocale } from '../../../../../lib/eventService';
 import { getEventAttendeeCount } from '../../../../../lib/eventUtils'; // Import the function
+import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import EventHeroSection from './components/EventHeroSection';
 import EventMainContent from './components/EventMainContent';
 import EventSidebar from './components/EventSidebar';
@@ -309,7 +310,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
         current_attendees: enrollmentCount, // For compatibility with existing components
         enrollment_count: enrollmentCount, // Primary source of truth from myuni_event_enrollments
         registration_deadline: eventData.registration_deadline ? String(eventData.registration_deadline) : null,
-        is_registration_open: Boolean(eventData.is_registration_open),
+        is_registration_open: eventData.is_registration_open !== false && eventData.is_registration_open !== 'false',
         thumbnail_url: eventData.thumbnail_url ? String(eventData.thumbnail_url) : null,
         banner_url: eventData.banner_url ? String(eventData.banner_url) : null,
         status: (eventData.status as 'upcoming' | 'ongoing' | 'completed' | 'cancelled') || 'upcoming',
@@ -393,10 +394,11 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   };
 
   const isRegistrationOpen = () => {
-    if (!eventDetail?.registration_deadline) return eventDetail?.is_registration_open;
-    const deadline = new Date(eventDetail.registration_deadline);
-    const now = new Date();
-    return eventDetail.is_registration_open && now < deadline;
+    if (!eventDetail) return false;
+    return isEventRegistrationOpen({
+      is_registration_open: eventDetail.is_registration_open,
+      registration_deadline: eventDetail.registration_deadline,
+    });
   };
 
   const getTimeUntilEvent = () => {
