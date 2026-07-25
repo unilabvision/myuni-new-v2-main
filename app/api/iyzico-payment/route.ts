@@ -115,7 +115,7 @@ async function computeServerDiscount(
   const { data: rows, error } = await supabase
     .from('discount_codes')
     .select(
-      'id, code, discount_amount, discount_type, valid_until, applicable_courses, max_usage, usage_count, is_used, is_referral, has_balance_limit, remaining_balance, minimum_order_amount, full_course_only'
+      'id, code, discount_amount, discount_type, valid_until, applicable_courses, max_usage, usage_count, is_used, is_referral, has_balance_limit, remaining_balance, minimum_order_amount, maximum_order_amount, full_course_only'
     )
     .eq('is_referral', false)
     .ilike('code', rawCode)
@@ -154,7 +154,8 @@ async function computeServerDiscount(
     return { discount: 0, appliedCode: null, codeId: null };
   }
 
-  const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions(codeRow);
+  const { fullCourseOnly, minimumOrderAmount, maximumOrderAmount } =
+    resolveDiscountRestrictions(codeRow);
   const applicableCourses: string[] = (codeRow.applicable_courses as string[]) || [];
 
   let eligibleItems = items;
@@ -174,6 +175,10 @@ async function computeServerDiscount(
   const eligibleTotal = eligibleItems.reduce((sum, it) => sum + (Number(it.price) || 0), 0);
 
   if (minimumOrderAmount > 0 && eligibleTotal < minimumOrderAmount) {
+    return { discount: 0, appliedCode: null, codeId: null };
+  }
+
+  if (maximumOrderAmount > 0 && eligibleTotal > maximumOrderAmount) {
     return { discount: 0, appliedCode: null, codeId: null };
   }
 

@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Percent, ChevronRight } from 'lucide-react';
 
+/** Üst kampanya barında yalnızca bu kod gösterilir */
+const PROMO_BAR_CODE = 'HOSGELDİN15';
+
 interface CampaignItem {
   id: string;
   title: string;
@@ -60,8 +63,27 @@ export default function CampaignPromoBar({ locale }: { locale: string }) {
         const res = await fetch(`/api/campaigns?locale=${locale}`, { cache: 'no-store' });
         const json = await res.json();
         if (cancelled || !json?.success) return;
-        const items = ((json.data as CampaignItem[]) || []).filter((c) => c.is_active);
-        setCampaigns(items);
+        const items = ((json.data as CampaignItem[]) || [])
+          .filter((c) => c.is_active)
+          .filter(
+            (c) =>
+              String(c.code || '').toLocaleUpperCase('tr-TR') ===
+              PROMO_BAR_CODE.toLocaleUpperCase('tr-TR')
+          );
+
+        // API'de yoksa bile üst barda yalnızca HOSGELDİN15 görünsün
+        setCampaigns(
+          items.length > 0
+            ? items
+            : [
+                {
+                  id: 'promo-hosgeldin15',
+                  title: PROMO_BAR_CODE,
+                  is_active: true,
+                  code: PROMO_BAR_CODE,
+                },
+              ]
+        );
         setIndex(0);
       } catch {
         // ignore
@@ -92,6 +114,11 @@ export default function CampaignPromoBar({ locale }: { locale: string }) {
 
   if (!visible || !current) return null;
 
+  const displayCode = (current.code || PROMO_BAR_CODE).toLocaleUpperCase('tr-TR');
+  const titleDistinct =
+    current.title &&
+    current.title.trim().toLocaleUpperCase('tr-TR') !== displayCode;
+
   const goNext = () => {
     if (campaigns.length <= 1) return;
     setFadeIn(false);
@@ -113,17 +140,12 @@ export default function CampaignPromoBar({ locale }: { locale: string }) {
             fadeIn ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          {current.discount_percentage != null && current.discount_percentage > 0 && (
-            <span className="shrink-0 rounded bg-white/15 px-2 py-0.5 text-xs font-semibold tracking-wide">
-              %{current.discount_percentage}
-            </span>
+          <span className="shrink-0 rounded border border-dashed border-white/50 bg-white/10 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide">
+            {displayCode}
+          </span>
+          {titleDistinct && (
+            <p className="truncate text-sm font-medium">{current.title}</p>
           )}
-          {current.code && (
-            <span className="shrink-0 rounded border border-dashed border-white/50 bg-white/10 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide">
-              {current.code}
-            </span>
-          )}
-          <p className="truncate text-sm font-medium">{current.title}</p>
           {campaigns.length > 1 && (
             <span className="hidden sm:inline shrink-0 text-[11px] text-white/70">
               {index + 1}/{campaigns.length}

@@ -159,6 +159,8 @@ export type Database = {
           initial_balance: number | null;
           /** Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz (modül paketlerini engellemek için) */
           minimum_order_amount: number | null;
+          /** Sepet/ürün tutarı bu değerin üstündeyse kod uygulanmaz; null = tavan yok */
+          maximum_order_amount: number | null;
           /** true ise yalnızca is_full_course / tam-egitim tier'larında geçerli */
           full_course_only: boolean;
         };
@@ -191,6 +193,7 @@ export type Database = {
           owner_id?: string | null;
           initial_balance?: number | null;
           minimum_order_amount?: number | null;
+          maximum_order_amount?: number | null;
           full_course_only?: boolean;
         };
         Update: {
@@ -222,6 +225,7 @@ export type Database = {
           owner_id?: string | null;
           initial_balance?: number | null;
           minimum_order_amount?: number | null;
+          maximum_order_amount?: number | null;
           full_course_only?: boolean;
         };
       };

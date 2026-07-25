@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { data: rows, error } = await supabaseAdmin
       .from('discount_codes')
       .select(
-        'id, code, discount_amount, discount_type, valid_until, applicable_courses, max_usage, usage_count, is_used, is_referral, has_balance_limit, remaining_balance, owner_id, minimum_order_amount, full_course_only'
+        'id, code, discount_amount, discount_type, valid_until, applicable_courses, max_usage, usage_count, is_used, is_referral, has_balance_limit, remaining_balance, owner_id, minimum_order_amount, maximum_order_amount, full_course_only'
       )
       .eq('is_referral', false)
       .ilike('code', rawCode)
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       remaining_balance: number | null;
       owner_id: string | null;
       minimum_order_amount: number | null;
+      maximum_order_amount: number | null;
       full_course_only: boolean | null;
     };
 
@@ -130,7 +131,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions(discountCode);
+    const { fullCourseOnly, minimumOrderAmount, maximumOrderAmount } =
+      resolveDiscountRestrictions(discountCode);
 
     if (fullCourseOnly && body.itemType !== 'cart') {
       if (body.itemType !== 'tier' || !body.isFullCourse) {
@@ -154,6 +156,20 @@ export async function POST(request: NextRequest) {
         error: isEnglish
           ? `This discount code requires a minimum order of ${minimumOrderAmount} ₺`
           : `Bu indirim kodu için minimum sipariş tutarı ${minimumOrderAmount.toLocaleString('tr-TR')} ₺ olmalıdır`,
+      });
+    }
+
+    if (
+      maximumOrderAmount > 0 &&
+      body.coursePrice != null &&
+      body.itemType !== 'cart' &&
+      Number(body.coursePrice) > maximumOrderAmount
+    ) {
+      return NextResponse.json({
+        success: false,
+        error: isEnglish
+          ? `This discount code is only valid for orders up to ${maximumOrderAmount} ₺`
+          : `Bu indirim kodu en fazla ${maximumOrderAmount.toLocaleString('tr-TR')} ₺ tutarındaki siparişlerde geçerlidir`,
       });
     }
 
@@ -185,9 +201,11 @@ export async function POST(request: NextRequest) {
         remaining_balance: discountCode.remaining_balance ?? null,
         owner_id: discountCode.owner_id || null,
         minimum_order_amount: discountCode.minimum_order_amount ?? null,
+        maximum_order_amount: discountCode.maximum_order_amount ?? null,
         full_course_only: !!discountCode.full_course_only,
         fullCourseOnly,
         minimumOrderAmount,
+        maximumOrderAmount,
       },
     });
   } catch (error) {

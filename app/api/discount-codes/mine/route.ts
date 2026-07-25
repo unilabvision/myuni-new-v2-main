@@ -32,6 +32,7 @@ export async function GET() {
           'owner_id',
           'influencer_id',
           'minimum_order_amount',
+          'maximum_order_amount',
           'full_course_only',
         ].join(',')
       )

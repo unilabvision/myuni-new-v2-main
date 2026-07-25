@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2000₺+ fixed → min tutar (indirim+1); full_course_only yalnızca DB bayrağından
-    const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions(discountCode);
+    // 2000₺+ fixed → min tutar (indirim+1); full_course_only / max yalnızca DB bayrağından
+    const { fullCourseOnly, minimumOrderAmount, maximumOrderAmount } =
+      resolveDiscountRestrictions(discountCode);
 
     if (fullCourseOnly) {
       const allowed =
@@ -97,6 +98,18 @@ export async function POST(request: NextRequest) {
           error: isEnglish
             ? `This discount code requires a minimum order of ${minimumOrderAmount} ₺`
             : `Bu indirim kodu için minimum sipariş tutarı ${minimumOrderAmount.toLocaleString('tr-TR')} ₺ olmalıdır`,
+        });
+      }
+    }
+
+    if (maximumOrderAmount > 0) {
+      const price = Number(coursePrice) || 0;
+      if (price > maximumOrderAmount) {
+        return NextResponse.json({
+          success: false,
+          error: isEnglish
+            ? `This discount code is only valid for orders up to ${maximumOrderAmount} ₺`
+            : `Bu indirim kodu en fazla ${maximumOrderAmount.toLocaleString('tr-TR')} ₺ tutarındaki siparişlerde geçerlidir`,
         });
       }
     }

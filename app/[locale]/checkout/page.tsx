@@ -51,6 +51,8 @@ interface DiscountCode {
   owner_id?: string | null;
   /** Sipariş tutarı bundan düşükse kod uygulanmaz */
   minimum_order_amount?: number | null;
+  /** Sipariş tutarı bundan yüksekse kod uygulanmaz */
+  maximum_order_amount?: number | null;
   /** Yalnızca tam eğitim (full course) tier'larında geçerli */
   full_course_only?: boolean;
 }
@@ -144,6 +146,7 @@ const texts = {
     discountExpired: "Bu indirim kodunun süresi dolmuş",
     discountNotApplicable: "Bu indirim kodu bu kurs için geçerli değil",
     discountMinOrder: "Bu indirim kodu için minimum sipariş tutarı karşılanmıyor",
+    discountMaxOrder: "Bu indirim kodu için maksimum sipariş tutarı aşıldı",
     discountFullCourseOnly: "Bu indirim kodu yalnızca tam eğitim paketi için geçerlidir",
     discountAlreadyApplied: "Bu indirim kodu zaten uygulandı",
     discountOnlyOne: "Sadece bir indirim kodu kullanabilirsin",
@@ -210,6 +213,7 @@ const texts = {
     discountExpired: "This discount code has expired",
     discountNotApplicable: "This discount code is not applicable for this course",
     discountMinOrder: "This discount code requires a higher minimum order amount",
+    discountMaxOrder: "This discount code exceeds the maximum order amount",
     discountFullCourseOnly: "This discount code is only valid for the full education package",
     discountAlreadyApplied: "This discount code is already applied",
     discountOnlyOne: "You can only use one discount code",
@@ -669,6 +673,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     let foundCode: DiscountCode;
     let fullCourseOnly: boolean;
     let minimumOrderAmount: number;
+    let maximumOrderAmount: number;
 
     try {
       const validateRes = await fetch(`/api/discount-codes/validate?locale=${locale}`, {
@@ -712,10 +717,12 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         remaining_balance: d.remaining_balance ?? null,
         owner_id: d.owner_id || null,
         minimum_order_amount: d.minimum_order_amount ?? null,
+        maximum_order_amount: d.maximum_order_amount ?? null,
         full_course_only: !!d.full_course_only,
       };
       fullCourseOnly = Boolean(d.fullCourseOnly);
       minimumOrderAmount = Number(d.minimumOrderAmount) || 0;
+      maximumOrderAmount = Number(d.maximumOrderAmount) || 0;
       console.log('Validated discount code via API:', foundCode);
     } catch (err) {
       console.error('Discount validate API error:', err);
@@ -779,6 +786,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
 
+      if (maximumOrderAmount > 0 && eligibleTotal > maximumOrderAmount) {
+        setDiscountError(
+          locale === 'tr'
+            ? `${t.discountMaxOrder} (max. ${maximumOrderAmount.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMaxOrder} (max. ${maximumOrderAmount.toLocaleString('en-US')} ₺)`
+        );
+        setDiscountLoading(false);
+        return;
+      }
+
       if (foundCode.has_balance_limit && foundCode.remaining_balance !== null && foundCode.remaining_balance !== undefined) {
         const remainingBalance = foundCode.remaining_balance;
         if (remainingBalance >= eligibleTotal) {
@@ -807,6 +824,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           locale === 'tr'
             ? `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('tr-TR')} ₺)`
             : `${t.discountMinOrder} (min. ${minimumOrderAmount.toLocaleString('en-US')} ₺)`
+        );
+        setDiscountLoading(false);
+        return;
+      }
+
+      if (maximumOrderAmount > 0 && singlePrice > maximumOrderAmount) {
+        setDiscountError(
+          locale === 'tr'
+            ? `${t.discountMaxOrder} (max. ${maximumOrderAmount.toLocaleString('tr-TR')} ₺)`
+            : `${t.discountMaxOrder} (max. ${maximumOrderAmount.toLocaleString('en-US')} ₺)`
         );
         setDiscountLoading(false);
         return;

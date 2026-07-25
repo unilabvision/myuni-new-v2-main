@@ -6,6 +6,8 @@
  * full_course_only yalnızca DB / admin bayrağından gelir; sepette modül
  * paketlerine (ör. SONGUN) uygulanabilmesi için 2000+ fixed otomatik
  * tam-eğitim kilidi uygulanmaz.
+ *
+ * maximum_order_amount: eligible sepet/ürün üst sınırı (null/0 = tavan yok).
  */
 
 export const HIGH_VALUE_FIXED_THRESHOLD = 2000;
@@ -17,6 +19,7 @@ export type DiscountRestrictionInput = {
   discountAmount?: number | null; // checkout client mapping
   has_balance_limit?: boolean | null;
   minimum_order_amount?: number | null;
+  maximum_order_amount?: number | null;
   full_course_only?: boolean | null;
 };
 
@@ -42,10 +45,12 @@ export function resolveDiscountRestrictions(code: DiscountRestrictionInput): {
   isHighValueFixed: boolean;
   fullCourseOnly: boolean;
   minimumOrderAmount: number;
+  maximumOrderAmount: number;
 } {
   const isHighValueFixed = isHighValueFixedCode(code);
   const amount = getDiscountAmount(code);
   const explicitMin = Number(code.minimum_order_amount) || 0;
+  const explicitMax = Number(code.maximum_order_amount) || 0;
 
   // Tam eğitim kilidi yalnızca açık bayraktan; 2000+ fixed otomatik kilitlemez
   const fullCourseOnly = Boolean(code.full_course_only);
@@ -53,8 +58,9 @@ export function resolveDiscountRestrictions(code: DiscountRestrictionInput): {
   const minimumOrderAmount = isHighValueFixed
     ? Math.max(explicitMin, amount + 1)
     : explicitMin;
+  const maximumOrderAmount = explicitMax > 0 ? explicitMax : 0;
 
-  return { isHighValueFixed, fullCourseOnly, minimumOrderAmount };
+  return { isHighValueFixed, fullCourseOnly, minimumOrderAmount, maximumOrderAmount };
 }
 
 /**
@@ -67,6 +73,7 @@ export function applyHighValueFixedDefaults<T extends Record<string, unknown>>(
     discount_amount?: number;
     has_balance_limit?: boolean;
     minimum_order_amount?: number | null;
+    maximum_order_amount?: number | null;
     full_course_only?: boolean;
   }
 ): T {

@@ -31,11 +31,18 @@ interface DiscountCodeRow {
   remaining_balance: number | null;
   initial_balance?: number | null;
   minimum_order_amount?: number | null;
+  maximum_order_amount?: number | null;
   full_course_only?: boolean;
   is_campaign: boolean;
   campaign_name: string | null;
   campaign_description: string | null;
   created_at: string | null;
+}
+
+interface AdminCourseOption {
+  id: string;
+  title: string;
+  slug: string;
 }
 
 const emptyForm = {
@@ -44,11 +51,12 @@ const emptyForm = {
   discount_type: 'percentage' as 'percentage' | 'fixed',
   valid_until: '',
   max_usage: 1,
-  applicable_courses: '',
+  applicable_course_ids: [] as string[],
   has_balance_limit: false,
   remaining_balance: 0,
   initial_balance: 0,
   minimum_order_amount: 0,
+  maximum_order_amount: 0,
   full_course_only: false,
   is_campaign: false,
   campaign_name: '',
@@ -67,6 +75,8 @@ export default function AdminDiscountCodesPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [courses, setCourses] = useState<AdminCourseOption[]>([]);
+  const [courseSearch, setCourseSearch] = useState('');
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -92,13 +102,27 @@ export default function AdminDiscountCodesPage() {
     }
   }, []);
 
+  const fetchCourses = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/courses');
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) {
+        setCourses(json.data);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     fetchList();
-  }, [fetchList]);
+    fetchCourses();
+  }, [fetchList, fetchCourses]);
 
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setCourseSearch('');
     setSubmitError(null);
     setModalOpen(true);
   };
@@ -111,16 +135,18 @@ export default function AdminDiscountCodesPage() {
       discount_type: (row.discount_type === 'fixed' ? 'fixed' : 'percentage') as 'percentage' | 'fixed',
       valid_until: row.valid_until || '',
       max_usage: row.max_usage,
-      applicable_courses: Array.isArray(row.applicable_courses) ? row.applicable_courses.join(', ') : '',
+      applicable_course_ids: Array.isArray(row.applicable_courses) ? row.applicable_courses : [],
       has_balance_limit: row.has_balance_limit,
       remaining_balance: row.remaining_balance ?? 0,
       initial_balance: row.initial_balance ?? 0,
       minimum_order_amount: row.minimum_order_amount ?? 0,
+      maximum_order_amount: row.maximum_order_amount ?? 0,
       full_course_only: !!row.full_course_only,
       is_campaign: row.is_campaign,
       campaign_name: row.campaign_name || '',
       campaign_description: row.campaign_description || '',
     });
+    setCourseSearch('');
     setSubmitError(null);
     setModalOpen(true);
   };
@@ -137,21 +163,20 @@ export default function AdminDiscountCodesPage() {
     setSubmitLoading(true);
     setSubmitError(null);
     try {
-      const applicableCourses = form.applicable_courses
-        .split(/[,\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
       const payload = {
         code: form.code.trim(),
         discount_amount: Number(form.discount_amount),
         discount_type: form.discount_type,
         valid_until: form.valid_until.trim(),
         max_usage: Math.max(1, Number(form.max_usage) || 1),
-        applicable_courses: applicableCourses.length ? applicableCourses : null,
+        applicable_courses: form.applicable_course_ids.length
+          ? form.applicable_course_ids
+          : null,
         has_balance_limit: form.has_balance_limit,
         remaining_balance: form.has_balance_limit ? Number(form.remaining_balance) || 0 : null,
         initial_balance: form.has_balance_limit ? Number(form.initial_balance) || 0 : null,
         minimum_order_amount: Number(form.minimum_order_amount) > 0 ? Number(form.minimum_order_amount) : null,
+        maximum_order_amount: Number(form.maximum_order_amount) > 0 ? Number(form.maximum_order_amount) : null,
         full_course_only: form.full_course_only,
         is_campaign: form.is_campaign,
         campaign_name: form.campaign_name.trim() || null,
@@ -511,51 +536,109 @@ export default function AdminDiscountCodesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  Uygulanacak kurs ID’leri (virgül veya boşlukla ayırın; boş = tümü)
+                  Uygulanacak kurslar (boş = tümü)
                 </label>
                 <input
-                  type="text"
-                  value={form.applicable_courses}
-                  onChange={(e) => setForm((f) => ({ ...f, applicable_courses: e.target.value }))}
-                  placeholder="uuid-1, uuid-2"
-                  className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
+                  type="search"
+                  value={courseSearch}
+                  onChange={(e) => setCourseSearch(e.target.value)}
+                  placeholder="Kurs ara..."
+                  className="mb-2 w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-sm"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  Minimum sipariş tutarı (₺) — boş/0 = yok
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.minimum_order_amount}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      minimum_order_amount: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                  placeholder="Örn. 2501 (modül paketlerini engeller)"
-                  className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
-                />
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-neutral-300 dark:border-neutral-600 p-2 space-y-1">
+                  {courses
+                    .filter((c) => {
+                      const q = courseSearch.trim().toLocaleLowerCase('tr-TR');
+                      if (!q) return true;
+                      return (
+                        c.title.toLocaleLowerCase('tr-TR').includes(q) ||
+                        c.slug.toLocaleLowerCase('tr-TR').includes(q)
+                      );
+                    })
+                    .map((c) => {
+                      const checked = form.applicable_course_ids.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex items-start gap-2 rounded px-2 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setForm((f) => ({
+                                ...f,
+                                applicable_course_ids: checked
+                                  ? f.applicable_course_ids.filter((id) => id !== c.id)
+                                  : [...f.applicable_course_ids, c.id],
+                              }))
+                            }
+                            className="mt-0.5 rounded border-neutral-300 text-[#990000] focus:ring-[#990000]"
+                          />
+                          <span className="text-neutral-800 dark:text-neutral-200">{c.title}</span>
+                        </label>
+                      );
+                    })}
+                  {courses.length === 0 && (
+                    <p className="text-xs text-neutral-500 px-2 py-1">Kurs listesi yüklenemedi.</p>
+                  )}
+                </div>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Sepet/ürün tutarı bu değerin altındaysa kod uygulanmaz. Sabit 2000 ₺+ kodlarda sistem otomatik olarak
-                  en az (indirim + 1) uygular.
+                  Seçili: {form.applicable_course_ids.length || 'tümü'}
                 </p>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    Minimum sipariş tutarı (₺) — boş/0 = yok
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.minimum_order_amount}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        minimum_order_amount: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Örn. 1000"
+                    className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    Maksimum sipariş tutarı (₺) — boş/0 = yok
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.maximum_order_amount}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        maximum_order_amount: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Örn. 20000"
+                    className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500 -mt-2">
+                {form.discount_type === 'percentage'
+                  ? 'Yüzde kodlarda sepet/ürün tutarı bu TL aralığında olmalıdır.'
+                  : 'Sepet/ürün tutarı bu aralık dışındaysa kod uygulanmaz. Sabit 2000 ₺+ kodlarda min otomatik (indirim + 1) olabilir.'}
+              </p>
 
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="full_course_only"
-                  checked={
-                    form.full_course_only ||
-                    (form.discount_type === 'fixed' &&
-                      !form.has_balance_limit &&
-                      Number(form.discount_amount) >= 2000)
-                  }
+                  checked={form.full_course_only}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, full_course_only: e.target.checked }))
                   }
@@ -565,14 +648,6 @@ export default function AdminDiscountCodesPage() {
                   Yalnızca tam eğitim paketi (modül paketlerinde kullanılamaz)
                 </label>
               </div>
-              {form.discount_type === 'fixed' &&
-                !form.has_balance_limit &&
-                Number(form.discount_amount) >= 2000 && (
-                  <p className="text-xs text-[#990000]">
-                    Sabit 2000 ₺ ve üzeri kodlar otomatik olarak yalnızca tam eğitim paketinde geçerlidir; minimum
-                    sipariş tutarı da (indirim + 1) olur.
-                  </p>
-                )}
 
               <div className="flex items-center gap-2">
                 <input

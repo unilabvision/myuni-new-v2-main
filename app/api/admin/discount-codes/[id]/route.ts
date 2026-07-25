@@ -21,6 +21,7 @@ type UpdatePayload = {
   remaining_balance?: number | null;
   initial_balance?: number | null;
   minimum_order_amount?: number | null;
+  maximum_order_amount?: number | null;
   full_course_only?: boolean;
 };
 
@@ -97,6 +98,10 @@ export async function PATCH(
   if (body.minimum_order_amount !== undefined) {
     const n = body.minimum_order_amount == null ? null : Math.max(0, Number(body.minimum_order_amount) || 0);
     updates.minimum_order_amount = n === 0 ? null : n;
+  }
+  if (body.maximum_order_amount !== undefined) {
+    const n = body.maximum_order_amount == null ? null : Math.max(0, Number(body.maximum_order_amount) || 0);
+    updates.maximum_order_amount = n === 0 ? null : n;
   }
   if (body.full_course_only !== undefined) updates.full_course_only = Boolean(body.full_course_only);
 
