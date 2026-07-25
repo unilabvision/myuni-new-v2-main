@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2000₺+ fixed → otomatik tam eğitim + min tutar (indirim+1)
+    // 2000₺+ fixed → min tutar (indirim+1); full_course_only yalnızca DB bayrağından
     const { fullCourseOnly, minimumOrderAmount } = resolveDiscountRestrictions(discountCode);
 
     if (fullCourseOnly) {

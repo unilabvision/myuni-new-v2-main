@@ -1,8 +1,11 @@
 /**
- * Yüksek tutarlı sabit indirim kodları (modül paketlerini bedava bırakmasın).
+ * Yüksek tutarlı sabit indirim kodları (ucuz tek modülü bedava bırakmasın).
  * 2000 TL ve üzeri fixed kodlar otomatik olarak:
- * - yalnızca tam eğitim paketine uygulanır
  * - minimum sipariş tutarı en az (indirim + 1) olur
+ *
+ * full_course_only yalnızca DB / admin bayrağından gelir; sepette modül
+ * paketlerine (ör. SONGUN) uygulanabilmesi için 2000+ fixed otomatik
+ * tam-eğitim kilidi uygulanmaz.
  */
 
 export const HIGH_VALUE_FIXED_THRESHOLD = 2000;
@@ -44,8 +47,9 @@ export function resolveDiscountRestrictions(code: DiscountRestrictionInput): {
   const amount = getDiscountAmount(code);
   const explicitMin = Number(code.minimum_order_amount) || 0;
 
-  // 2000+ fixed → her zaman tam eğitim; min tutar en az indirim+1
-  const fullCourseOnly = Boolean(code.full_course_only) || isHighValueFixed;
+  // Tam eğitim kilidi yalnızca açık bayraktan; 2000+ fixed otomatik kilitlemez
+  const fullCourseOnly = Boolean(code.full_course_only);
+  // 2000+ fixed → min tutar en az indirim+1 (tek ucuz modülü engeller)
   const minimumOrderAmount = isHighValueFixed
     ? Math.max(explicitMin, amount + 1)
     : explicitMin;
@@ -54,7 +58,8 @@ export function resolveDiscountRestrictions(code: DiscountRestrictionInput): {
 }
 
 /**
- * Admin create/update: 2000+ fixed kodlarda alanları otomatik doldur.
+ * Admin create/update: 2000+ fixed kodlarda minimum tutarı otomatik doldur.
+ * full_course_only'yi zorlamaz — sepette modül paketlerine izin verilir.
  */
 export function applyHighValueFixedDefaults<T extends Record<string, unknown>>(
   row: T & {
@@ -72,7 +77,19 @@ export function applyHighValueFixedDefaults<T extends Record<string, unknown>>(
 
   return {
     ...row,
-    full_course_only: true,
     minimum_order_amount: Math.max(explicitMin, amount + 1),
   };
+}
+
+/**
+ * Sepet / ödeme kaleminin indirim kodu applicable_courses listesine uyup uymadığını kontrol eder.
+ * Tier ve package için hem kendi id hem courseId eşleşmesi kabul edilir.
+ */
+export function itemMatchesApplicableCourses(
+  item: { id?: string | null; type?: string | null; courseId?: string | null },
+  applicableCourses: string[]
+): boolean {
+  if (!applicableCourses.length) return true;
+  const ids = [item.id, item.courseId].filter(Boolean).map(String);
+  return ids.some((id) => applicableCourses.includes(id));
 }

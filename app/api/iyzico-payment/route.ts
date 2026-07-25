@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
-import { resolveDiscountRestrictions } from '@/lib/discountRestrictions';
+import { resolveDiscountRestrictions, itemMatchesApplicableCourses } from '@/lib/discountRestrictions';
 import {
   buildOrderSnapshot,
   resolveEmailCourseType,
@@ -159,10 +159,9 @@ async function computeServerDiscount(
 
   let eligibleItems = items;
   if (applicableCourses.length > 0) {
-    eligibleItems = eligibleItems.filter((it) => {
-      const productId = it.type === 'tier' ? it.courseId || it.id : it.id;
-      return applicableCourses.includes(productId);
-    });
+    eligibleItems = eligibleItems.filter((it) =>
+      itemMatchesApplicableCourses(it, applicableCourses)
+    );
   }
   if (fullCourseOnly) {
     eligibleItems = eligibleItems.filter((it) => it.type === 'tier' && it.isFullCourse);

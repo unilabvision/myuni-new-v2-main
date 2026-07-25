@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
 import supabase from '../../_services/supabaseClient.js';
 import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
+import { itemMatchesApplicableCourses } from '@/lib/discountRestrictions';
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -744,10 +745,9 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     if (isCartMode) {
       // ---- CART MODE DISCOUNT CALCULATION ----
       let eligibleItems = foundCode.applicableCourses.length > 0
-        ? activeCartItems.filter(ci => {
-            const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
-            return foundCode.applicableCourses.includes(productId);
-          })
+        ? activeCartItems.filter((ci) =>
+            itemMatchesApplicableCourses(ci, foundCode.applicableCourses)
+          )
         : activeCartItems;
 
       if (fullCourseOnly) {
@@ -856,9 +856,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           coursePrice: isCartMode
             ? (foundCode.applicableCourses.length > 0 || fullCourseOnly
                 ? activeCartItems
-                    .filter(ci => {
-                      const productId = ci.type === 'tier' ? (ci.courseId ?? ci.id) : ci.id;
-                      const courseOk = foundCode.applicableCourses.length === 0 || foundCode.applicableCourses.includes(productId);
+                    .filter((ci) => {
+                      const courseOk =
+                        foundCode.applicableCourses.length === 0 ||
+                        itemMatchesApplicableCourses(ci, foundCode.applicableCourses);
                       const fullOk = !fullCourseOnly || (ci.type === 'tier' && ci.isFullCourse);
                       return courseOk && fullOk;
                     })
