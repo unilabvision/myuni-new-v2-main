@@ -11,8 +11,8 @@ export type SiteApplicationStatus =
   | 'accepted'
   | 'rejected';
 
-export const SITE_APPLICATION_MAX_FILE_BYTES = 50 * 1024 * 1024;
-export const SITE_APPLICATION_FILE_RETENTION_DAYS = 20;
+export const SITE_APPLICATION_MAX_FILE_BYTES = 100 * 1024 * 1024;
+export const SITE_APPLICATION_FILE_RETENTION_DAYS = 30;
 
 export const SITE_APPLICATION_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_SITE_APPLICATIONS_BUCKET ||

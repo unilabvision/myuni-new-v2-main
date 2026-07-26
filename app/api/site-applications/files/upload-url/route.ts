@@ -69,7 +69,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    if (!form.allows_attachment) {
+    let allowUpload = Boolean(form.allows_attachment);
+    if (!allowUpload) {
+      const { data: fields } = await supabase
+        .from(siteApplicationsDb.formFields)
+        .select('field_type')
+        .eq('form_id', form.id);
+      allowUpload = (fields || []).some((f) => f.field_type === 'file');
+    }
+
+    if (!allowUpload) {
       return NextResponse.json({ error: 'Attachments not allowed' }, { status: 400 });
     }
 

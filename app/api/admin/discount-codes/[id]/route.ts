@@ -94,7 +94,10 @@ export async function PATCH(
   if (body.campaign_description_en !== undefined) updates.campaign_description_en = body.campaign_description_en;
   if (body.has_balance_limit !== undefined) updates.has_balance_limit = body.has_balance_limit;
   if (body.remaining_balance !== undefined) updates.remaining_balance = body.remaining_balance;
-  if (body.initial_balance !== undefined) updates.initial_balance = body.initial_balance;
+  // Map initial_balance → remaining_balance when remaining not sent (column may not exist in DB)
+  if (body.initial_balance !== undefined && body.remaining_balance === undefined) {
+    updates.remaining_balance = body.initial_balance;
+  }
   if (body.minimum_order_amount !== undefined) {
     const n = body.minimum_order_amount == null ? null : Math.max(0, Number(body.minimum_order_amount) || 0);
     updates.minimum_order_amount = n === 0 ? null : n;

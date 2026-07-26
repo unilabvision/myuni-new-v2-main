@@ -29,7 +29,7 @@ import {
 import type { RegistrationTier } from '@/lib/siteApplications/packages';
 import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
-import { SITE_APPLICATION_MAX_FILE_BYTES } from '@/lib/siteApplications/config';
+import { SITE_APPLICATION_MAX_FILE_BYTES, SITE_APPLICATION_FILE_RETENTION_DAYS } from '@/lib/siteApplications/config';
 import { formatFileSize, validateAttachmentFile } from '@/lib/siteApplications/files';
 
 interface DynamicSiteApplicationFormProps {
@@ -56,7 +56,7 @@ const ui = {
     spamNote: 'Bu form spam koruması içerir.',
     select: 'Seçiniz',
     attachment: 'Ek Dosya (isteğe bağlı)',
-    attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar 20 gün sonra otomatik silinir.`,
+    attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar ${SITE_APPLICATION_FILE_RETENTION_DAYS} gün sonra otomatik silinir.`,
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
     sideTitle: 'Başvurun için hazır mısın?',
@@ -83,7 +83,7 @@ const ui = {
     spamNote: 'This form includes spam protection.',
     select: 'Select',
     attachment: 'Attachment (optional)',
-    attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after 20 days.`,
+    attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after ${SITE_APPLICATION_FILE_RETENTION_DAYS} days.`,
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
     sideTitle: 'Ready to apply?',
@@ -117,6 +117,11 @@ const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
 
 const inputClass =
   'w-full rounded-xl border border-neutral-200 dark:border-neutral-600 bg-white/90 dark:bg-neutral-900/80 px-4 py-3 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 transition-all duration-200 focus:ring-2 focus:ring-[#990000]/30 focus:border-[#990000] focus:outline-none hover:border-neutral-300 dark:hover:border-neutral-500';
+
+function isFileFieldType(fieldType: string | null | undefined): boolean {
+  const t = String(fieldType || '').trim().toLowerCase();
+  return t === 'file' || t === 'upload' || t === 'attachment';
+}
 
 function FormShell({
   children,
@@ -165,6 +170,7 @@ export default function DynamicSiteApplicationForm({
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [fieldFiles, setFieldFiles] = useState<Record<string, File>>({});
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
@@ -252,6 +258,9 @@ export default function DynamicSiteApplicationForm({
     if (required.length === 0) return 100;
     const filled = required.filter((f) => {
       const raw = values[f.field_key]?.trim() || '';
+      if (f.field_type === 'file' || isFileFieldType(f.field_type)) {
+        return Boolean(fieldFiles[f.field_key] || raw);
+      }
       if (!raw) return false;
       if (f.field_type === 'checkbox') {
         try {
@@ -264,7 +273,7 @@ export default function DynamicSiteApplicationForm({
       return true;
     }).length;
     return Math.round((filled / required.length) * 100);
-  }, [formConfig, values]);
+  }, [formConfig, values, fieldFiles]);
 
   const updateValue = (fieldKey: string, value: string) => {
     setValues((prev) => ({ ...prev, [fieldKey]: value }));
@@ -291,6 +300,12 @@ export default function DynamicSiteApplicationForm({
           selected = [];
         }
         if (field.required && selected.length === 0) {
+          nextErrors[field.field_key] = t.required;
+        }
+        continue;
+      }
+      if (field.field_type === 'file' || isFileFieldType(field.field_type)) {
+        if (field.required && !fieldFiles[field.field_key] && !value) {
           nextErrors[field.field_key] = t.required;
         }
         continue;
@@ -332,6 +347,7 @@ export default function DynamicSiteApplicationForm({
 
     try {
       let attachmentMeta: Record<string, unknown> = {};
+      const submissionFields: Record<string, string> = { ...values };
 
       if (attachment && formConfig.allows_attachment) {
         const uploadRes = await fetch('/api/site-applications/files/upload-url', {
@@ -364,6 +380,35 @@ export default function DynamicSiteApplicationForm({
         };
       }
 
+      for (const [fieldKey, file] of Object.entries(fieldFiles)) {
+        const uploadRes = await fetch('/api/site-applications/files/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            formSlug: formConfig.slug,
+            eventSlug: eventSlug || formConfig.event_slug || undefined,
+            locale,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          }),
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || t.uploadFailed);
+        const putRes = await fetch(uploadData.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': uploadData.mimeType || file.type },
+          body: file,
+        });
+        if (!putRes.ok) throw new Error(t.uploadFailed);
+        submissionFields[fieldKey] = JSON.stringify({
+          storagePath: uploadData.storageRef,
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+        });
+      }
+
       const res = await fetch('/api/site-applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -372,7 +417,7 @@ export default function DynamicSiteApplicationForm({
           eventSlug: eventSlug || formConfig.event_slug || undefined,
           locale,
           registrationTier,
-          fields: values,
+          fields: submissionFields,
           honeypot,
           ...attachmentMeta,
         }),
@@ -595,6 +640,7 @@ export default function DynamicSiteApplicationForm({
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
                 const inputId = `field-${field.field_key}`;
+                const isFileField = isFileFieldType(field.field_type);
                 return (
                   <div key={field.field_key} className="group">
                     <label
@@ -608,7 +654,46 @@ export default function DynamicSiteApplicationForm({
                       {field.required && <span className="text-[#990000]">*</span>}
                     </label>
 
-                    {field.field_type === 'textarea' ? (
+                    {isFileField ? (
+                      <label
+                        htmlFor={inputId}
+                        className="flex flex-col items-center justify-center gap-2 cursor-pointer rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-600 px-4 py-8 hover:border-[#990000]/50 hover:bg-[#990000]/[0.03] transition-colors"
+                      >
+                        <CloudUpload className="w-8 h-8 text-[#990000]" />
+                        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200 text-center">
+                          {fieldFiles[field.field_key]?.name || t.attachmentDrop}
+                        </span>
+                        <span className="text-xs text-neutral-400 text-center max-w-sm">
+                          {t.attachmentHint}
+                        </span>
+                        <input
+                          id={inputId}
+                          type="file"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) {
+                              setFieldFiles((prev) => {
+                                const next = { ...prev };
+                                delete next[field.field_key];
+                                return next;
+                              });
+                              updateValue(field.field_key, '');
+                              return;
+                            }
+                            const err = validateAttachmentFile(file);
+                            if (err) {
+                              setGeneralError(err);
+                              e.target.value = '';
+                              return;
+                            }
+                            setFieldFiles((prev) => ({ ...prev, [field.field_key]: file }));
+                            updateValue(field.field_key, file.name);
+                            setGeneralError(null);
+                          }}
+                        />
+                      </label>
+                    ) : field.field_type === 'textarea' ? (
                       <textarea
                         id={inputId}
                         rows={4}

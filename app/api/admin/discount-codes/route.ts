@@ -112,10 +112,11 @@ export async function POST(request: NextRequest) {
     const discountType = body.discount_type === 'fixed' ? 'fixed' : 'percentage';
     const hasBalanceLimit = Boolean(body.has_balance_limit);
     const remainingBalance = hasBalanceLimit
-      ? (body.remaining_balance != null ? Number(body.remaining_balance) : 0)
-      : null;
-    const initialBalance = hasBalanceLimit
-      ? (body.initial_balance != null ? Number(body.initial_balance) : remainingBalance)
+      ? (body.remaining_balance != null
+          ? Number(body.remaining_balance)
+          : body.initial_balance != null
+            ? Number(body.initial_balance)
+            : 0)
       : null;
 
     const row = applyHighValueFixedDefaults({
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       campaign_description_en: body.campaign_description_en ?? null,
       has_balance_limit: hasBalanceLimit,
       remaining_balance: remainingBalance,
-      initial_balance: initialBalance,
+      // initial_balance omitted: column not present on shared DB yet
       owner_id: body.owner_id ?? null,
       influencer_id: body.influencer_id ?? null,
       campaign_id: body.campaign_id ?? null,
