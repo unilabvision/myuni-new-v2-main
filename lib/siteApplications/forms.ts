@@ -8,6 +8,7 @@ import {
   getPublicRegistrationPackages,
   parsePackageSettings,
 } from './packages';
+import { parseResourceOptions } from './files';
 
 export function normalizeFieldOptions(options: unknown): SiteApplicationFormFieldOption[] {
   if (!options) return [];
@@ -52,8 +53,11 @@ export function toPublicForm(
   const isEn = locale === 'en';
   const slug = isEn ? form.slug_en : form.slug_tr;
 
+  const isEventForm = form.form_type === 'event' || Boolean(form.event_id);
   const packageSettings = parsePackageSettings(form.package_settings);
-  const packages = getPublicRegistrationPackages(packageSettings, locale);
+  const packages = isEventForm
+    ? getPublicRegistrationPackages(packageSettings, locale)
+    : [];
 
   return {
     id: form.id,
@@ -62,20 +66,39 @@ export function toPublicForm(
     subtitle: isEn ? form.subtitle_en : form.subtitle_tr,
     success_message: isEn ? form.success_message_en : form.success_message_tr,
     allows_attachment: form.allows_attachment,
+    form_type: form.form_type ?? (isEventForm ? 'event' : 'team'),
+    event_id: form.event_id ?? null,
     packages,
     fields: [...fields]
       .sort((a, b) => a.order_index - b.order_index)
-      .map((field) => ({
-        field_key: field.field_key,
-        field_type: field.field_type,
-        label: isEn ? field.label_en : field.label_tr,
-        placeholder: isEn ? field.placeholder_en : field.placeholder_tr,
-        required: field.required,
-        order_index: field.order_index,
-        options: normalizeFieldOptions(field.options).map((opt) => ({
-          value: opt.value,
-          label: isEn ? opt.label_en : opt.label_tr,
-        })),
-      })),
+      .map((field) => {
+        if (field.field_type === 'resource') {
+          const meta = parseResourceOptions(field.options);
+          return {
+            field_key: field.field_key,
+            field_type: field.field_type,
+            label: isEn ? field.label_en : field.label_tr,
+            placeholder: isEn ? field.placeholder_en : field.placeholder_tr,
+            required: false,
+            order_index: field.order_index,
+            options: meta ? [{ value: 'resource', label: meta.fileName }] : [],
+            resource_file_name: meta?.fileName ?? null,
+            has_resource: Boolean(meta),
+          };
+        }
+
+        return {
+          field_key: field.field_key,
+          field_type: field.field_type,
+          label: isEn ? field.label_en : field.label_tr,
+          placeholder: isEn ? field.placeholder_en : field.placeholder_tr,
+          required: field.required,
+          order_index: field.order_index,
+          options: normalizeFieldOptions(field.options).map((opt) => ({
+            value: opt.value,
+            label: isEn ? opt.label_en : opt.label_tr,
+          })),
+        };
+      }),
   };
 }

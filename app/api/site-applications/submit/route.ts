@@ -148,26 +148,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Incomplete attachment metadata' }, { status: 400 });
     }
 
-    const certificatePrice = getCertificatePrice(packageSettings);
-    const requiresPayment =
-      registrationTierInput === 'certificate' && certificatePrice > 0;
-    const paymentStatus = requiresPayment ? 'pending' : 'none';
-    const packagePrice = registrationTierInput === 'certificate' ? certificatePrice : 0;
-
+    // Event if linked to an event — do not treat bare eventSlug / packages as enough
+    // (team forms must stay source=website so they appear in Ekip Başvuruları).
     const isEventApplication =
       Boolean(event) ||
       Boolean(form.event_id) ||
-      Boolean(eventSlug) ||
       form.form_type === 'event';
+
+    const certificatePrice = getCertificatePrice(packageSettings);
+    const requiresPayment =
+      isEventApplication &&
+      registrationTierInput === 'certificate' &&
+      certificatePrice > 0;
+    const paymentStatus = requiresPayment ? 'pending' : 'none';
+    const packagePrice =
+      isEventApplication && registrationTierInput === 'certificate' ? certificatePrice : 0;
 
     // Events: always auto-accept (no admin review). Certificate fee tracked via payment_status.
     const initialStatus = isEventApplication ? 'accepted' : 'pending';
 
     const submissionData: Record<string, unknown> = {
       ...normalized,
-      registration_tier: registrationTierInput,
-      payment_status: paymentStatus,
-      package_price: packagePrice,
+      ...(isEventApplication
+        ? {
+            registration_tier: registrationTierInput,
+            payment_status: paymentStatus,
+            package_price: packagePrice,
+          }
+        : {}),
     };
 
     const contact = extractContactFromSubmission(typedFields, normalized);

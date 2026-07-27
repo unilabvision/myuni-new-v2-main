@@ -66,3 +66,55 @@ export function computeAttachmentExpiresAt(from = new Date()): string {
   expires.setDate(expires.getDate() + SITE_APPLICATION_FILE_RETENTION_DAYS);
   return expires.toISOString();
 }
+
+export function parseAttachmentStorageRef(storageRef: string): {
+  bucket: string;
+  path: string;
+} {
+  const trimmed = storageRef.trim();
+  if (trimmed.includes('::')) {
+    const [bucket, ...rest] = trimmed.split('::');
+    return { bucket: bucket || SITE_APPLICATION_STORAGE_BUCKET, path: rest.join('::') };
+  }
+  return { bucket: SITE_APPLICATION_STORAGE_BUCKET, path: trimmed.replace(/^\/+/, '') };
+}
+
+export type ResourceFileMeta = {
+  storageRef: string;
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+};
+
+export function parseResourceOptions(options: unknown): ResourceFileMeta | null {
+  if (!options) return null;
+  let list: unknown = options;
+  if (typeof options === 'string') {
+    try {
+      list = JSON.parse(options);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const row = list[0];
+  if (!row || typeof row !== 'object') return null;
+  const obj = row as Record<string, unknown>;
+  const storageRef = String(obj.value ?? obj.storageRef ?? obj.storage_path ?? '').trim();
+  const fileName = String(obj.label_tr ?? obj.label_en ?? obj.label ?? obj.fileName ?? '').trim();
+  if (!storageRef || !fileName) return null;
+  if (storageRef.startsWith('http://') || storageRef.startsWith('https://')) return null;
+  const fileSizeRaw = obj.fileSize ?? obj.file_size;
+  const fileSize =
+    typeof fileSizeRaw === 'number'
+      ? fileSizeRaw
+      : fileSizeRaw != null
+        ? Number(fileSizeRaw)
+        : undefined;
+  return {
+    storageRef,
+    fileName,
+    mimeType: obj.mimeType || obj.mime_type ? String(obj.mimeType || obj.mime_type) : undefined,
+    fileSize: Number.isFinite(fileSize) ? fileSize : undefined,
+  };
+}

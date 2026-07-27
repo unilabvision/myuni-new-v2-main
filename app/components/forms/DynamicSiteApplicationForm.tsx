@@ -25,6 +25,7 @@ import {
   CheckSquare,
   Circle,
   CloudUpload,
+  Download,
 } from 'lucide-react';
 import type { RegistrationTier } from '@/lib/siteApplications/packages';
 import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
@@ -59,6 +60,10 @@ const ui = {
     attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar ${SITE_APPLICATION_FILE_RETENTION_DAYS} gün sonra otomatik silinir.`,
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
+    resourceDownload: 'Dosyayı indir',
+    resourceDownloading: 'Hazırlanıyor…',
+    resourceMissing: 'Dosya henüz yüklenmemiş.',
+    resourceHint: 'Önce dosyayı indirin, ardından cevabınızı aşağıdaki dosya alanına yükleyin.',
     sideTitle: 'Başvurun için hazır mısın?',
     sideSubtitle: 'Birkaç dakikada tamamla — sana döneceğiz.',
     step1: 'Bilgilerini doldur',
@@ -86,6 +91,10 @@ const ui = {
     attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after ${SITE_APPLICATION_FILE_RETENTION_DAYS} days.`,
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
+    resourceDownload: 'Download file',
+    resourceDownloading: 'Preparing…',
+    resourceMissing: 'File has not been uploaded yet.',
+    resourceHint: 'Download the file first, then upload your answer in the file field below.',
     sideTitle: 'Ready to apply?',
     sideSubtitle: 'Takes just a few minutes — we will get back to you.',
     step1: 'Fill in your details',
@@ -113,6 +122,7 @@ const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
   linear_scale: Hash,
   rating: Star,
   file: CloudUpload,
+  resource: Download,
 };
 
 const inputClass =
@@ -173,9 +183,13 @@ export default function DynamicSiteApplicationForm({
   const [fieldFiles, setFieldFiles] = useState<Record<string, File>>({});
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [resourceDownloading, setResourceDownloading] = useState<string | null>(null);
 
   const isEventForm = Boolean(
-    eventSlug || formConfig?.event_slug || formConfig?.event_title || (formConfig?.packages?.length ?? 0) > 0
+    eventSlug ||
+      formConfig?.event_slug ||
+      formConfig?.event_id ||
+      formConfig?.form_type === 'event'
   );
 
   const mapServerFieldError = (code: string) => {
@@ -285,11 +299,42 @@ export default function DynamicSiteApplicationForm({
     });
   };
 
+  const downloadResource = async (fieldKey: string) => {
+    if (!formConfig) return;
+    setResourceDownloading(fieldKey);
+    setGeneralError(null);
+    try {
+      const params = new URLSearchParams({ locale });
+      if (eventSlug || formConfig.event_slug) {
+        params.set('eventSlug', eventSlug || formConfig.event_slug || '');
+      }
+      const res = await fetch(
+        `/api/site-applications/public/forms/${encodeURIComponent(formConfig.slug)}/resources/${encodeURIComponent(fieldKey)}?${params.toString()}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t.resourceMissing);
+      const a = document.createElement('a');
+      a.href = data.url;
+      a.download = data.fileName || 'download';
+      a.rel = 'noopener';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      setGeneralError(err instanceof Error ? err.message : t.resourceMissing);
+    } finally {
+      setResourceDownloading(null);
+    }
+  };
+
   const validateClient = () => {
     if (!formConfig) return false;
     const nextErrors: Record<string, string> = {};
 
     for (const field of formConfig.fields) {
+      if (field.field_type === 'resource') continue;
+
       const value = values[field.field_key]?.trim() || '';
       if (field.field_type === 'checkbox') {
         let selected: string[] = [];
@@ -641,20 +686,41 @@ export default function DynamicSiteApplicationForm({
                 const Icon = fieldIcon[field.field_type] || FileText;
                 const inputId = `field-${field.field_key}`;
                 const isFileField = isFileFieldType(field.field_type);
+                const isResourceField = field.field_type === 'resource';
                 return (
                   <div key={field.field_key} className="group">
                     <label
-                      htmlFor={inputId}
+                      htmlFor={isResourceField ? undefined : inputId}
                       className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
                     >
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#990000]/8 text-[#990000] group-focus-within:bg-[#990000]/15 transition-colors">
                         <Icon className="w-3.5 h-3.5" />
                       </span>
                       {field.label}
-                      {field.required && <span className="text-[#990000]">*</span>}
+                      {field.required && !isResourceField && (
+                        <span className="text-[#990000]">*</span>
+                      )}
                     </label>
 
-                    {isFileField ? (
+                    {isResourceField ? (
+                      <div className="rounded-2xl border border-[#990000]/25 bg-[#990000]/[0.04] px-4 py-5 space-y-3">
+                        <p className="text-sm text-neutral-700 dark:text-neutral-200">
+                          {field.resource_file_name || field.options?.[0]?.label || t.resourceMissing}
+                        </p>
+                        <p className="text-xs text-neutral-500">{t.resourceHint}</p>
+                        <button
+                          type="button"
+                          disabled={!field.has_resource || resourceDownloading === field.field_key}
+                          onClick={() => downloadResource(field.field_key)}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#990000] text-white text-sm font-medium disabled:opacity-50 hover:bg-[#7a0000] transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          {resourceDownloading === field.field_key
+                            ? t.resourceDownloading
+                            : t.resourceDownload}
+                        </button>
+                      </div>
+                    ) : isFileField ? (
                       <label
                         htmlFor={inputId}
                         className="flex flex-col items-center justify-center gap-2 cursor-pointer rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-600 px-4 py-8 hover:border-[#990000]/50 hover:bg-[#990000]/[0.03] transition-colors"

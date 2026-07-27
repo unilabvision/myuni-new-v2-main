@@ -12,7 +12,8 @@ export type SiteApplicationFieldType =
   | 'dropdown'
   | 'linear_scale'
   | 'rating'
-  | 'file';
+  | 'file'
+  | 'resource';
 
 export interface SiteApplicationFormFieldOption {
   value: string;
@@ -49,6 +50,7 @@ export interface SiteApplicationForm {
   is_active: boolean;
   show_on_website: boolean;
   allows_attachment: boolean;
+  form_type?: 'team' | 'event' | null;
   event_id: string | null;
   package_settings?: unknown;
   created_by: string | null;
@@ -73,6 +75,7 @@ export interface PublicSiteApplicationForm {
   subtitle: string | null;
   success_message: string | null;
   allows_attachment: boolean;
+  form_type?: 'team' | 'event' | null;
   event_id?: string | null;
   event_slug?: string | null;
   event_title?: string | null;
@@ -85,6 +88,9 @@ export interface PublicSiteApplicationForm {
     required: boolean;
     order_index: number;
     options: Array<{ value: string; label: string }>;
+    /** Present when field_type is resource and admin uploaded a file */
+    resource_file_name?: string | null;
+    has_resource?: boolean;
   }>;
 }
 
