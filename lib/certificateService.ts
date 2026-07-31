@@ -767,6 +767,37 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
       } catch (error) {
         console.log('⚠️ Etkinlik sertifika bilgileri alınamadı, default değerler kullanılıyor:', error);
       }
+    } else {
+      // Kurs: dashboard'da kaydedilen MyUNI şablonunu kullan
+      // Öncelik: varsayılan şablon → en son güncellenen → id 2
+      try {
+        const { data: defaultTpl } = await supabase
+          .from('certificate_templates')
+          .select('id')
+          .eq('organization_slug', 'myuni')
+          .eq('is_default', true)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (defaultTpl?.id) {
+          templateId = String(defaultTpl.id);
+        } else {
+          const { data: latestTpl } = await supabase
+            .from('certificate_templates')
+            .select('id')
+            .eq('organization_slug', 'myuni')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (latestTpl?.id) {
+            templateId = String(latestTpl.id);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ Kurs şablonu çözülemedi, template_id=2 kullanılıyor:', error);
+      }
     }
 
     const publicCertificateData = {

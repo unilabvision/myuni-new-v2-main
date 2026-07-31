@@ -121,6 +121,13 @@ export default function CourseTierSelector({
   const allSelectedEnrolled =
     hasSelection && selectedTiers.every((t) => enrolledTierIds.includes(t.id));
 
+  const hasEnrolledTiers = enrolledTierIds.length > 0;
+  const allTiersEnrolled =
+    sortedTiers.length > 0 &&
+    sortedTiers.every((t) => enrolledTierIds.includes(t.id));
+
+  const goToCourse = () => router.push(`/${locale}/watch/course/${course.slug}`);
+
   const buildCartItem = (tier: CourseTier): CartItem => ({
     id: tier.id,
     title: `${course.title} — ${tier.title}`,
@@ -206,17 +213,35 @@ export default function CourseTierSelector({
     );
 
   const actionButtons = !hasSelection ? (
-    <button
-      type="button"
-      disabled
-      className="w-full bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium cursor-not-allowed text-center text-sm"
-    >
-      Satın almak için paket seçin
-    </button>
+    hasEnrolledTiers ? (
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={goToCourse}
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-medium transition-colors flex items-center justify-center text-sm"
+        >
+          <Play className="w-4 h-4 mr-2" fill="currentColor" />
+          Kursa Git
+        </button>
+        {!allTiersEnrolled && (
+          <p className="text-xs text-center text-neutral-500 dark:text-neutral-400">
+            Diğer paketleri almak için yukarıdan seçim yapın.
+          </p>
+        )}
+      </div>
+    ) : (
+      <button
+        type="button"
+        disabled
+        className="w-full bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 py-3 px-6 rounded-xl font-medium cursor-not-allowed text-center text-sm"
+      >
+        Satın almak için paket seçin
+      </button>
+    )
   ) : allSelectedEnrolled ? (
     <button
       type="button"
-      onClick={() => router.push(`/${locale}/watch/course/${course.slug}`)}
+      onClick={goToCourse}
       className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-medium transition-colors flex items-center justify-center text-sm"
     >
       <Play className="w-4 h-4 mr-2" fill="currentColor" />
@@ -232,56 +257,74 @@ export default function CourseTierSelector({
       Kayıt Kapalı
     </button>
   ) : (
-    <div className="flex flex-col sm:flex-row gap-2 w-full">
-      <button
-        type="button"
-        onClick={handleBuySelected}
-        className="w-full sm:flex-1 bg-[#990000] hover:bg-[#b30000] text-white py-3 px-6 rounded-xl font-medium transition-colors text-center text-sm"
-      >
-        {selectedTiers.length > 1
-          ? `${selectedTiers.length} Paketi Satın Al`
-          : 'Hemen Satın Al'}
-      </button>
-      {canAddToCart && (
+    <div className="space-y-2">
+      <div className="flex flex-col sm:flex-row gap-2 w-full">
         <button
           type="button"
-          onClick={handleAddSelectedToCart}
-          className="w-full sm:w-auto sm:min-w-[10rem] flex items-center justify-center gap-2 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 py-3 px-6 rounded-xl font-medium hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-sm"
+          onClick={handleBuySelected}
+          className="w-full sm:flex-1 bg-[#990000] hover:bg-[#b30000] text-white py-3 px-6 rounded-xl font-medium transition-colors text-center text-sm"
         >
-          <ShoppingCart className="w-4 h-4 shrink-0" />
-          <span className="truncate">
-            {selectedTiers.length > 1
-              ? `Sepete Ekle (${selectedTiers.length - selectedInCartCount})`
-              : 'Sepete Ekle'}
-          </span>
+          {selectedTiers.length > 1
+            ? `${selectedTiers.length} Paketi Satın Al`
+            : 'Hemen Satın Al'}
+        </button>
+        {canAddToCart && (
+          <button
+            type="button"
+            onClick={handleAddSelectedToCart}
+            className="w-full sm:w-auto sm:min-w-[10rem] flex items-center justify-center gap-2 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 py-3 px-6 rounded-xl font-medium hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-sm"
+          >
+            <ShoppingCart className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {selectedTiers.length > 1
+                ? `Sepete Ekle (${selectedTiers.length - selectedInCartCount})`
+                : 'Sepete Ekle'}
+            </span>
+          </button>
+        )}
+      </div>
+      {hasEnrolledTiers && (
+        <button
+          type="button"
+          onClick={goToCourse}
+          className="w-full flex items-center justify-center gap-2 border border-green-500/60 text-green-700 dark:text-green-400 py-3 px-6 rounded-xl font-medium hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors text-sm"
+        >
+          <Play className="w-4 h-4" fill="currentColor" />
+          Kursa Git
         </button>
       )}
     </div>
   );
 
-  const mobileStickyBar = hasSelection ? (
+  const mobileStickyBar = hasSelection || hasEnrolledTiers ? (
     <div className="fixed bottom-0 inset-x-0 z-50 lg:hidden border-t border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-800/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
       <div className="mx-auto w-full max-w-lg px-3 sm:px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
         <div className="flex items-end justify-between gap-2 mb-2">
           <div className="min-w-0">
             <p className="text-lg sm:text-xl font-semibold leading-none text-neutral-900 dark:text-neutral-100">
-              {displayPrice === 0 ? 'Ücretsiz' : `₺${displayPrice.toLocaleString('tr-TR')}`}
+              {hasSelection
+                ? displayPrice === 0
+                  ? 'Ücretsiz'
+                  : `₺${displayPrice.toLocaleString('tr-TR')}`
+                : 'Eğitimin sizde'}
             </p>
             <p className="text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
-              {selectedTiers.length} paket seçildi
+              {hasSelection
+                ? `${selectedTiers.length} paket seçildi`
+                : `${enrolledTierIds.length} paket satın alındı`}
             </p>
           </div>
-          {showStrikethrough && displayOriginal != null && (
+          {hasSelection && showStrikethrough && displayOriginal != null && (
             <p className="text-xs text-neutral-400 line-through shrink-0">
               ₺{displayOriginal.toLocaleString('tr-TR')}
             </p>
           )}
         </div>
 
-        {allSelectedEnrolled ? (
+        {!hasSelection || allSelectedEnrolled ? (
           <button
             type="button"
-            onClick={() => router.push(`/${locale}/watch/course/${course.slug}`)}
+            onClick={goToCourse}
             className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 px-4 rounded-xl font-medium text-sm flex items-center justify-center"
           >
             <Play className="w-4 h-4 mr-1.5" fill="currentColor" />
@@ -316,15 +359,26 @@ export default function CourseTierSelector({
                 <ShoppingCart className="w-4 h-4" />
               </button>
             )}
+            {hasEnrolledTiers && (
+              <button
+                type="button"
+                onClick={goToCourse}
+                aria-label="Kursa git"
+                className="shrink-0 flex items-center justify-center w-11 h-11 border border-green-500/60 rounded-xl text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+              >
+                <Play className="w-4 h-4" fill="currentColor" />
+              </button>
+            )}
           </div>
         )}
       </div>
     </div>
   ) : null;
 
-  const mobileBottomSpacer = hasSelection
-    ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0'
-    : 'lg:pb-0';
+  const mobileBottomSpacer =
+    hasSelection || hasEnrolledTiers
+      ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0'
+      : 'lg:pb-0';
 
   if (checkingEnrollment) {
     return (
