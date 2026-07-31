@@ -332,7 +332,7 @@ export default function PackageDetailPage({ params }: CourseDetailPageProps) {
           lessons: section.lessons?.map((lesson: APILesson, lessonIndex: number) => ({
             id: String(lesson.id || ''),
             title: String(lesson.title || lesson.name || ''),
-            duration: String(lesson.duration || '0'),
+            duration: String(lesson.duration || ''),
             type: (lesson.type as 'video' | 'text' | 'quiz' | 'assignment') || 'video',
             order_index: Number(lesson.order_index ?? lesson.order ?? lessonIndex),
             isCompleted: Boolean(lesson.isCompleted || false), // Default to false

@@ -368,7 +368,7 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             sectionId: lesson.section_id,
             title: lesson.title,
             type: validateLessonType(lesson.lesson_type),
-            duration: lesson.duration_minutes ? `${lesson.duration_minutes} dk` : '0 dk',
+            duration: lesson.duration_minutes ? `${lesson.duration_minutes} dk` : '',
             isCompleted: progress?.is_completed || false,
             lastPosition: progress?.last_position_seconds || 0,
             watchTime: progress?.watch_time_seconds || 0,

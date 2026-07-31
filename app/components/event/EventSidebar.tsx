@@ -1271,10 +1271,12 @@ export default function EventSidebar({
                               <p className="font-medium text-neutral-900 dark:text-neutral-100 text-sm truncate">
                                 {sanitizeText(lesson.title || '')}
                               </p>
-                              <div className="flex items-center text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                                <Clock className="w-3 h-3 mr-1 flex-shrink-0" />
-                                <span>{sanitizeText(lesson.duration || '')}</span>
-                              </div>
+                              {lesson.duration && (
+                                <div className="flex items-center text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                                  <Clock className="w-3 h-3 mr-1 flex-shrink-0" />
+                                  <span>{sanitizeText(lesson.duration)}</span>
+                                </div>
+                              )}
                             </div>
                           </button>
                         ))}

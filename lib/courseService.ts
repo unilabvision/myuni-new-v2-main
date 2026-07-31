@@ -1,6 +1,7 @@
 // lib/courseService.ts - Complete Fixed Version
 
 import { supabase } from './supabase';
+import { formatDurationMinutes, resolveLessonDurationMinutes } from './durationFormat';
 import {
   getUserCourseProgress as apiGetUserCourseProgress,
   getUserLessonProgress as apiGetUserLessonProgress,
@@ -90,6 +91,7 @@ interface LessonWithSection {
   order_index: number;
   section_id: string;
   is_active: boolean;
+  videos?: Array<{ duration_seconds?: number | null }>;
   myuni_course_sections: {
     course_id: string;
   };
@@ -706,7 +708,8 @@ export async function getCourseWithContent(courseSlug: string) {
           duration_minutes,
           order_index,
           section_id,
-          is_active
+          is_active,
+          videos:myuni_videos(duration_seconds)
         )
       `)
       .eq('course_id', course.id)
@@ -739,7 +742,7 @@ export async function getCourseWithContent(courseSlug: string) {
           id: lesson.id,
           title: lesson.title,
           lesson_type: lesson.lesson_type,
-          duration_minutes: lesson.duration_minutes,
+          duration_minutes: resolveLessonDurationMinutes(lesson) || undefined,
           order_index: lesson.order_index
         }));
 
@@ -793,7 +796,10 @@ export async function getCourseSections(courseId: string) {
       .from('myuni_course_sections')
       .select(`
         *,
-        lessons:myuni_course_lessons(*)
+        lessons:myuni_course_lessons(
+          *,
+          videos:myuni_videos(duration_seconds)
+        )
       `)
       .eq('course_id', courseId)
       .eq('is_active', true)
@@ -811,7 +817,7 @@ export async function getCourseSections(courseId: string) {
           id: lesson.id,
           title: lesson.title,
           type: lesson.lesson_type,
-          duration: lesson.duration_minutes ? `${lesson.duration_minutes} dk` : '0 dk',
+          duration: formatDurationMinutes(resolveLessonDurationMinutes(lesson)),
           isCompleted: false,
           isLocked: false, // Default olarak unlocked
           order: lesson.order_index

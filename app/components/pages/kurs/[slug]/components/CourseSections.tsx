@@ -337,10 +337,12 @@ const CourseSections: React.FC<CourseSectionsProps> = ({
 
                         {/* Lesson Duration & Preview */}
                         <div className="flex flex-col sm:flex-row items-end sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 flex-shrink-0">
-                          <div className="flex items-center space-x-1 text-xs text-neutral-500 dark:text-neutral-400">
-                            <Clock className="w-3 h-3" />
-                            <span>{lesson.duration}</span>
-                          </div>
+                          {lesson.duration && (
+                            <div className="flex items-center space-x-1 text-xs text-neutral-500 dark:text-neutral-400">
+                              <Clock className="w-3 h-3" />
+                              <span>{lesson.duration}</span>
+                            </div>
+                          )}
 
                           {/* Preview Badge - Sadece ilk bölümün ilk 3 video dersinde */}
                           {shouldShowPreview(sectionIndex, lessonIndex, lesson.type) && (

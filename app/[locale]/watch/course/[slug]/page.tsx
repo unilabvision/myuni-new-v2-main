@@ -11,6 +11,7 @@ import {
   getUserCourseProgress,
   markLessonCompleted
 } from '../../../../../lib/courseService';
+import { formatDurationMinutes } from '../../../../../lib/durationFormat';
 
 // Import certificate service
 import { 
@@ -255,7 +256,7 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
           id: lesson.id,
           title: lesson.title,
           type: validateLessonType(lesson.lesson_type),
-          duration: lesson.duration_minutes ? `${lesson.duration_minutes} dk` : '0 dk',
+          duration: formatDurationMinutes(lesson.duration_minutes, locale),
           duration_minutes: lesson.duration_minutes, // Veritabanından gelen değeri koru
           isCompleted: progress?.is_completed || false,
           lastPosition: progress?.last_position_seconds || 0,
@@ -293,7 +294,7 @@ export default function CourseWatchPage({ params }: CourseWatchPageProps) {
       live_timezone: courseData.course.live_timezone || null,
       duration: courseData.course.duration || '4 hafta'
     };
-  }, []);
+  }, [locale]);
 
   // Check certificate status
   const checkCertificateStatus = useCallback(async () => {
