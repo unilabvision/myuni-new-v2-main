@@ -1,4 +1,5 @@
 import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
+import { TEAM_FORM_SLUGS } from '@/lib/siteApplications/config';
 
 export interface NavItem {
   href: string;
@@ -20,7 +21,6 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/hakkimizda', label: 'Biz Kimiz' },
         { href: '/{locale}/egitmen-ol', label: 'Eğitmen Ol' },
-        { href: '/{locale}/ekip-basvuru', label: 'UNILAB Ekip Başvurusu' },
         { href: '/{locale}/bultenimiz', label: 'Bültenimiz' },
         { href: '/{locale}/gizlilik', label: 'Gizlilik Politikası' },
         {
@@ -50,7 +50,6 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/about', label: 'Who We Are' },
         { href: '/{locale}/egitmen-ol', label: 'Become an Instructor' },
-        { href: '/{locale}/team-application', label: 'UNILAB Team Application' },
         { href: '/{locale}/newsletter', label: 'Newsletter' },
         { href: '/{locale}/privacy', label: 'Privacy Policy' },
         { href: '/{locale}/terms', label: 'Terms of Use' },
@@ -84,7 +83,10 @@ function injectSiteForms(
   locale: string,
   siteForms: PublicSiteApplicationNavForm[]
 ): NavItem[] {
-  const aboutForms = siteForms.filter((f) => f.navSection === 'about');
+  // Team forms (UNILAB vb.) Staj Fırsatları'nda iş ortaklığı olarak gösterilir; Hakkımızda'ya eklenmez
+  const aboutForms = siteForms.filter(
+    (f) => f.navSection === 'about' && !TEAM_FORM_SLUGS.has(f.slug)
+  );
 
   return items.map((item) => {
     const navKey = (item as NavItem & { navKey?: string }).navKey;

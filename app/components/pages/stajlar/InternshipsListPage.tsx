@@ -1,37 +1,157 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
 import {
-  Briefcase,
-  MapPin,
-  Calendar,
-  Sparkles,
-  Building2,
   ArrowRight,
+  Briefcase,
+  Building2,
+  Calendar,
+  Filter,
+  Handshake,
+  MapPin,
+  Search,
+  Sparkles,
 } from 'lucide-react';
 import type { OpportunityWithMatch } from '@/lib/types/opportunity';
+import { getUnilabVolunteerPath } from '@/lib/unilabVolunteer';
+
+const UNILAB_VISION_BANNER = '/unilab-vision-banner.png';
 
 interface InternshipsListPageProps {
   locale?: string;
 }
 
-const workModeLabel: Record<string, { tr: string; en: string }> = {
-  remote: { tr: 'Uzaktan', en: 'Remote' },
-  hybrid: { tr: 'Hibrit', en: 'Hybrid' },
-  onsite: { tr: 'Yerinde', en: 'On-site' },
+type ListItemKind = 'volunteer' | 'internship';
+
+interface ListItem {
+  id: string;
+  kind: ListItemKind;
+  href: string;
+  title: string;
+  company?: string;
+  description?: string;
+  location?: string;
+  workMode?: string;
+  deadline?: string;
+  isRecommended?: boolean;
+  matchReasons?: string[];
+  logo?: string;
+}
+
+const texts = {
+  tr: {
+    badge: '🚀 Fırsatları keşfet!',
+    title:
+      'Tamamladığınız eğitimlere göre size özel staj ve gönüllü ekip fırsatlarını keşfedin.',
+    subtitle:
+      'Staj ilanları ve gönüllü ekip çağrıları tek yerde. Eğitim geçmişinize uyan ilanlar üstte listelenir.',
+    viewAll: 'Tüm Fırsatları Görüntüle',
+    exploreMore: 'Detayları İncele',
+    featuredTitle: 'Öne Çıkan Fırsat',
+    allTitle: 'Tüm Fırsatlar',
+    statOpen: 'Açık Fırsat',
+    statVolunteer: 'Gönüllü',
+    statMatch: 'Eşleşme',
+    kindLabel: 'Fırsat Türü:',
+    modeLabel: 'Çalışma Biçimi:',
+    kinds: { all: 'Tümü', internship: 'Staj', volunteer: 'Gönüllü' },
+    modes: {
+      all: 'Tümü',
+      remote: 'Uzaktan',
+      hybrid: 'Hibrit',
+      onsite: 'Yerinde',
+    },
+    activeFilters: 'Aktif filtreler:',
+    loading: 'Fırsatlar yükleniyor...',
+    noResults: 'Filtreye uygun fırsat bulunamadı',
+    tryDifferent:
+      'Farklı bir filtre seçeneğini deneyin veya tüm fırsatları görüntüleyin.',
+    showAll: 'Tümünü Göster',
+    recommended: 'Sana özel',
+    matching: 'Eşleşen eğitim:',
+    volunteerBadge: 'Gönüllü',
+    internshipBadge: 'Staj',
+    open: 'Başvuru Açık',
+    deadlineLabel: 'Son başvuru:',
+    companyLabel: 'Kurum:',
+    modeShort: 'Çalışma:',
+    locationLabel: 'Konum:',
+    apply: 'Başvur',
+  },
+  en: {
+    badge: '🚀 Explore opportunities!',
+    title:
+      'Discover internships and volunteer team openings matched to the courses you completed.',
+    subtitle:
+      'Internship listings and volunteer team calls in one place. Opportunities matching your learning history appear first.',
+    viewAll: 'View All Opportunities',
+    exploreMore: 'Explore Details',
+    featuredTitle: 'Featured Opportunity',
+    allTitle: 'All Opportunities',
+    statOpen: 'Open Roles',
+    statVolunteer: 'Volunteer',
+    statMatch: 'Match Rate',
+    kindLabel: 'Opportunity Type:',
+    modeLabel: 'Work Mode:',
+    kinds: { all: 'All', internship: 'Internship', volunteer: 'Volunteer' },
+    modes: {
+      all: 'All',
+      remote: 'Remote',
+      hybrid: 'Hybrid',
+      onsite: 'On-site',
+    },
+    activeFilters: 'Active filters:',
+    loading: 'Loading opportunities...',
+    noResults: 'No opportunities match this filter',
+    tryDifferent: 'Try a different filter option or view all opportunities.',
+    showAll: 'Show All',
+    recommended: 'For you',
+    matching: 'Matching course:',
+    volunteerBadge: 'Volunteer',
+    internshipBadge: 'Internship',
+    open: 'Applications Open',
+    deadlineLabel: 'Deadline:',
+    companyLabel: 'Organization:',
+    modeShort: 'Work mode:',
+    locationLabel: 'Location:',
+    apply: 'Apply',
+  },
 };
+
+function buildVolunteerItem(locale: string): ListItem {
+  const isEn = locale === 'en';
+  return {
+    id: 'unilab-vision-volunteer',
+    kind: 'volunteer',
+    href: getUnilabVolunteerPath(locale),
+    title: isEn
+      ? 'Join the UNILAB Vision volunteer team'
+      : 'UNILAB Vision gönüllü ekibine katılın',
+    company: 'UNILAB Vision',
+    description: isEn
+      ? 'A platform uniting engineers, scientists, designers, and artists around projects in technology, sustainability, art, and education. Volunteer in one of its five units: R&D, Software, Media, Events, or Community.'
+      : 'Mühendisleri, bilim insanlarını, tasarımcıları ve sanatçıları teknoloji, sürdürülebilirlik, sanat ve eğitim projelerinde buluşturan platform. Ar-Ge, Yazılım, Medya, Etkinlik ve Topluluk birimlerinde gönüllü olun.',
+    location: isEn ? 'Remote / Hybrid' : 'Uzaktan / Hibrit',
+    workMode: 'hybrid',
+    logo: UNILAB_VISION_BANNER,
+  };
+}
 
 export default function InternshipsListPage({
   locale = 'tr',
 }: InternshipsListPageProps) {
   const { isSignedIn } = useUser();
-  const [opportunities, setOpportunities] = useState<OpportunityWithMatch[]>(
-    []
-  );
+  const [opportunities, setOpportunities] = useState<OpportunityWithMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeKind, setActiveKind] = useState<'all' | ListItemKind>('all');
+  const [activeMode, setActiveMode] = useState('all');
+
+  const allItemsRef = useRef<HTMLElement>(null);
   const basePath = locale === 'tr' ? 'stajlar' : 'internships';
+  const t = texts[locale as keyof typeof texts] || texts.tr;
 
   useEffect(() => {
     const load = async () => {
@@ -49,133 +169,481 @@ export default function InternshipsListPage({
     load();
   }, [locale, isSignedIn]);
 
-  const recommended = opportunities.filter((o) => o.is_recommended);
-  const others = opportunities.filter((o) => !o.is_recommended);
+  const volunteerItem = useMemo(() => buildVolunteerItem(locale), [locale]);
 
-  const renderCard = (opp: OpportunityWithMatch, highlighted?: boolean) => {
-    const title =
-      typeof opp.title === 'object'
-        ? opp.title[locale] || opp.title.tr || ''
-        : String(opp.title);
-    const desc =
-      opp.description != null && typeof opp.description === 'object'
-        ? opp.description[locale] || opp.description.tr || ''
-        : String(opp.description ?? '');
+  const items = useMemo<ListItem[]>(() => {
+    const mapped = opportunities.map<ListItem>((opp) => {
+      const title =
+        typeof opp.title === 'object'
+          ? opp.title[locale] || opp.title.tr || ''
+          : String(opp.title);
+      const description =
+        opp.description != null && typeof opp.description === 'object'
+          ? opp.description[locale] || opp.description.tr || ''
+          : String(opp.description ?? '');
+
+      return {
+        id: opp.id,
+        kind: 'internship',
+        href: `/${locale}/${basePath}/${opp.slug}`,
+        title,
+        company: opp.company_name || undefined,
+        description,
+        location: opp.location || undefined,
+        workMode: opp.work_mode || undefined,
+        deadline: opp.application_deadline || undefined,
+        isRecommended: opp.is_recommended,
+        matchReasons: opp.match_reasons,
+      };
+    });
+
+    const recommendedFirst = [
+      ...mapped.filter((i) => i.isRecommended),
+      ...mapped.filter((i) => !i.isRecommended),
+    ];
+
+    return [volunteerItem, ...recommendedFirst];
+  }, [opportunities, locale, basePath, volunteerItem]);
+
+  const filteredItems = items.filter((item) => {
+    const kindMatch = activeKind === 'all' || item.kind === activeKind;
+    const modeMatch = activeMode === 'all' || item.workMode === activeMode;
+    return kindMatch && modeMatch;
+  });
+
+  const volunteerCount = items.filter((i) => i.kind === 'volunteer').length;
+  const recommendedCount = items.filter((i) => i.isRecommended).length;
+
+  const scrollToAll = () => {
+    allItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const formatDate = (value: string) =>
+    new Date(value).toLocaleDateString(locale === 'tr' ? 'tr-TR' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+  const modeText = (mode?: string) =>
+    mode
+      ? t.modes[mode as keyof typeof t.modes] || mode
+      : undefined;
+
+  const OpportunityCard = ({ item }: { item: ListItem }) => {
+    const isVolunteer = item.kind === 'volunteer';
 
     return (
       <Link
-        key={opp.id}
-        href={`/${locale}/${basePath}/${opp.slug}`}
-        className={`block rounded-xl border p-5 transition-all hover:shadow-md ${
-          highlighted
-            ? 'border-[#990000]/40 bg-[#990000]/5 dark:bg-[#990000]/10'
-            : 'border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800'
-        }`}
+        href={item.href}
+        className="bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group flex flex-col"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            {highlighted && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#990000] mb-1">
+        {/* Media header — event card ile aynı oran */}
+        <div
+          className={`relative w-full h-48 overflow-hidden flex items-center justify-center ${
+            item.logo
+              ? 'bg-white'
+              : 'bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-700 dark:to-neutral-800'
+          }`}
+        >
+          {item.logo ? (
+            <Image
+              src={item.logo}
+              alt={item.company || item.title}
+              width={1024}
+              height={300}
+              className="w-[78%] max-h-[52%] object-contain transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <Briefcase className="w-14 h-14 text-neutral-400 dark:text-neutral-500 transition-transform duration-300 group-hover:scale-105" />
+          )}
+
+          <div className="absolute top-3 left-3">
+            <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+              {isVolunteer ? (
+                <Handshake className="w-4 h-4" />
+              ) : (
+                <Briefcase className="w-4 h-4" />
+              )}
+              {isVolunteer ? t.volunteerBadge : t.internshipBadge}
+            </div>
+          </div>
+
+          <div className="absolute top-3 right-3">
+            {item.isRecommended ? (
+              <div className="bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                {locale === 'tr' ? 'Sana özel' : 'For you'}
-              </span>
-            )}
-            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-              {title}
-            </h3>
-            {opp.company_name && (
-              <p className="text-sm text-neutral-500 flex items-center gap-1 mt-0.5">
-                <Building2 className="w-3.5 h-3.5 shrink-0" />
-                {opp.company_name}
-              </p>
+                {t.recommended}
+              </div>
+            ) : (
+              <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                {t.open}
+              </div>
             )}
           </div>
-          <ArrowRight className="w-4 h-4 text-neutral-400 shrink-0 mt-1" />
         </div>
-        {desc && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2 line-clamp-2">
-            {desc}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2 mt-3 text-xs text-neutral-500">
-          {opp.location && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {opp.location}
-            </span>
+
+        <div className="p-6 flex flex-col flex-1">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {modeText(item.workMode) && (
+              <span className="inline-block px-3 py-1 rounded-lg text-sm bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {modeText(item.workMode)}
+              </span>
+            )}
+          </div>
+
+          <h3 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-[#990000] transition-colors">
+            {item.title}
+          </h3>
+
+          {item.description && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2 mb-4 leading-relaxed">
+              {item.description}
+            </p>
           )}
-          {opp.work_mode && (
-            <span className="inline-flex items-center gap-1">
-              <Briefcase className="w-3 h-3" />
-              {workModeLabel[opp.work_mode]?.[locale as 'tr' | 'en'] ||
-                opp.work_mode}
-            </span>
+
+          <div className="grid grid-cols-2 gap-4 text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+            {item.company && (
+              <div>
+                <span className="font-medium">{t.companyLabel}</span>
+                <p className="text-neutral-700 dark:text-neutral-300">
+                  {item.company}
+                </p>
+              </div>
+            )}
+            {item.location && (
+              <div>
+                <span className="font-medium">{t.locationLabel}</span>
+                <p className="text-neutral-700 dark:text-neutral-300">
+                  {item.location}
+                </p>
+              </div>
+            )}
+            {item.deadline && (
+              <div>
+                <span className="font-medium">{t.deadlineLabel}</span>
+                <p className="text-neutral-700 dark:text-neutral-300">
+                  {formatDate(item.deadline)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {item.matchReasons && item.matchReasons.length > 0 && (
+            <p className="text-xs text-[#990000] mb-4">
+              {t.matching} {item.matchReasons.join(', ')}
+            </p>
           )}
-          {opp.application_deadline && (
-            <span className="inline-flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {new Date(opp.application_deadline).toLocaleDateString(
-                locale === 'tr' ? 'tr-TR' : 'en-US'
+
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center gap-2">
+              {item.location && (
+                <span className="flex items-center text-sm text-neutral-600 dark:text-neutral-400">
+                  <MapPin className="w-4 h-4 mr-1" />
+                  {item.location}
+                </span>
               )}
-            </span>
-          )}
+            </div>
+            <button className="text-[#990000] hover:text-[#cc0000] transition-colors text-sm font-medium flex items-center">
+              {isVolunteer ? t.exploreMore : t.apply}
+              <ArrowRight className="w-3 h-3 ml-1" />
+            </button>
+          </div>
         </div>
-        {opp.match_reasons?.length > 0 && (
-          <p className="text-xs text-[#990000] mt-2">
-            {locale === 'tr' ? 'Eşleşen eğitim:' : 'Matching course:'}{' '}
-            {opp.match_reasons.join(', ')}
-          </p>
-        )}
       </Link>
     );
   };
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
-          {locale === 'tr' ? 'Staj Fırsatları' : 'Internship Opportunities'}
-        </h1>
-        <p className="text-neutral-600 dark:text-neutral-400 mt-2 max-w-2xl">
-          {locale === 'tr'
-            ? 'Tamamladığınız eğitimlere göre size önerilen stajlar üstte listelenir. Tüm fırsatları inceleyebilirsiniz.'
-            : 'Internships matching your completed courses appear first. Browse all opportunities.'}
-        </p>
-      </div>
+  if (loading) {
+    return (
+      <section className="relative py-16 lg:py-18 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 lg:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="order-2 lg:order-1 animate-pulse">
+              <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4 mb-6" />
+              <div className="h-32 bg-neutral-200 dark:bg-neutral-700 rounded mb-6" />
+              <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2" />
+              <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-5/6" />
+            </div>
+            <div className="order-1 lg:order-2">
+              <div className="h-[400px] lg:h-[500px] bg-neutral-200 dark:bg-neutral-700 rounded-md animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
-      {loading ? (
-        <div className="py-16 text-center text-neutral-500">Yükleniyor...</div>
-      ) : opportunities.length === 0 ? (
-        <div className="py-16 text-center text-neutral-500 rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600">
-          {locale === 'tr'
-            ? 'Henüz yayınlanmış staj ilanı yok.'
-            : 'No internship listings yet.'}
-        </div>
-      ) : (
-        <div className="space-y-10">
-          {recommended.length > 0 && (
-            <section>
-              <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-[#990000]" />
-                {locale === 'tr' ? 'Önerilenler' : 'Recommended'}
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {recommended.map((o) => renderCard(o, true))}
+  return (
+    <div className="relative">
+      {/* Hero */}
+      <section className="relative py-16 lg:py-18 overflow-hidden">
+        <div className="max-w-7xl px-6 container mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="text-left order-2 lg:order-1">
+              <div className="bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm px-4 py-2 mb-6 border border-neutral-300 dark:border-neutral-700 rounded-full shadow-sm inline-block">
+                {t.badge}
               </div>
-            </section>
-          )}
-          {others.length > 0 && (
-            <section>
-              <h2 className="text-lg font-medium mb-4 text-neutral-700 dark:text-neutral-300">
-                {locale === 'tr' ? 'Tüm staj ilanları' : 'All internships'}
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {others.map((o) => renderCard(o))}
+
+              <h1 className="text-3xl lg:text-4xl font-medium text-neutral-900 dark:text-neutral-100 leading-tight mb-6">
+                {t.title}
+              </h1>
+
+              <div className="w-16 h-px bg-[#990000] mb-6" />
+
+              <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 max-w-2xl">
+                {t.subtitle}
+              </p>
+
+              <div className="flex space-x-8 mb-8 text-neutral-700 dark:text-neutral-300 text-sm md:text-base">
+                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                  <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    {items.length}
+                  </span>
+                  <span>{t.statOpen}</span>
+                </div>
+                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                  <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    {volunteerCount}
+                  </span>
+                  <span>{t.statVolunteer}</span>
+                </div>
+                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                  <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    {recommendedCount}
+                  </span>
+                  <span>{t.statMatch}</span>
+                </div>
               </div>
-            </section>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button
+                  onClick={scrollToAll}
+                  className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white rounded-md py-3 px-8 text-md font-medium flex items-center justify-center transition-colors"
+                >
+                  {t.viewAll}
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </button>
+
+                <Link
+                  href={volunteerItem.href}
+                  className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium transition-colors text-center"
+                >
+                  {t.exploreMore}
+                </Link>
+              </div>
+            </div>
+
+            {/* Featured — UNILAB Vision */}
+            <div className="order-1 lg:order-2">
+              <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg">
+                <div className="p-6 lg:p-8 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-4 lg:mb-6">
+                    <h3 className="text-lg lg:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                      {t.featuredTitle}
+                    </h3>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#990000]">
+                      <Handshake className="w-4 h-4" />
+                      {t.volunteerBadge}
+                    </span>
+                  </div>
+
+                  <Link
+                    href={volunteerItem.href}
+                    className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 flex-1 flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 group min-h-0"
+                  >
+                    <div className="relative h-32 lg:h-48 flex-shrink-0 bg-white flex items-center justify-center overflow-hidden">
+                      <Image
+                        src={UNILAB_VISION_BANNER}
+                        alt="UNILAB Vision"
+                        width={1024}
+                        height={300}
+                        className="w-[78%] max-h-[55%] object-contain transition-transform duration-300 group-hover:scale-105"
+                        priority
+                      />
+                      <div className="absolute top-3 left-3">
+                        <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+                          <Handshake className="w-4 h-4" />
+                          {t.volunteerBadge}
+                        </div>
+                      </div>
+                      <div className="absolute top-3 right-3">
+                        <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                          {t.open}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 lg:p-6 flex-1 flex flex-col min-h-0">
+                      <div className="mb-2 lg:mb-3 flex gap-2 flex-shrink-0">
+                        <span className="inline-block px-2 py-1 lg:px-3 rounded-lg text-xs lg:text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {t.modes.hybrid}
+                        </span>
+                      </div>
+
+                      <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 text-base lg:text-lg mb-2 lg:mb-3 leading-tight group-hover:text-[#990000] transition-colors flex-shrink-0">
+                        {volunteerItem.title}
+                      </h4>
+
+                      <p className="text-xs lg:text-sm text-neutral-600 dark:text-neutral-300 mb-3 lg:mb-4 flex-1 leading-relaxed overflow-hidden line-clamp-4">
+                        {volunteerItem.description}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs lg:text-sm text-neutral-500 dark:text-neutral-400 mb-3 lg:mb-4 flex-shrink-0">
+                        <div>
+                          <span className="font-medium block">
+                            {t.companyLabel}
+                          </span>
+                          <span className="text-neutral-700 dark:text-neutral-200">
+                            UNILAB Vision
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">
+                            {t.modeShort}
+                          </span>
+                          <span className="text-neutral-700 dark:text-neutral-200">
+                            {t.modes.hybrid}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between flex-shrink-0 mt-auto">
+                        <span className="flex items-center text-xs lg:text-sm text-neutral-600 dark:text-neutral-400">
+                          <Building2 className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
+                          {volunteerItem.location}
+                        </span>
+                        <span className="text-[#990000] hover:text-[#cc0000] transition-colors text-xs lg:text-sm font-medium flex items-center flex-shrink-0">
+                          {t.exploreMore}
+                          <ArrowRight className="w-3 h-3 ml-1" />
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* All opportunities */}
+      <section
+        ref={allItemsRef}
+        className="py-16 bg-white dark:bg-neutral-900"
+      >
+        <div className="max-w-7xl px-6 mx-auto">
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100">
+                {t.allTitle} ({filteredItems.length})
+              </h2>
+
+              {(activeKind !== 'all' || activeMode !== 'all') && (
+                <div className="flex items-center space-x-2 text-sm">
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    {t.activeFilters}
+                  </span>
+                  {activeKind !== 'all' && (
+                    <span className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-2 py-1 rounded text-xs">
+                      {t.kinds[activeKind]}
+                    </span>
+                  )}
+                  {activeMode !== 'all' && (
+                    <span className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-2 py-1 rounded text-xs">
+                      {t.modes[activeMode as keyof typeof t.modes]}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="w-16 h-px bg-[#990000] mb-8" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="flex items-center mb-3">
+                  <Filter className="w-4 h-4 mr-2 text-neutral-600 dark:text-neutral-400" />
+                  <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                    {t.kindLabel}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(t.kinds) as [
+                      'all' | ListItemKind,
+                      string,
+                    ][]
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveKind(key)}
+                      className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${
+                        activeKind === key
+                          ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center mb-3">
+                  <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                    {t.modeLabel}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(t.modes).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveMode(key)}
+                      className={`px-3 py-2 rounded-md font-medium transition-all duration-300 text-sm ${
+                        activeMode === key
+                          ? 'bg-neutral-800 dark:bg-neutral-700 text-white'
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {filteredItems.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredItems.map((item) => (
+                <OpportunityCard key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-neutral-200 dark:bg-neutral-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                <Search className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />
+              </div>
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
+                {t.noResults}
+              </h3>
+              <p className="text-neutral-600 dark:text-neutral-400 mb-4">
+                {t.tryDifferent}
+              </p>
+              <button
+                onClick={() => {
+                  setActiveKind('all');
+                  setActiveMode('all');
+                }}
+                className="px-6 py-2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
+              >
+                {t.showAll}
+              </button>
+            </div>
           )}
         </div>
-      )}
+      </section>
     </div>
   );
 }
