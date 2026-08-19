@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllCourses } from '@/lib/courseService';
-import { supabase } from '@/lib/supabase';
+import { createServerSupabasePublicClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,14 +9,34 @@ export async function GET(request: NextRequest) {
     const locale = request.nextUrl.searchParams.get('locale') || 'tr';
     console.log('[api/public/courses] Locale:', locale);
     
+    // Debug environment variables
+    console.log('[api/public/courses] Environment check:', {
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      supabaseUrlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
+      supabaseKeyLength: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length || 0,
+      supabaseUrlPrefix: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) || 'missing',
+      nodeEnv: process.env.NODE_ENV
+    });
+    
     // Check Supabase connection
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.error('[api/public/courses] Missing Supabase env vars');
       return NextResponse.json(
-        { success: false, error: 'Supabase configuration missing' },
+        { 
+          success: false, 
+          error: 'Supabase configuration missing',
+          details: {
+            hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+            hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          }
+        },
         { status: 500 }
       );
     }
+    
+    // Create server-side Supabase client for this request
+    const supabase = createServerSupabasePublicClient();
     
     console.log('[api/public/courses] Fetching courses...');
     const courses = await getAllCourses(locale);
