@@ -728,6 +728,12 @@ const translations: TranslationsType = useMemo(
       const [showPassword, setShowPassword] = useState(false);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
+      const [secondFactorCode, setSecondFactorCode] = useState('');
+      const [secondFactor, setSecondFactor] = useState<{
+        strategy?: string;
+        identifier?: string;
+      } | null>(null);
+      const [secondFactorLoading, setSecondFactorLoading] = useState(false);
       const router = useRouter();
 
       const handleSubmit = async (e: React.FormEvent) => {
@@ -750,8 +756,22 @@ const translations: TranslationsType = useMemo(
             const finalRedirectUrl = searchParams.get('redirect') || redirectUrl;
             console.log('Login successful, redirecting to:', finalRedirectUrl);
             router.push(finalRedirectUrl);
+          } else if (result.status === 'needs_second_factor') {
+            // Clerk ikinci doğrulama (2FA / email/phone code vs.) istiyor.
+            const strategy =
+              (result as any).secondFactorVerification?.strategy ||
+              (result as any).supportedSecondFactors?.[0]?.strategy ||
+              (result as any).secondFactorStrategy ||
+              'totp';
+
+            setSecondFactorCode('');
+            setSecondFactor({
+              strategy,
+              identifier: (result as any).identifier,
+            });
+            setError('');
           } else {
-            console.error('SignIn incomplete:', JSON.stringify({ status: result.status, firstFactorVerification: result.firstFactorVerification, secondFactorVerification: result.secondFactorVerification, identifier: result.identifier }));
+            console.error('SignIn incomplete:', JSON.stringify({ status: result.status, firstFactorVerification: result.firstFactorVerification, secondFactorVerification: (result as any).secondFactorVerification, identifier: (result as any).identifier }));
             setError(`${t.signin.errorGeneral} (status: ${result.status})`);
           }
         } catch (err: unknown) {
@@ -762,6 +782,40 @@ const translations: TranslationsType = useMemo(
           setError(clerkMsg || t.signin.errorCredentials);
         } finally {
           setLoading(false);
+        }
+      };
+
+      const handleSecondFactorSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isLoaded || !signIn || !secondFactor) return;
+
+        try {
+          setSecondFactorLoading(true);
+          setError('');
+
+          const strategy = secondFactor.strategy;
+          const attempt = await (signIn as any).attemptSecondFactor({
+            strategy,
+            code: secondFactorCode,
+          });
+
+          if (attempt.status === 'complete' && attempt.createdSessionId) {
+            await setActive({ session: attempt.createdSessionId });
+            const finalRedirectUrl = searchParams.get('redirect') || redirectUrl;
+            router.push(finalRedirectUrl);
+            return;
+          }
+
+          // Daha farklı bir durum gelebilir; kullanıcıya log ile hata gösteriyoruz.
+          console.error('Second factor incomplete:', JSON.stringify({ status: attempt?.status, attempt }));
+          setError(`${t.signin.errorGeneral} (status: ${attempt?.status || 'unknown'})`);
+        } catch (err: unknown) {
+          console.error('Second factor error:', err);
+          const authErr = err as { errors?: { message?: string; code?: string; longMessage?: string }[] };
+          const clerkMsg = authErr.errors?.[0]?.longMessage || authErr.errors?.[0]?.message || authErr.errors?.[0]?.code;
+          setError(clerkMsg || t.signin.errorCredentials);
+        } finally {
+          setSecondFactorLoading(false);
         }
       };
 
@@ -834,7 +888,7 @@ const translations: TranslationsType = useMemo(
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !!secondFactor}
               className="flex w-full justify-center rounded-md bg-neutral-800 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-70 dark:bg-neutral-700 dark:hover:bg-neutral-600"
             >
               {loading ? (
@@ -847,6 +901,50 @@ const translations: TranslationsType = useMemo(
               )}
             </button>
           </form>
+
+          {/* Second factor step */}
+          {secondFactor && (
+            <form onSubmit={handleSecondFactorSubmit} className="space-y-4">
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-neutral-300">
+                {normalizedLocale === 'tr'
+                  ? 'Hesabınız için ikinci doğrulama gerekiyor. Size gönderilen doğrulama kodunu girin.'
+                  : 'Your account requires a second verification step. Enter the verification code sent to you.'}
+              </div>
+              <div>
+                <label
+                  htmlFor="secondFactorCode"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  {normalizedLocale === 'tr' ? 'Doğrulama Kodu' : 'Verification Code'}
+                </label>
+                <input
+                  id="secondFactorCode"
+                  name="secondFactorCode"
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  value={secondFactorCode}
+                  onChange={(e) => setSecondFactorCode(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-2 text-neutral-900 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 sm:text-sm shadow-sm focus:ring-2 focus:ring-neutral-300 focus:border-neutral-400 dark:focus:ring-neutral-500 dark:focus:border-neutral-500"
+                  placeholder={normalizedLocale === 'tr' ? 'E-posta/SMS kodunu girin' : 'Enter the code'}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={secondFactorLoading || !secondFactorCode}
+                className="flex w-full justify-center rounded-md bg-[#990000] px-4 py-2 text-sm font-medium text-white hover:bg-[#7a0000] disabled:opacity-70 transition-colors"
+              >
+                {secondFactorLoading
+                  ? normalizedLocale === 'tr'
+                    ? 'Doğrulanıyor...'
+                    : 'Verifying...'
+                  : normalizedLocale === 'tr'
+                    ? 'Kodu Doğrula'
+                    : 'Verify Code'}
+              </button>
+            </form>
+          )}
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-neutral-300 dark:border-neutral-700" />
