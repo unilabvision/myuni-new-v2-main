@@ -6,8 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Clock, Users, Calendar, MapPin, Filter, Search, BookOpen } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { getAllCourses, mapLevelToLocale } from '../../../../lib/courseService';
+import { mapLevelToLocale } from '../../../../lib/courseService';
 
 // Define a type for the course object to avoid using 'any'
 interface Course {
@@ -185,8 +184,6 @@ export default function CourseListPage({ params }: CourseListPageProps) {
   const [activeCourseTypeFilter, setActiveCourseTypeFilter] = useState('all');
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const supabase = createClientComponentClient();
-
   const allCoursesRef = useRef<HTMLElement>(null);
 
   const resolvedParams = use(params);
@@ -231,15 +228,17 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       setLoading(true);
       setError(null);
 
-      // getAllCourses fonksiyonu içinde is_registration_open filtresi eklenmeli
-      // courseService.js/ts dosyasında bu filtreyi eklemeniz gerekir
-      const coursesData = await getAllCourses(locale);
+      const response = await fetch(`/api/public/courses?locale=${encodeURIComponent(locale)}`, {
+        cache: 'no-store',
+      });
+      const payload = await response.json();
 
-      // Removed the client-side filter that was excluding courses when is_registration_open === false
-      // so users can see the "Kayıt Kapalı" badge on the course card.
-      const filteredCoursesData = coursesData;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to load courses');
+      }
 
-      const mappedCourses: Course[] = filteredCoursesData.map((course: RawCourse) => {
+      const coursesData = payload.courses as RawCourse[];
+      const mappedCourses: Course[] = coursesData.map((course: RawCourse) => {
         const mappedLevel = mapLevelToLocale(course.level, locale);
         const courseName = course.title || course.name || '';
 
@@ -253,50 +252,17 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       });
 
       setCourses(mappedCourses);
+      setPackages(Array.isArray(payload.packages) ? payload.packages : []);
+      setRatingMap(payload.ratingMap || {});
 
-      // Fetch packages
-      const { data: packagesData, error: packagesError } = await supabase
-        .from('myuni_packages')
-        .select('*')
-        .eq('is_active', true);
-        
-      if (!packagesError && packagesData) {
-        setPackages(packagesData);
-      }
-
-      // Fetch ratings for all mapped courses
       const courseIds = mappedCourses.map((c) => String(c.id));
       if (courseIds.length > 0) {
-        const sinceDate = new Date();
-        sinceDate.setDate(sinceDate.getDate() - 30);
-        const [commentsRes, enrollmentsJson] = await Promise.all([
-          supabase
-            .from('myuni_comments')
-            .select('course_id, rating, status')
-            .in('course_id', courseIds)
-            .eq('status', 'approved'),
-          fetch(
-            `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
-          ).then((r) => r.json()).catch(() => ({ success: false, counts: {} })),
-        ]);
+        const enrollmentsJson = await fetch(
+          `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
+        )
+          .then((r) => r.json())
+          .catch(() => ({ success: false, counts: {} }));
 
-        if (!commentsRes.error && Array.isArray(commentsRes.data)) {
-          const agg: Record<string, { sum: number; count: number }> = {};
-          for (const row of commentsRes.data as Array<{ course_id: string; rating: number | null }>) {
-            if (row.rating && row.rating > 0) {
-              if (!agg[row.course_id]) agg[row.course_id] = { sum: 0, count: 0 };
-              agg[row.course_id].sum += row.rating;
-              agg[row.course_id].count += 1;
-            }
-          }
-          const resultMap: Record<string, { avg: number; count: number }> = {};
-          Object.entries(agg).forEach(([k, v]) => {
-            resultMap[k] = { avg: v.sum / v.count, count: v.count };
-          });
-          setRatingMap(resultMap);
-        }
-
-        // compute top sellers by enrollment count in last 30 days (limit 3)
         if (enrollmentsJson.success && enrollmentsJson.counts) {
           const pMap = enrollmentsJson.counts as Record<string, number>;
           const sorted = Object.entries(pMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -305,7 +271,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       }
     } catch (err) {
       console.error("Error fetching courses:", err);
-      setError('Failed to load courses');
+      setError(err instanceof Error ? err.message : t.error);
     } finally {
       setLoading(false);
     }

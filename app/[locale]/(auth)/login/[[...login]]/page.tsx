@@ -923,7 +923,7 @@ const translations: TranslationsType = useMemo(
               </div>
               <div>
                 <label
-                  htmlFor="secondFactorCode"
+                  htmlFor="secondFactorCode" 
                   className="block text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
                   {normalizedLocale === 'tr' ? 'Doğrulama Kodu' : 'Verification Code'}
