@@ -906,9 +906,20 @@ const translations: TranslationsType = useMemo(
           {secondFactor && (
             <form onSubmit={handleSecondFactorSubmit} className="space-y-4">
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-neutral-300">
-                {normalizedLocale === 'tr'
-                  ? 'Hesabınız için ikinci doğrulama gerekiyor. Size gönderilen doğrulama kodunu girin.'
-                  : 'Your account requires a second verification step. Enter the verification code sent to you.'}
+                {normalizedLocale === 'tr' ? (
+                  (secondFactor.strategy === 'email_code' &&
+                    `Clerk bu e-posta adresine doğrulama kodu gönderir: ${secondFactor.identifier || email}`) ||
+                  (secondFactor.strategy === 'phone_code' && 'Clerk kayıtlı telefonunuza SMS doğrulama kodu gönderir.') ||
+                  (secondFactor.strategy === 'totp' && 'Clerk TOTP istiyor: doğrulama uygulamanızdaki kodu girin.') ||
+                  'Hesabınız için ikinci doğrulama gerekiyor. Gelen kodu girin.'
+                ) : (
+                  (secondFactor.strategy === 'email_code' &&
+                    `Clerk sends the verification code to: ${secondFactor.identifier || email}`) ||
+                  (secondFactor.strategy === 'phone_code' &&
+                    'Clerk sends an SMS verification code to your registered phone.') ||
+                  (secondFactor.strategy === 'totp' && 'Clerk requires a TOTP code: enter the code from your authenticator app.') ||
+                  'Your account requires a second verification step. Enter the code you received.'
+                )}
               </div>
               <div>
                 <label
