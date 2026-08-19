@@ -751,12 +751,14 @@ const translations: TranslationsType = useMemo(
             console.log('Login successful, redirecting to:', finalRedirectUrl);
             router.push(finalRedirectUrl);
           } else {
-            setError(t.signin.errorGeneral);
+            console.error('SignIn incomplete:', JSON.stringify({ status: result.status, firstFactorVerification: result.firstFactorVerification, secondFactorVerification: result.secondFactorVerification, identifier: result.identifier }));
+            setError(`${t.signin.errorGeneral} (status: ${result.status})`);
           }
         } catch (err: unknown) {
           console.error('SignIn error:', err);
           const authErr = err as { errors?: { message?: string; code?: string; longMessage?: string }[] };
           const clerkMsg = authErr.errors?.[0]?.longMessage || authErr.errors?.[0]?.message || authErr.errors?.[0]?.code;
+          console.error('Clerk error detail:', clerkMsg);
           setError(clerkMsg || t.signin.errorCredentials);
         } finally {
           setLoading(false);
