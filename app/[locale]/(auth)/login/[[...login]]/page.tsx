@@ -755,7 +755,9 @@ const translations: TranslationsType = useMemo(
           }
         } catch (err: unknown) {
           console.error('SignIn error:', err);
-          setError(t.signin.errorCredentials);
+          const authErr = err as { errors?: { message?: string; code?: string; longMessage?: string }[] };
+          const clerkMsg = authErr.errors?.[0]?.longMessage || authErr.errors?.[0]?.message || authErr.errors?.[0]?.code;
+          setError(clerkMsg || t.signin.errorCredentials);
         } finally {
           setLoading(false);
         }
