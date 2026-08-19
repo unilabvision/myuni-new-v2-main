@@ -78,11 +78,29 @@ export async function GET(request: NextRequest) {
     console.error('[api/public/courses] Error stack:', error instanceof Error ? error.stack : 'No stack');
     console.error('[api/public/courses] Error message:', error instanceof Error ? error.message : String(error));
     
+    // Serialize error properly
+    let errorDetails = 'Unknown error';
+    if (error instanceof Error) {
+      errorDetails = `${error.name}: ${error.message}`;
+      if (error.stack) {
+        console.error('[api/public/courses] Full stack:', error.stack);
+      }
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        errorDetails = JSON.stringify(error, null, 2);
+      } catch {
+        errorDetails = String(error);
+      }
+    } else {
+      errorDetails = String(error);
+    }
+    
     return NextResponse.json(
       { 
         success: false, 
         error: 'Failed to load courses',
-        details: error instanceof Error ? error.message : String(error)
+        details: errorDetails,
+        timestamp: new Date().toISOString()
       },
       { status: 500 }
     );
