@@ -144,10 +144,78 @@ export async function POST(request: NextRequest) {
             
             if (!alreadyEnrolled) {
               await enrollUserInPackage(userId, item.id, orderId);
+              
+              // Paketin içindeki kursları da kullanıcıya ekle
+              const { data: packageCourses } = await supabaseAdmin
+                .from('myuni_package_courses')
+                .select('course_id, myuni_courses(id, title)')
+                .eq('package_id', item.id)
+                .order('order_index', { ascending: true });
+
+              if (packageCourses && packageCourses.length > 0) {
+                for (const pc of packageCourses) {
+                  const courseId = pc.course_id;
+                  const courseTitle = (pc.myuni_courses as any)?.title || 'Unknown';
+
+                  // Her kurs için enrollment oluştur
+                  const { data: existingCourseEnrollment } = await supabaseAdmin
+                    .from('myuni_enrollments')
+                    .select('id, is_active')
+                    .eq('user_id', userId)
+                    .eq('course_id', courseId)
+                    .maybeSingle();
+
+                  if (!existingCourseEnrollment) {
+                    const { data: newCourseEnrollment, error: courseEnrollError } = await supabaseAdmin
+                      .from('myuni_enrollments')
+                      .insert({
+                        user_id: userId,
+                        course_id: courseId,
+                        enrolled_at: new Date().toISOString(),
+                        progress_percentage: 0,
+                        is_active: true,
+                      })
+                      .select()
+                      .single();
+
+                    if (!courseEnrollError && newCourseEnrollment) {
+                      results.enrollmentsCreated.push({
+                        courseId: courseId,
+                        courseName: courseTitle,
+                        action: 'created_from_package',
+                        packageId: item.id,
+                        packageName: item.title,
+                      });
+
+                      if (!firstEnrollmentId) {
+                        firstEnrollmentId = newCourseEnrollment.id;
+                      }
+                    }
+                  } else if (!existingCourseEnrollment.is_active) {
+                    await supabaseAdmin
+                      .from('myuni_enrollments')
+                      .update({ 
+                        is_active: true,
+                        enrolled_at: new Date().toISOString() 
+                      })
+                      .eq('id', existingCourseEnrollment.id);
+
+                    results.enrollmentsCreated.push({
+                      courseId: courseId,
+                      courseName: courseTitle,
+                      action: 'activated_from_package',
+                      packageId: item.id,
+                      packageName: item.title,
+                    });
+                  }
+                }
+              }
+
               results.enrollmentsCreated.push({
                 packageId: item.id,
                 packageName: item.title,
                 action: 'enrolled_in_package',
+                coursesCount: packageCourses?.length || 0,
               });
             }
           } else if (item.type === 'product') {
