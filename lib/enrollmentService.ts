@@ -315,16 +315,20 @@ export async function checkUserPackageEnrollment(userId: string, packageId: stri
   }
 }
 
-// Kullanıcıyı pakete kaydet
+// Kullanıcıyı pakete kaydet ve paketin içindeki tüm kurslara da kaydet
 export async function enrollUserInPackage(userId: string, packageId: string, orderId?: string): Promise<boolean> {
   try {
     if (!userId || !packageId) return false;
 
     // Önce zaten kayıtlı mı kontrol et
     const alreadyEnrolled = await checkUserPackageEnrollment(userId, packageId);
-    if (alreadyEnrolled) return true;
+    if (alreadyEnrolled) {
+      console.log('User already enrolled in package:', packageId);
+      return true;
+    }
 
-    const { error } = await supabase
+    // 1. Package enrollment oluştur
+    const { error: packageError } = await supabase
       .from('myuni_package_enrollments')
       .insert({
         user_id: userId,
@@ -333,12 +337,89 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
         is_active: true
       });
 
-    if (error) {
-      console.error('Error enrolling user in package:', error);
+    if (packageError) {
+      console.error('Error enrolling user in package:', packageError);
       return false;
     }
 
+    console.log('Package enrollment created:', packageId);
+
+    // 2. Paketin içindeki tüm kursları al
+    const { data: packageCourses, error: coursesError } = await supabase
+      .from('myuni_package_courses')
+      .select('course_id, myuni_courses(id, title)')
+      .eq('package_id', packageId)
+      .order('order_index', { ascending: true });
+
+    if (coursesError) {
+      console.error('Error fetching package courses:', coursesError);
+      return true; // Package enrollment başarılı ama course enrollment başarısız
+    }
+
+    if (!packageCourses || packageCourses.length === 0) {
+      console.warn('No courses found in package:', packageId);
+      return true;
+    }
+
+    console.log(`Found ${packageCourses.length} courses in package ${packageId}`);
+
+    // 3. Her kurs için enrollment oluştur
+    for (const pc of packageCourses) {
+      const courseId = pc.course_id;
+      const courseTitle = (pc.myuni_courses as any)?.title || 'Unknown';
+
+      try {
+        // Mevcut enrollment var mı kontrol et
+        const { data: existingEnrollment } = await supabase
+          .from('myuni_enrollments')
+          .select('id, is_active')
+          .eq('user_id', userId)
+          .eq('course_id', courseId)
+          .maybeSingle();
+
+        if (existingEnrollment) {
+          if (!existingEnrollment.is_active) {
+            // Pasif enrollment'ı aktif et
+            await supabase
+              .from('myuni_enrollments')
+              .update({ 
+                is_active: true,
+                enrolled_at: new Date().toISOString() 
+              })
+              .eq('id', existingEnrollment.id);
+            
+            console.log(`Activated existing enrollment for course: ${courseTitle}`);
+          } else {
+            console.log(`User already enrolled in course: ${courseTitle}`);
+          }
+        } else {
+          // Yeni enrollment oluştur
+          const { error: enrollError } = await supabase
+            .from('myuni_enrollments')
+            .insert({
+              user_id: userId,
+              course_id: courseId,
+              enrolled_at: new Date().toISOString(),
+              progress_percentage: 0,
+              is_active: true,
+              welcome_shown: false
+            });
+
+          if (enrollError) {
+            console.error(`Error creating enrollment for course ${courseTitle}:`, enrollError);
+          } else {
+            console.log(`Created enrollment for course: ${courseTitle}`);
+          }
+        }
+      } catch (courseError) {
+        console.error(`Error processing course ${courseId}:`, courseError);
+        // Devam et, diğer kursları kaydet
+      }
+    }
+
+    console.log(`Successfully enrolled user in package ${packageId} with ${packageCourses.length} courses`);
     return true;
+
   } catch (error) {
     console.error('Unexpected error enrolling user in package:', error);
     return false;
