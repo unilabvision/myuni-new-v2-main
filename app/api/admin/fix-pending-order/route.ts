@@ -38,14 +38,6 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Zaten completed ise skip
-    if (order.status === 'completed') {
-      return NextResponse.json({
-        message: 'Order zaten completed durumunda',
-        order,
-      });
-    }
-
     const userId = order.custom_data?.userId || order.useremail;
     const isCartMode = order.custom_data?.cartMode === true;
     const cartItems = order.custom_data?.cartItems || [];
@@ -54,25 +46,28 @@ export async function POST(request: NextRequest) {
       orderUpdated: false,
       enrollmentsCreated: [] as any[],
       errors: [] as any[],
+      wasAlreadyCompleted: order.status === 'completed',
     };
 
-    // 2. Order'ı completed yap
-    const { error: updateError } = await supabaseAdmin
-      .from('orders')
-      .update({
-        status: 'completed',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('orderid', orderId);
+    // 2. Order'ı completed yap (eğer değilse)
+    if (order.status !== 'completed') {
+      const { error: updateError } = await supabaseAdmin
+        .from('orders')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('orderid', orderId);
 
-    if (updateError) {
-      return NextResponse.json({
-        error: 'Order güncellenemedi',
-        details: updateError,
-      }, { status: 500 });
+      if (updateError) {
+        return NextResponse.json({
+          error: 'Order güncellenemedi',
+          details: updateError,
+        }, { status: 500 });
+      }
+
+      results.orderUpdated = true;
     }
-
-    results.orderUpdated = true;
 
     // 3. Enrollment oluştur
     let firstEnrollmentId: string | undefined;
