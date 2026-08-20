@@ -4,33 +4,13 @@ import { createServerSupabasePublicClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[api/public/courses] Starting request...');
-    
     const locale = request.nextUrl.searchParams.get('locale') || 'tr';
-    console.log('[api/public/courses] Locale:', locale);
-    
-    // Debug environment variables
-    console.log('[api/public/courses] Environment check:', {
-      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      supabaseUrlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length || 0,
-      supabaseKeyLength: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length || 0,
-      supabaseUrlPrefix: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) || 'missing',
-      nodeEnv: process.env.NODE_ENV
-    });
     
     // Check Supabase connection
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('[api/public/courses] Missing Supabase env vars');
+      console.error('[api/public/courses] Missing Supabase configuration');
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Supabase configuration missing',
-          details: {
-            hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-            hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-          }
-        },
+        { success: false, error: 'Configuration error' },
         { status: 500 }
       );
     }
@@ -38,27 +18,21 @@ export async function GET(request: NextRequest) {
     // Create server-side Supabase client for this request
     const supabase = createServerSupabasePublicClient();
     
-    console.log('[api/public/courses] Fetching courses...');
     const courses = await getAllCourses(locale);
-    console.log('[api/public/courses] Courses fetched:', courses.length);
 
-    console.log('[api/public/courses] Fetching packages...');
     const { data: packages, error: packagesError } = await supabase
       .from('myuni_packages')
       .select('*')
       .eq('is_active', true);
 
     if (packagesError) {
-      console.error('[api/public/courses] packages error:', packagesError);
-    } else {
-      console.log('[api/public/courses] Packages fetched:', packages?.length || 0);
+      console.error('[api/public/courses] Error fetching packages:', packagesError.message);
     }
 
     const courseIds = courses.map((course) => String(course.id));
     const ratingMap: Record<string, { avg: number; count: number }> = {};
 
     if (courseIds.length > 0) {
-      console.log('[api/public/courses] Fetching ratings for', courseIds.length, 'courses...');
       const { data: comments, error: commentsError } = await supabase
         .from('myuni_comments')
         .select('course_id, rating, status')
@@ -66,9 +40,8 @@ export async function GET(request: NextRequest) {
         .eq('status', 'approved');
 
       if (commentsError) {
-        console.error('[api/public/courses] comments error:', commentsError);
+        console.error('[api/public/courses] Error fetching comments:', commentsError.message);
       } else if (comments) {
-        console.log('[api/public/courses] Comments fetched:', comments.length);
         const agg: Record<string, { sum: number; count: number }> = {};
         for (const row of comments as Array<{ course_id: string; rating: number | null }>) {
           if (row.rating && row.rating > 0) {
@@ -86,7 +59,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('[api/public/courses] Request completed successfully');
     return NextResponse.json({
       success: true,
       courses,
@@ -94,33 +66,12 @@ export async function GET(request: NextRequest) {
       ratingMap,
     });
   } catch (error) {
-    console.error('[api/public/courses] GET error:', error);
-    console.error('[api/public/courses] Error stack:', error instanceof Error ? error.stack : 'No stack');
-    console.error('[api/public/courses] Error message:', error instanceof Error ? error.message : String(error));
-    
-    // Serialize error properly
-    let errorDetails = 'Unknown error';
-    if (error instanceof Error) {
-      errorDetails = `${error.name}: ${error.message}`;
-      if (error.stack) {
-        console.error('[api/public/courses] Full stack:', error.stack);
-      }
-    } else if (typeof error === 'object' && error !== null) {
-      try {
-        errorDetails = JSON.stringify(error, null, 2);
-      } catch {
-        errorDetails = String(error);
-      }
-    } else {
-      errorDetails = String(error);
-    }
+    console.error('[api/public/courses] Error:', error instanceof Error ? error.message : 'Unknown error');
     
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Failed to load courses',
-        details: errorDetails,
-        timestamp: new Date().toISOString()
+        error: 'Failed to load courses'
       },
       { status: 500 }
     );
