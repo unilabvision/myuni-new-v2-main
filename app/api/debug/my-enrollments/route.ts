@@ -36,7 +36,15 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. User'ın tüm enrollment'larını kontrol et
-    const userIdToCheck = userId || email;
+    // Eğer email ile çağrıldıysa, order'dan userId'yi al
+    let userIdToCheck = userId;
+    if (!userIdToCheck && email && orders && orders.length > 0) {
+      userIdToCheck = orders[0].custom_data?.userId || email;
+    }
+    if (!userIdToCheck) {
+      userIdToCheck = email;
+    }
+    
     const { data: enrollments, error: enrollmentsError } = await supabaseAdmin
       .from('myuni_enrollments')
       .select(`
@@ -138,23 +146,29 @@ export async function GET(request: NextRequest) {
         userId: o.custom_data?.userId,
         cartMode: o.custom_data?.cartMode,
       })),
-      enrollments: enrollments?.map(e => ({
-        id: e.id,
-        courseId: e.course_id,
-        courseName: e.course?.title,
-        courseSlug: e.course?.slug,
-        enrolledAt: e.enrolled_at,
-        isActive: e.is_active,
-        tierId: e.tier_id,
-        progress: e.progress_percentage,
-      })),
-      packageEnrollments: packageEnrollments?.map(pe => ({
-        id: pe.id,
-        packageId: pe.package_id,
-        packageName: pe.package?.title,
-        enrolledAt: pe.enrolled_at,
-        isActive: pe.is_active,
-      })),
+      enrollments: enrollments?.map(e => {
+        const course = e.course as any;
+        return {
+          id: e.id,
+          courseId: e.course_id,
+          courseName: Array.isArray(course) ? course[0]?.title : course?.title,
+          courseSlug: Array.isArray(course) ? course[0]?.slug : course?.slug,
+          enrolledAt: e.enrolled_at,
+          isActive: e.is_active,
+          tierId: e.tier_id,
+          progress: e.progress_percentage,
+        };
+      }),
+      packageEnrollments: packageEnrollments?.map(pe => {
+        const pkg = pe.package as any;
+        return {
+          id: pe.id,
+          packageId: pe.package_id,
+          packageName: Array.isArray(pkg) ? pkg[0]?.title : pkg?.title,
+          enrolledAt: pe.enrolled_at,
+          isActive: pe.is_active,
+        };
+      }),
       productPurchases: productPurchases?.map(pp => ({
         id: pp.id,
         productId: pp.product_id,
