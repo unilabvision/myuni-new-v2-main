@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Mail, ArrowRight, Video, Clock, Award } from 'lucide-react';
+import { Users, Mail, ArrowRight, Video, Clock, Award } from 'lucide-react';
 
 interface EgitmenPageProps {
   locale?: string;
@@ -271,21 +271,12 @@ function HeroSection({ content, locale }: HeroSectionProps) {
           {/* CTA Buttons - updated for dark theme */}
           <div className="flex flex-col sm:flex-row gap-4">
             <a 
-              href={content.scheduleLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-3 bg-[#990000] dark:bg-white text-white dark:text-neutral-900 rounded-md hover:bg-[#800000] dark:hover:bg-neutral-200 transition-all duration-300 flex items-center gap-2 group text-sm font-medium"
-            >
-              <Calendar className="w-4 h-4" />
-              <span>{content.scheduleButtonText}</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-            </a>
-            <a 
               href="mailto:info@myunilab.net"
-              className="px-6 py-3 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-md hover:border-[#990000] hover:text-[#990000] dark:hover:text-white dark:hover:border-white transition-all duration-300 flex items-center gap-2 text-sm font-medium"
+              className="px-6 py-3 bg-[#990000] dark:bg-white text-white dark:text-neutral-900 rounded-md hover:bg-[#800000] dark:hover:bg-neutral-200 transition-all duration-300 flex items-center gap-2 group text-sm font-medium"
             >
               <Mail className="w-4 h-4" />
               <span>{content.contactButtonText}</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
             </a>
           </div>
         </div>
@@ -451,20 +442,6 @@ function ProcessSection({ content }: ProcessSectionProps) {
               </p>
             </div>
           ))}
-        </div>
-
-        {/* CTA - Left aligned */}
-        <div className="mt-16 text-left">
-          <a 
-            href={content.scheduleLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-[#990000] dark:bg-white text-white dark:text-neutral-900 rounded-md hover:bg-[#800000] dark:hover:bg-neutral-200 transition-all duration-300 group text-sm font-medium"
-          >
-            <Calendar className="w-5 h-5" />
-            <span>{content.scheduleButtonText}</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-          </a>
         </div>
       </div>
     </section>
