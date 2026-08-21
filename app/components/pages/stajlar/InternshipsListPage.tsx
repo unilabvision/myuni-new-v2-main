@@ -18,6 +18,8 @@ import {
 import type { OpportunityWithMatch } from '@/lib/types/opportunity';
 import { UNILAB_VOLUNTEER_SLUG } from '@/lib/unilabVolunteer';
 
+const UNILAB_VISION_BANNER = '/unilab-vision-banner.png';
+
 interface InternshipsListPageProps {
   locale?: string;
 }
@@ -206,6 +208,12 @@ export default function InternshipsListPage({
 
   const volunteerCount = items.filter((i) => i.kind === 'volunteer').length;
   const recommendedCount = items.filter((i) => i.isRecommended).length;
+
+  // Find the volunteer item (UNILAB Vision volunteer opportunity)
+  const volunteerItem = useMemo(() => {
+    const slug = locale === 'en' ? UNILAB_VOLUNTEER_SLUG.en : UNILAB_VOLUNTEER_SLUG.tr;
+    return items.find((i) => i.kind === 'volunteer' && i.href.includes(slug));
+  }, [items, locale]);
 
   const scrollToAll = () => {
     allItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -418,16 +426,19 @@ export default function InternshipsListPage({
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </button>
 
-                <Link
-                  href={volunteerItem.href}
-                  className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium transition-colors text-center"
-                >
-                  {t.exploreMore}
-                </Link>
+                {volunteerItem && (
+                  <Link
+                    href={volunteerItem.href}
+                    className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium transition-colors text-center"
+                  >
+                    {t.exploreMore}
+                  </Link>
+                )}
               </div>
             </div>
 
             {/* Featured — UNILAB Vision */}
+            {volunteerItem && (
             <div className="order-1 lg:order-2">
               <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg">
                 <div className="p-6 lg:p-8 h-full flex flex-col">
@@ -504,7 +515,7 @@ export default function InternshipsListPage({
                       <div className="flex items-center justify-between flex-shrink-0 mt-auto">
                         <span className="flex items-center text-xs lg:text-sm text-neutral-600 dark:text-neutral-400">
                           <Building2 className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-                          {volunteerItem.location}
+                          {volunteerItem.location || t.modes.hybrid}
                         </span>
                         <span className="text-[#990000] hover:text-[#cc0000] transition-colors text-xs lg:text-sm font-medium flex items-center flex-shrink-0">
                           {t.exploreMore}
@@ -516,6 +527,7 @@ export default function InternshipsListPage({
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </section>
