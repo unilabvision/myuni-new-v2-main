@@ -15,7 +15,6 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  EVENT_BANNER_ASPECT_CLASS,
   EVENT_BANNER_HEIGHT,
   EVENT_BANNER_WIDTH,
 } from '@/lib/events/banner';
@@ -23,12 +22,6 @@ import {
   getUnilabApplyPath,
   UNILAB_VOLUNTEER_SLUG,
 } from '@/lib/unilabVolunteer';
-
-interface UnilabVolunteerPageProps {
-  locale?: string;
-}
-
-const FALLBACK_BANNER = '/unilab-vision-banner.png';
 
 type OppMeta = {
   is_active: boolean;
@@ -39,6 +32,14 @@ type OppMeta = {
   work_mode?: string | null;
   location?: string | null;
 };
+
+interface UnilabVolunteerPageProps {
+  locale?: string;
+  /** Panelden gelen banner/meta — SSR'da doğru görsel için */
+  initialOpp?: OppMeta | null;
+}
+
+const FALLBACK_BANNER = '/unilab-vision-banner.png';
 
 function getCopy(locale: string) {
   if (locale === 'en') {
@@ -248,13 +249,14 @@ function getCopy(locale: string) {
 
 export default function UnilabVolunteerPage({
   locale = 'tr',
+  initialOpp = null,
 }: UnilabVolunteerPageProps) {
   const copy = getCopy(locale);
   const listPath =
     locale === 'en' ? `/${locale}/internships` : `/${locale}/stajlar`;
   const applyPath = getUnilabApplyPath(locale);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [opp, setOpp] = useState<OppMeta | null>(null);
+  const [opp, setOpp] = useState<OppMeta | null>(initialOpp);
 
   useEffect(() => {
     const slug =
@@ -272,8 +274,13 @@ export default function UnilabVolunteerPage({
   const bannerSrc =
     opp?.banner_url?.trim() ||
     opp?.thumbnail_url?.trim() ||
+    initialOpp?.banner_url?.trim() ||
+    initialOpp?.thumbnail_url?.trim() ||
     FALLBACK_BANNER;
-  const company = opp?.company_name?.trim() || copy.company;
+  const company =
+    opp?.company_name?.trim() ||
+    initialOpp?.company_name?.trim() ||
+    copy.company;
   const isOpen = opp ? Boolean(opp.is_active) : true;
   const deadline = opp?.application_deadline || null;
   const statusLabel = isOpen
@@ -352,17 +359,16 @@ export default function UnilabVolunteerPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-8 sm:py-12">
-        {/* Hero banner — panel banner_url; koyu görseller dark mode'da kaybolmasın diye açık zemin + contain */}
+        {/* Hero banner — panel banner_url (SSR initialOpp + client refresh) */}
         <div className="mb-8 sm:mb-10">
-          <div
-            className={`relative w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-100 ${EVENT_BANNER_ASPECT_CLASS}`}
-          >
+          <div className="relative w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-100">
             <Image
+              key={bannerSrc}
               src={bannerSrc}
               alt={copy.title}
               width={EVENT_BANNER_WIDTH}
               height={EVENT_BANNER_HEIGHT}
-              className="absolute inset-0 h-full w-full object-contain"
+              className="block w-full h-auto max-w-full"
               sizes="(max-width: 1280px) 90vw, 1100px"
               priority
               unoptimized
