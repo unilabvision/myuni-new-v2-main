@@ -1090,7 +1090,7 @@ export async function POST(request: Request) {
     };
 
     return new Promise<NextResponse>((resolve) => {
-      iyzipay.checkoutFormInitialize.create(iyzicoRequest, function (err: any, result: any) {
+      iyzipay.checkoutFormInitialize.create(iyzicoRequest, async function (err: any, result: any) {
         if (err) {
           console.error("Iyzico Error:", err);
           resolve(NextResponse.json({ success: false, message: "Iyzico hatası: " + err.message }, { status: 500 }));
