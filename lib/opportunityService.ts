@@ -197,14 +197,19 @@ export async function getActiveOpportunities(
 }
 
 export async function getOpportunityBySlug(
-  slug: string
+  slug: string,
+  options?: { requireActive?: boolean }
 ): Promise<Opportunity | null> {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('myuni_opportunities')
     .select('*')
-    .eq('slug', slug)
-    .eq('is_active', true)
-    .maybeSingle();
+    .eq('slug', slug);
+
+  if (options?.requireActive !== false) {
+    query = query.eq('is_active', true);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) return null;
   const [withRelations] = await loadOpportunityRelations([data as Opportunity]);
@@ -257,9 +262,10 @@ export async function getOpportunitiesForUser(
 export async function getOpportunityWithMatchForUser(
   slug: string,
   userId: string | null,
-  locale = 'tr'
+  locale = 'tr',
+  options?: { requireActive?: boolean }
 ): Promise<OpportunityWithMatch | null> {
-  const opp = await getOpportunityBySlug(slug);
+  const opp = await getOpportunityBySlug(slug, options);
   if (!opp) return null;
 
   if (!userId) {

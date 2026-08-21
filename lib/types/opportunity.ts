@@ -27,6 +27,10 @@ export interface Opportunity {
   work_mode: OpportunityWorkMode | null;
   application_deadline: string | null;
   form_config_id: string | null;
+  site_form_id?: string | null;
+  opportunity_type?: string | null;
+  banner_url?: string | null;
+  thumbnail_url?: string | null;
   is_active: boolean;
   is_featured: boolean;
   order_index: number;

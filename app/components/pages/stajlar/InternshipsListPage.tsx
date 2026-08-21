@@ -16,9 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { OpportunityWithMatch } from '@/lib/types/opportunity';
-import { getUnilabVolunteerPath } from '@/lib/unilabVolunteer';
-
-const UNILAB_VISION_BANNER = '/unilab-vision-banner.png';
+import { UNILAB_VOLUNTEER_SLUG } from '@/lib/unilabVolunteer';
 
 interface InternshipsListPageProps {
   locale?: string;
@@ -121,23 +119,17 @@ const texts = {
   },
 };
 
-function buildVolunteerItem(locale: string): ListItem {
-  const isEn = locale === 'en';
-  return {
-    id: 'unilab-vision-volunteer',
-    kind: 'volunteer',
-    href: getUnilabVolunteerPath(locale),
-    title: isEn
-      ? 'Join the UNILAB Vision volunteer team'
-      : 'UNILAB Vision gönüllü ekibine katılın',
-    company: 'UNILAB Vision',
-    description: isEn
-      ? 'A platform uniting engineers, scientists, designers, and artists around projects in technology, sustainability, art, and education. Volunteer in one of its five units: R&D, Software, Media, Events, or Community.'
-      : 'Mühendisleri, bilim insanlarını, tasarımcıları ve sanatçıları teknoloji, sürdürülebilirlik, sanat ve eğitim projelerinde buluşturan platform. Ar-Ge, Yazılım, Medya, Etkinlik ve Topluluk birimlerinde gönüllü olun.',
-    location: isEn ? 'Remote / Hybrid' : 'Uzaktan / Hibrit',
-    workMode: 'hybrid',
-    logo: UNILAB_VISION_BANNER,
-  };
+function opportunityKind(opp: OpportunityWithMatch): ListItemKind {
+  const t = (opp.opportunity_type || '').toLowerCase();
+  if (t === 'gonullu' || t === 'volunteer') return 'volunteer';
+  // Legacy UNILAB slug without type still counts as volunteer
+  if (
+    opp.slug === UNILAB_VOLUNTEER_SLUG.tr ||
+    opp.slug === UNILAB_VOLUNTEER_SLUG.en
+  ) {
+    return 'volunteer';
+  }
+  return 'internship';
 }
 
 export default function InternshipsListPage({
@@ -169,8 +161,6 @@ export default function InternshipsListPage({
     load();
   }, [locale, isSignedIn]);
 
-  const volunteerItem = useMemo(() => buildVolunteerItem(locale), [locale]);
-
   const items = useMemo<ListItem[]>(() => {
     const mapped = opportunities.map<ListItem>((opp) => {
       const title =
@@ -181,10 +171,14 @@ export default function InternshipsListPage({
         opp.description != null && typeof opp.description === 'object'
           ? opp.description[locale] || opp.description.tr || ''
           : String(opp.description ?? '');
+      const logo =
+        opp.thumbnail_url?.trim() ||
+        opp.banner_url?.trim() ||
+        undefined;
 
       return {
         id: opp.id,
-        kind: 'internship',
+        kind: opportunityKind(opp),
         href: `/${locale}/${basePath}/${opp.slug}`,
         title,
         company: opp.company_name || undefined,
@@ -194,16 +188,15 @@ export default function InternshipsListPage({
         deadline: opp.application_deadline || undefined,
         isRecommended: opp.is_recommended,
         matchReasons: opp.match_reasons,
+        logo,
       };
     });
 
-    const recommendedFirst = [
+    return [
       ...mapped.filter((i) => i.isRecommended),
       ...mapped.filter((i) => !i.isRecommended),
     ];
-
-    return [volunteerItem, ...recommendedFirst];
-  }, [opportunities, locale, basePath, volunteerItem]);
+  }, [opportunities, locale, basePath]);
 
   const filteredItems = items.filter((item) => {
     const kindMatch = activeKind === 'all' || item.kind === activeKind;

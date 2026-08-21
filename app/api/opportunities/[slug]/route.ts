@@ -4,6 +4,7 @@ import {
   getOpportunityWithMatchForUser,
   localizeText,
 } from '@/lib/opportunityService';
+import { isUnilabVolunteerSlug } from '@/lib/unilabVolunteer';
 
 export async function GET(
   request: NextRequest,
@@ -13,12 +14,15 @@ export async function GET(
     const { slug } = await params;
     const { searchParams } = new URL(request.url);
     const locale = searchParams.get('locale') || 'tr';
+    const includeInactive =
+      searchParams.get('includeInactive') === '1' && isUnilabVolunteerSlug(slug);
     const { userId } = await auth();
 
     const opportunity = await getOpportunityWithMatchForUser(
       slug,
       userId,
-      locale
+      locale,
+      { requireActive: !includeInactive }
     );
 
     if (!opportunity) {

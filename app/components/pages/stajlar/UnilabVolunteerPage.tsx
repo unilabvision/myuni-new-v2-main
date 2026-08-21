@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -19,13 +19,26 @@ import {
   EVENT_BANNER_HEIGHT,
   EVENT_BANNER_WIDTH,
 } from '@/lib/events/banner';
-import { getUnilabApplyPath } from '@/lib/unilabVolunteer';
+import {
+  getUnilabApplyPath,
+  UNILAB_VOLUNTEER_SLUG,
+} from '@/lib/unilabVolunteer';
 
 interface UnilabVolunteerPageProps {
   locale?: string;
 }
 
-const BANNER_SRC = '/unilab-vision-banner.png';
+const FALLBACK_BANNER = '/unilab-vision-banner.png';
+
+type OppMeta = {
+  is_active: boolean;
+  banner_url?: string | null;
+  thumbnail_url?: string | null;
+  company_name?: string | null;
+  application_deadline?: string | null;
+  work_mode?: string | null;
+  location?: string | null;
+};
 
 function getCopy(locale: string) {
   if (locale === 'en') {
@@ -241,6 +254,45 @@ export default function UnilabVolunteerPage({
     locale === 'en' ? `/${locale}/internships` : `/${locale}/stajlar`;
   const applyPath = getUnilabApplyPath(locale);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [opp, setOpp] = useState<OppMeta | null>(null);
+
+  useEffect(() => {
+    const slug =
+      locale === 'en' ? UNILAB_VOLUNTEER_SLUG.en : UNILAB_VOLUNTEER_SLUG.tr;
+    fetch(
+      `/api/opportunities/${slug}?locale=${locale}&includeInactive=1`
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.opportunity) setOpp(json.opportunity as OppMeta);
+      })
+      .catch(() => undefined);
+  }, [locale]);
+
+  const bannerSrc =
+    opp?.banner_url?.trim() ||
+    opp?.thumbnail_url?.trim() ||
+    FALLBACK_BANNER;
+  const isExternalBanner = /^https?:\/\//i.test(bannerSrc);
+  const company = opp?.company_name?.trim() || copy.company;
+  const isOpen = opp ? Boolean(opp.is_active) : true;
+  const deadline = opp?.application_deadline || null;
+  const statusLabel = isOpen
+    ? copy.statusOpen
+    : locale === 'en'
+      ? 'Applications closed'
+      : 'Başvuru kapalı';
+  const statusDetail = isOpen
+    ? copy.detailStatusValue
+    : locale === 'en'
+      ? 'Closed'
+      : 'Kapalı';
+  const deadlineLabel = deadline
+    ? new Date(deadline).toLocaleDateString(
+        locale === 'tr' ? 'tr-TR' : 'en-US',
+        { day: 'numeric', month: 'long', year: 'numeric' }
+      )
+    : null;
 
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-900 pb-24 lg:pb-0">
@@ -268,7 +320,7 @@ export default function UnilabVolunteerPage({
               </span>
               <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                 <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                {copy.company}
+                {company}
               </span>
               <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
                 <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -278,34 +330,52 @@ export default function UnilabVolunteerPage({
                 <Users className="w-4 h-4" />
                 {copy.location}
               </span>
+              {deadlineLabel && (
+                <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  {locale === 'en' ? 'Deadline: ' : 'Son başvuru: '}
+                  {deadlineLabel}
+                </span>
+              )}
             </div>
-            <div className="inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium w-fit">
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium w-fit ${
+                isOpen
+                  ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                  : 'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200'
+              }`}
+            >
               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              {copy.statusOpen}
+              {statusLabel}
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-8 sm:py-12">
-        {/* Hero banner */}
+        {/* Hero banner — panel banner_url öncelikli */}
         <div className="mb-8 sm:mb-10">
           <div
             className={`relative w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white flex items-center justify-center ${EVENT_BANNER_ASPECT_CLASS}`}
           >
             <Image
-              src={BANNER_SRC}
+              src={bannerSrc}
               alt={copy.title}
               width={EVENT_BANNER_WIDTH}
               height={EVENT_BANNER_HEIGHT}
-              className="w-[55%] max-h-[46%] object-contain"
-              sizes="(max-width: 1280px) 60vw, 700px"
+              className={
+                isExternalBanner
+                  ? 'absolute inset-0 h-full w-full object-cover'
+                  : 'w-[55%] max-h-[46%] object-contain'
+              }
+              sizes="(max-width: 1280px) 90vw, 1100px"
               priority
+              unoptimized={isExternalBanner}
             />
             <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6">
               <span className="inline-flex items-center gap-1.5 bg-neutral-900/85 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm">
                 <Building2 className="w-3.5 h-3.5" />
-                {copy.company}
+                {company}
               </span>
             </div>
           </div>
@@ -318,10 +388,18 @@ export default function UnilabVolunteerPage({
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[
-              { label: copy.detailOrg, value: copy.company },
+              { label: copy.detailOrg, value: company },
               { label: copy.detailType, value: copy.detailTypeValue },
               { label: copy.detailMode, value: copy.detailModeValue },
-              { label: copy.detailStatus, value: copy.detailStatusValue },
+              { label: copy.detailStatus, value: statusDetail },
+              ...(deadlineLabel
+                ? [
+                    {
+                      label: locale === 'en' ? 'Deadline' : 'Son başvuru',
+                      value: deadlineLabel,
+                    },
+                  ]
+                : []),
             ].map((item) => (
               <div
                 key={item.label}
@@ -483,7 +561,7 @@ export default function UnilabVolunteerPage({
                 <div className="space-y-2.5 text-sm text-neutral-600 dark:text-neutral-400 mb-5">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 shrink-0" />
-                    {copy.company}
+                    {company}
                   </div>
                   <div className="flex items-center gap-2">
                     <Handshake className="w-4 h-4 shrink-0" />
@@ -495,16 +573,24 @@ export default function UnilabVolunteerPage({
                   </div>
                 </div>
                 <p className="text-xs text-neutral-500 mb-4">{copy.sidebarNote}</p>
-                <Link
-                  href={applyPath}
-                  className="flex items-center justify-center gap-2 w-full bg-[#990000] hover:bg-[#7a0000] text-white text-sm font-medium py-3 px-4 rounded-sm transition-colors"
-                >
-                  {copy.sidebarCta}
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <p className="text-[11px] text-neutral-500 mt-3 text-center">
-                  {copy.sidebarHint}
-                </p>
+                {isOpen ? (
+                  <>
+                    <Link
+                      href={applyPath}
+                      className="flex items-center justify-center gap-2 w-full bg-[#990000] hover:bg-[#7a0000] text-white text-sm font-medium py-3 px-4 rounded-sm transition-colors"
+                    >
+                      {copy.sidebarCta}
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    <p className="text-[11px] text-neutral-500 mt-3 text-center">
+                      {copy.sidebarHint}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-center text-amber-700 dark:text-amber-300 font-medium py-2">
+                    {statusLabel}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -512,6 +598,7 @@ export default function UnilabVolunteerPage({
       </div>
 
       {/* Mobile sticky CTA */}
+      {isOpen && (
       <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm p-3 safe-area-pb">
         <Link
           href={applyPath}
@@ -521,6 +608,7 @@ export default function UnilabVolunteerPage({
           <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
+      )}
     </div>
   );
 }
