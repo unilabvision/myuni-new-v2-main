@@ -1095,6 +1095,31 @@ export async function POST(request: Request) {
           console.error("Iyzico Error:", err);
           resolve(NextResponse.json({ success: false, message: "Iyzico hatası: " + err.message }, { status: 500 }));
         } else if (result.status === 'success') {
+          // Persist checkout token so we can query Iyzico if callback never arrives
+          if (result.token) {
+            try {
+              const { data: existingOrder } = await supabase
+                .from('orders')
+                .select('custom_data')
+                .eq('orderid', orderId)
+                .maybeSingle();
+              await supabase
+                .from('orders')
+                .update({
+                  updated_at: new Date().toISOString(),
+                  custom_data: {
+                    ...(existingOrder?.custom_data || {}),
+                    iyzicoCheckoutToken: result.token,
+                    iyzicoPaymentPageUrl: result.paymentPageUrl || null,
+                    iyzicoTokenSavedAt: new Date().toISOString(),
+                  },
+                })
+                .eq('orderid', orderId);
+            } catch (tokenSaveErr) {
+              console.error('Failed to persist iyzicoCheckoutToken:', orderId, tokenSaveErr);
+            }
+          }
+
           resolve(NextResponse.json({
             success: true,
             redirectUrl: result.paymentPageUrl,

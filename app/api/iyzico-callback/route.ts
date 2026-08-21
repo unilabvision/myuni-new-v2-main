@@ -74,21 +74,86 @@ export async function POST(request: Request) {
                 if (err || result.status !== 'success' || result.paymentStatus !== 'SUCCESS') {
                     console.error("Iyzico Retrieve Error:", err, result);
                     if (result && result.basketId) {
-                         // Guarded so a delayed/duplicate failure notification can
-                         // never regress an order that has already progressed past
-                         // its initial state (claimed for processing, completed, or
-                         // previously flagged as a stuck payment error).
+                         const paymentStatus = String(result.paymentStatus || '').toUpperCase();
+                         const fraudStatus = result.fraudStatus;
+                         const { data: failOrder } = await supabase
+                           .from('orders')
+                           .select('custom_data')
+                           .eq('orderid', result.basketId)
+                           .maybeSingle();
+                         const mergedCustom = {
+                           ...(failOrder?.custom_data || {}),
+                           iyzicoPaymentStatus: paymentStatus || 'FAILURE',
+                           iyzicoFraudStatus: fraudStatus ?? null,
+                           iyzicoCallbackAt: new Date().toISOString(),
+                           iyzicoError: result.errorMessage || null,
+                         };
+
+                         // Fraud review: payment may be held — keep distinct from hard failure
+                         if (paymentStatus === 'SUCCESS' && Number(fraudStatus) === 0) {
+                           await supabase
+                             .from('orders')
+                             .update({
+                               status: 'payment_review',
+                               updated_at: new Date().toISOString(),
+                               custom_data: {
+                                 ...mergedCustom,
+                                 iyzicoPaymentStatus: 'SUCCESS',
+                               },
+                             })
+                             .eq('orderid', result.basketId)
+                             .in('status', ['pending', 'failed', 'payment_review']);
+                           const reviewUrl = new URL('/tr/payment-success', baseUrl);
+                           reviewUrl.searchParams.set('orderId', result.basketId);
+                           resolve(NextResponse.redirect(reviewUrl, 303));
+                           return;
+                         }
+
                          await supabase
                            .from('orders')
-                           .update({ status: 'failed', updated_at: new Date().toISOString() })
+                           .update({
+                             status: 'failed',
+                             updated_at: new Date().toISOString(),
+                             custom_data: mergedCustom,
+                           })
                            .eq('orderid', result.basketId)
-                           .in('status', ['pending', 'failed']);
+                           .in('status', ['pending', 'failed', 'payment_review']);
                     }
                     resolve(NextResponse.redirect(new URL('/tr/payment-failed?error=payment_failed', baseUrl), 303));
                     return;
                 }
                 
                 const orderId = result.basketId;
+
+                // Fraud hold: don't deliver until Iyzico approves (fraudStatus === 1)
+                if (Number(result.fraudStatus) === 0) {
+                    const { data: reviewOrder } = await supabase
+                      .from('orders')
+                      .select('custom_data')
+                      .eq('orderid', orderId)
+                      .maybeSingle();
+                    await supabase
+                      .from('orders')
+                      .update({
+                        status: 'payment_review',
+                        updated_at: new Date().toISOString(),
+                        custom_data: {
+                          ...(reviewOrder?.custom_data || {}),
+                          iyzicoPaymentStatus: 'SUCCESS',
+                          iyzicoFraudStatus: 0,
+                          iyzicoCallbackAt: new Date().toISOString(),
+                          iyzico_paymentId: result.paymentId,
+                          iyzico_authCode: result.authCode,
+                        },
+                      })
+                      .eq('orderid', orderId)
+                      .in('status', ['pending', 'failed', 'payment_review', 'payment_error']);
+                    const localeHold = reviewOrder?.custom_data?.locale || 'tr';
+                    const holdUrl = new URL(`/${localeHold}/payment-success`, baseUrl);
+                    holdUrl.searchParams.set('orderId', orderId);
+                    resolve(NextResponse.redirect(holdUrl, 303));
+                    return;
+                }
                 
                 // Siparişi al. maybeSingle() kullanıyoruz ki "sipariş bulunamadı"
                 // ile gerçek bir DB hatası birbirinden ayrılıp loglanabilsin —
@@ -123,7 +188,7 @@ export async function POST(request: Request) {
                     .from('orders')
                     .update({ status: 'processing', updated_at: new Date().toISOString() })
                     .eq('orderid', orderId)
-                    .in('status', ['pending', 'failed', 'payment_error'])
+                    .in('status', ['pending', 'failed', 'payment_error', 'payment_review'])
                     .select()
                     .maybeSingle();
 
@@ -138,6 +203,7 @@ export async function POST(request: Request) {
 
                     const orderForRetry = freshOrder || order;
                     const needsDelivery = await orderNeedsDelivery(orderForRetry);
+                    let repairedOrder = orderForRetry;
 
                     if (needsDelivery) {
                       console.warn(
@@ -145,16 +211,18 @@ export async function POST(request: Request) {
                       );
                       const repair = await deliverOrderAccess(orderForRetry);
                       if (repair.success || repair.deliveredTitles.length > 0) {
-                        await supabase
+                        const shouldComplete =
+                          repair.success &&
+                          ['processing', 'payment_error', 'pending'].includes(
+                            orderForRetry.status
+                          );
+
+                        const { data: updated } = await supabase
                           .from('orders')
                           .update({
                             enrolled: repair.success,
                             enrollmentid: repair.firstEnrollmentId || orderForRetry.enrollmentid || null,
-                            status:
-                              orderForRetry.status === 'processing' ||
-                              orderForRetry.status === 'payment_error'
-                                ? 'completed'
-                                : orderForRetry.status,
+                            status: shouldComplete ? 'completed' : orderForRetry.status,
                             updated_at: new Date().toISOString(),
                             custom_data: {
                               ...orderForRetry.custom_data,
@@ -165,7 +233,10 @@ export async function POST(request: Request) {
                               },
                             },
                           })
-                          .eq('orderid', orderId);
+                          .eq('orderid', orderId)
+                          .select()
+                          .maybeSingle();
+                        if (updated) repairedOrder = updated;
                       } else {
                         console.error(
                           `CRITICAL: Callback retry could not deliver order ${orderId}:`,
@@ -174,16 +245,94 @@ export async function POST(request: Request) {
                       }
                     }
 
-                    const dupLocale = orderForRetry.custom_data?.locale || 'tr';
-                    const dupIsCartMode = orderForRetry.custom_data?.cartMode === true;
+                    // If access is OK but confirmation email never went out, send once.
+                    const emailAlreadySent = Boolean(repairedOrder.custom_data?.emailSentAt);
+                    const stillNeedsAccess = await orderNeedsDelivery(repairedOrder);
+                    if (!emailAlreadySent && !stillNeedsAccess) {
+                      try {
+                        const { sendPurchaseConfirmationEmail } = await import('../../_services/emailService');
+                        const localeRetry = repairedOrder.custom_data?.locale || 'tr';
+                        const isCartRetry = repairedOrder.custom_data?.cartMode === true;
+                        const cartRetry = repairedOrder.custom_data?.cartItems || [];
+                        const snapshotRetry =
+                          repairedOrder.custom_data?.orderSnapshot &&
+                          Array.isArray(repairedOrder.custom_data.orderSnapshot.items)
+                            ? repairedOrder.custom_data.orderSnapshot
+                            : buildOrderSnapshot(
+                                cartRetry.length > 0
+                                  ? cartRetry
+                                  : [
+                                      {
+                                        id: repairedOrder.courseid,
+                                        title: repairedOrder.coursename,
+                                        price: Number(repairedOrder.amount) || 0,
+                                        type: repairedOrder.custom_data?.itemType || 'course',
+                                      },
+                                    ],
+                                {
+                                  paidTotal: Number(repairedOrder.amount) || 0,
+                                  discountAmount: Number(
+                                    repairedOrder.discountamount ||
+                                      repairedOrder.custom_data?.totalDiscount ||
+                                      0
+                                  ),
+                                  discountCodes:
+                                    repairedOrder.discountcode ||
+                                    repairedOrder.custom_data?.discountCodes ||
+                                    '',
+                                }
+                              );
+                        const emailTitle =
+                          isCartRetry || snapshotRetry.items?.length > 1
+                            ? 'Sepet Alımı'
+                            : snapshotRetry.items?.[0]?.title ||
+                              repairedOrder.coursename ||
+                              'Sipariş';
+                        await sendPurchaseConfirmationEmail(
+                          {
+                            name:
+                              repairedOrder.custom_data?.userName ||
+                              repairedOrder.useremail?.split('@')[0],
+                            email: repairedOrder.useremail,
+                          },
+                          { title: emailTitle, items: snapshotRetry.items || [] },
+                          {
+                            orderId,
+                            amount: Number(repairedOrder.amount) || 0,
+                            isFree: Number(repairedOrder.amount) <= 0,
+                            listTotal: snapshotRetry.listTotal,
+                            discountAmount: snapshotRetry.discountAmount,
+                            discountCodes: snapshotRetry.discountCodes,
+                            commissionAmount: snapshotRetry.commissionAmount || 0,
+                          },
+                          localeRetry,
+                          resolveEmailCourseType(snapshotRetry, isCartRetry)
+                        );
+                        await supabase
+                          .from('orders')
+                          .update({
+                            custom_data: {
+                              ...repairedOrder.custom_data,
+                              emailSentAt: new Date().toISOString(),
+                            },
+                            updated_at: new Date().toISOString(),
+                          })
+                          .eq('orderid', orderId);
+                      } catch (mailErr) {
+                        console.error('Retry confirmation email failed:', orderId, mailErr);
+                      }
+                    }
+
+                    const dupLocale = repairedOrder.custom_data?.locale || 'tr';
+                    const dupIsCartMode = repairedOrder.custom_data?.cartMode === true;
                     const successUrl = new URL(`/${dupLocale}/payment-success`, baseUrl);
                     successUrl.searchParams.set('orderId', orderId);
                     successUrl.searchParams.set('enrolled', 'true');
                     if (dupIsCartMode) {
                         successUrl.searchParams.set('cartMode', 'true');
                     } else {
-                        successUrl.searchParams.set('courseId', orderForRetry.courseid);
-                        successUrl.searchParams.set('type', orderForRetry.custom_data?.itemType || 'course');
+                        successUrl.searchParams.set('courseId', repairedOrder.courseid);
+                        successUrl.searchParams.set('type', repairedOrder.custom_data?.itemType || 'course');
                     }
                     resolve(NextResponse.redirect(successUrl, 303));
                     return;
@@ -428,6 +577,22 @@ export async function POST(request: Request) {
                     locale,
                     courseType
                   );
+
+                  const { data: latestForEmail } = await supabase
+                    .from('orders')
+                    .select('custom_data')
+                    .eq('orderid', orderId)
+                    .maybeSingle();
+                  await supabase
+                    .from('orders')
+                    .update({
+                      custom_data: {
+                        ...(latestForEmail?.custom_data || order.custom_data || {}),
+                        emailSentAt: new Date().toISOString(),
+                      },
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('orderid', orderId);
                 } catch (e) {
                   console.error("Email sending error", e);
                 }

@@ -123,6 +123,30 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const rawNames = searchParams.get('names');
   const cartItemNames = rawNames ? decodeUrlString(rawNames).split(', ') : [];
 
+  // Callback kaçtıysa Iyzico'dan durumu çek (pending → completed / payment_review / failed)
+  useEffect(() => {
+    if (!orderId || isFreePurchase || isEventApplication) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/iyzico-reconcile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.orderStatus && data.orderStatus !== 'completed') {
+          console.info('Iyzico reconcile:', data);
+        }
+      } catch (e) {
+        console.error('Iyzico reconcile call failed:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, isFreePurchase, isEventApplication]);
+
   const [itemSlug, setItemSlug] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState<string | null>(null);
   const [loadingItem, setLoadingItem] = useState(true);

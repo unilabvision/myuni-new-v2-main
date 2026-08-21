@@ -366,6 +366,7 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
     console.log(`Found ${packageCourses.length} courses in package ${packageId}`);
 
     // 3. Her kurs için enrollment oluştur
+    let courseFailures = 0;
     for (const pc of packageCourses) {
       const courseId = pc.course_id;
       const courseTitle = (pc.myuni_courses as any)?.title || 'Unknown';
@@ -382,15 +383,20 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
         if (existingEnrollment) {
           if (!existingEnrollment.is_active) {
             // Pasif enrollment'ı aktif et
-            await supabase
+            const { error: activateError } = await supabase
               .from('myuni_enrollments')
               .update({ 
                 is_active: true,
                 enrolled_at: new Date().toISOString() 
               })
               .eq('id', existingEnrollment.id);
-            
-            console.log(`Activated existing enrollment for course: ${courseTitle}`);
+
+            if (activateError) {
+              console.error(`Error activating enrollment for course ${courseTitle}:`, activateError);
+              courseFailures += 1;
+            } else {
+              console.log(`Activated existing enrollment for course: ${courseTitle}`);
+            }
           } else {
             console.log(`User already enrolled in course: ${courseTitle}`);
           }
@@ -409,14 +415,22 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
 
           if (enrollError) {
             console.error(`Error creating enrollment for course ${courseTitle}:`, enrollError);
+            courseFailures += 1;
           } else {
             console.log(`Created enrollment for course: ${courseTitle}`);
           }
         }
       } catch (courseError) {
         console.error(`Error processing course ${courseId}:`, courseError);
-        // Devam et, diğer kursları kaydet
+        courseFailures += 1;
       }
+    }
+
+    if (courseFailures > 0) {
+      console.error(
+        `Package ${packageId}: ${courseFailures}/${packageCourses.length} course enrollments failed`
+      );
+      return false;
     }
 
     console.log(`Successfully enrolled user in package ${packageId} with ${packageCourses.length} courses`);
