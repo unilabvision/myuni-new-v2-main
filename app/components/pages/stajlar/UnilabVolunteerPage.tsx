@@ -599,15 +599,15 @@ export default function UnilabVolunteerPage({
 
       {/* Mobile sticky CTA */}
       {isOpen && (
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm p-3 safe-area-pb">
-        <Link
-          href={applyPath}
-          className="flex items-center justify-center gap-2 w-full bg-[#990000] hover:bg-[#7a0000] text-white text-sm font-medium py-3 px-4 rounded-sm"
-        >
-          {copy.mobileCta}
-          <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm p-3 safe-area-pb">
+          <Link
+            href={applyPath}
+            className="flex items-center justify-center gap-2 w-full bg-[#990000] hover:bg-[#7a0000] text-white text-sm font-medium py-3 px-4 rounded-sm"
+          >
+            {copy.mobileCta}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       )}
     </div>
   );
