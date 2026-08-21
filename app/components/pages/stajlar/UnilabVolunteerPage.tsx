@@ -273,7 +273,6 @@ export default function UnilabVolunteerPage({
     opp?.banner_url?.trim() ||
     opp?.thumbnail_url?.trim() ||
     FALLBACK_BANNER;
-  const isExternalBanner = /^https?:\/\//i.test(bannerSrc);
   const company = opp?.company_name?.trim() || copy.company;
   const isOpen = opp ? Boolean(opp.is_active) : true;
   const deadline = opp?.application_deadline || null;
@@ -353,26 +352,22 @@ export default function UnilabVolunteerPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-8 sm:py-12">
-        {/* Hero banner — panel banner_url öncelikli */}
+        {/* Hero banner — panel banner_url; koyu görseller dark mode'da kaybolmasın diye açık zemin + contain */}
         <div className="mb-8 sm:mb-10">
           <div
-            className={`relative w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white flex items-center justify-center ${EVENT_BANNER_ASPECT_CLASS}`}
+            className={`relative w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-100 ${EVENT_BANNER_ASPECT_CLASS}`}
           >
             <Image
               src={bannerSrc}
               alt={copy.title}
               width={EVENT_BANNER_WIDTH}
               height={EVENT_BANNER_HEIGHT}
-              className={
-                isExternalBanner
-                  ? 'absolute inset-0 h-full w-full object-cover'
-                  : 'w-[55%] max-h-[46%] object-contain'
-              }
+              className="absolute inset-0 h-full w-full object-contain"
               sizes="(max-width: 1280px) 90vw, 1100px"
               priority
-              unoptimized={isExternalBanner}
+              unoptimized
             />
-            <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6">
+            <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 z-10">
               <span className="inline-flex items-center gap-1.5 bg-neutral-900/85 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm">
                 <Building2 className="w-3.5 h-3.5" />
                 {company}
