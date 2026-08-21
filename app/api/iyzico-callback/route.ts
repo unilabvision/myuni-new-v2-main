@@ -10,6 +10,10 @@ import {
   rescaleSnapshotForActualPaid,
   type OrderSnapshot,
 } from '@/lib/orderSnapshot';
+import {
+  deliverOrderAccess,
+  orderNeedsDelivery,
+} from '@/lib/orderDelivery';
 import Iyzipay from 'iyzipay';
 
 export async function POST(request: Request) {
@@ -124,16 +128,62 @@ export async function POST(request: Request) {
                     .maybeSingle();
 
                 if (claimError || !claimedOrder) {
-                    const dupLocale = order.custom_data?.locale || 'tr';
-                    const dupIsCartMode = order.custom_data?.cartMode === true;
+                    // Idempotent retry: payment already claimed/completed, but access
+                    // may still be missing (partial failure). Re-deliver if needed.
+                    const { data: freshOrder } = await supabase
+                      .from('orders')
+                      .select('*')
+                      .eq('orderid', orderId)
+                      .maybeSingle();
+
+                    const orderForRetry = freshOrder || order;
+                    const needsDelivery = await orderNeedsDelivery(orderForRetry);
+
+                    if (needsDelivery) {
+                      console.warn(
+                        `Iyzico callback retry: order ${orderId} status=${orderForRetry.status} needs delivery — repairing access`
+                      );
+                      const repair = await deliverOrderAccess(orderForRetry);
+                      if (repair.success || repair.deliveredTitles.length > 0) {
+                        await supabase
+                          .from('orders')
+                          .update({
+                            enrolled: repair.success,
+                            enrollmentid: repair.firstEnrollmentId || orderForRetry.enrollmentid || null,
+                            status:
+                              orderForRetry.status === 'processing' ||
+                              orderForRetry.status === 'payment_error'
+                                ? 'completed'
+                                : orderForRetry.status,
+                            updated_at: new Date().toISOString(),
+                            custom_data: {
+                              ...orderForRetry.custom_data,
+                              deliveryRepair: {
+                                at: new Date().toISOString(),
+                                success: repair.success,
+                                errors: repair.errors,
+                              },
+                            },
+                          })
+                          .eq('orderid', orderId);
+                      } else {
+                        console.error(
+                          `CRITICAL: Callback retry could not deliver order ${orderId}:`,
+                          repair.errors
+                        );
+                      }
+                    }
+
+                    const dupLocale = orderForRetry.custom_data?.locale || 'tr';
+                    const dupIsCartMode = orderForRetry.custom_data?.cartMode === true;
                     const successUrl = new URL(`/${dupLocale}/payment-success`, baseUrl);
                     successUrl.searchParams.set('orderId', orderId);
                     successUrl.searchParams.set('enrolled', 'true');
                     if (dupIsCartMode) {
                         successUrl.searchParams.set('cartMode', 'true');
                     } else {
-                        successUrl.searchParams.set('courseId', order.courseid);
-                        successUrl.searchParams.set('type', order.custom_data?.itemType || 'course');
+                        successUrl.searchParams.set('courseId', orderForRetry.courseid);
+                        successUrl.searchParams.set('type', orderForRetry.custom_data?.itemType || 'course');
                     }
                     resolve(NextResponse.redirect(successUrl, 303));
                     return;
@@ -214,108 +264,10 @@ export async function POST(request: Request) {
                 const snapshotById = new Map(
                   orderSnapshot.items.map((item) => [item.id, item] as const)
                 );
-                
-                let firstEnrollmentId: string | undefined;
-                let deliveredItemsDetails: string[] = [];
 
-                // ---- 1. SEPET MODU TESLİMATI (ÇOKLU ÜRÜN) ----
-                if (isCartMode && cartItems.length > 0) {
-                    for (const item of cartItems) {
-                        if (item.type === 'product') {
-                            const { data: existingPurchase, error: existingPurchaseError } = await supabase
-                                .from('myuni_products_purchases')
-                                .select('id')
-                                .eq('user_id', userId)
-                                .eq('product_id', item.id)
-                                .maybeSingle();
-
-                            if (existingPurchaseError) {
-                                console.error('Existing purchase lookup error:', item.id, existingPurchaseError);
-                            }
-
-                            if (!existingPurchase) {
-                                const { data: newPurchase } = await supabase
-                                    .from('myuni_products_purchases')
-                                    .insert({
-                                        user_id: userId,
-                                        product_id: item.id,
-                                        purchased_at: new Date().toISOString(),
-                                        // snapshotById already reflects the commission-rescaled allocation.
-                                    price_paid: snapshotById.get(item.id)?.paidPrice ?? item.paidPrice ?? item.price ?? 0,
-                                    })
-                                    .select()
-                                    .single();
-                                if (newPurchase && !firstEnrollmentId) {
-                                    firstEnrollmentId = newPurchase.id;
-                                }
-                            } else if (!firstEnrollmentId) {
-                                firstEnrollmentId = existingPurchase.id;
-                            }
-                        } else if (item.type === 'package') {
-                            const { checkUserPackageEnrollment, enrollUserInPackage } = await import('../../../lib/enrollmentService');
-                            const alreadyEnrolled = await checkUserPackageEnrollment(userId, item.id);
-                            if (!alreadyEnrolled) {
-                                await enrollUserInPackage(userId, item.id, orderId);
-                            }
-                            if (!firstEnrollmentId) {
-                                firstEnrollmentId = orderId;
-                            }
-                        } else if (item.type === 'tier') {
-                            const { enrollUserInTier } = await import('../../../lib/enrollmentService');
-                            if (item.courseId && item.tierId) {
-                                const result = await enrollUserInTier(userId, item.courseId, item.tierId);
-                                if (result.enrollmentId && !firstEnrollmentId) {
-                                    firstEnrollmentId = result.enrollmentId;
-                                }
-                            }
-                        } else {
-                            // course
-                            const { data: existingEnrollment, error: existingEnrollmentError } = await supabase
-                                .from('myuni_enrollments')
-                                .select('id, is_active')
-                                .eq('user_id', userId)
-                                .eq('course_id', item.id)
-                                .maybeSingle();
-
-                            if (existingEnrollmentError) {
-                                console.error('Existing enrollment lookup error:', item.id, existingEnrollmentError);
-                            }
-
-                            if (!existingEnrollment) {
-                                const { data: newEnrollment } = await supabase
-                                    .from('myuni_enrollments')
-                                    .insert({
-                                        user_id: userId,
-                                        course_id: item.id,
-                                        enrolled_at: new Date().toISOString(),
-                                        progress_percentage: 0,
-                                        is_active: true
-                                    })
-                                    .select()
-                                    .single();
-                                if (newEnrollment && !firstEnrollmentId) {
-                                    firstEnrollmentId = newEnrollment.id;
-                                }
-                            } else {
-                                if (!existingEnrollment.is_active) {
-                                    await supabase.from('myuni_enrollments').update({
-                                        is_active: true,
-                                        enrolled_at: new Date().toISOString()
-                                    }).eq('id', existingEnrollment.id);
-                                }
-                                if (!firstEnrollmentId) {
-                                    firstEnrollmentId = existingEnrollment.id;
-                                }
-                            }
-                        }
-                        deliveredItemsDetails.push(item.title);
-                    }
-                } 
-                // ---- 2. TEKİL ÜRÜN MODU TESLİMATI ----
-                else {
-                    const itemType = order.custom_data?.itemType || 'course';
-
-                    if (itemType === 'event_certificate') {
+                // ---- Event certificate (special path) ----
+                const itemType = order.custom_data?.itemType || 'course';
+                if (!isCartMode && itemType === 'event_certificate') {
                         const siteApplicationId =
                           order.custom_data?.siteApplicationId || order.courseid;
                         const eventSlug = order.custom_data?.eventSlug || '';
@@ -338,9 +290,6 @@ export async function POST(request: Request) {
                             status: 'completed',
                             enrolled: false,
                             updated_at: new Date().toISOString(),
-                            // Record the actual (possibly installment-commission-inflated)
-                            // charged amount — this branch previously left `amount` frozen
-                            // at the pre-charge quote forever.
                             amount: paidPriceNum,
                             custom_data: {
                                 ...order.custom_data,
@@ -361,104 +310,86 @@ export async function POST(request: Request) {
 
                         resolve(NextResponse.redirect(successUrl, 303));
                         return;
-                    }
-                    
-                    if (itemType === 'product') {
-                        const { data: existingPurchase, error: existingPurchaseError } = await supabase
-                            .from('myuni_products_purchases')
-                            .select('id')
-                            .eq('user_id', userId)
-                            .eq('product_id', order.courseid)
-                            .maybeSingle();
-
-                        if (existingPurchaseError) {
-                            console.error('Existing purchase lookup error:', order.courseid, existingPurchaseError);
-                        }
-
-                        if (!existingPurchase) {
-                            const { data: newPurchase } = await supabase
-                                .from('myuni_products_purchases')
-                                .insert({
-                                    user_id: userId,
-                                    product_id: order.courseid,
-                                    purchased_at: new Date().toISOString(),
-                                    // Use the same (commission-rescaled) snapshot allocation as the
-                                    // cart-mode path below, instead of the raw gateway paidPrice, so
-                                    // price_paid is recorded consistently regardless of purchase mode.
-                                    price_paid: snapshotById.get(order.courseid)?.paidPrice ?? paidPriceNum,
-                                })
-                                .select()
-                                .single();
-                            firstEnrollmentId = newPurchase?.id;
-                        } else {
-                            firstEnrollmentId = existingPurchase.id;
-                        }
-                    } else if (itemType === 'package') {
-                        const { checkUserPackageEnrollment, enrollUserInPackage } = await import('../../../lib/enrollmentService');
-                        const alreadyEnrolled = await checkUserPackageEnrollment(userId, order.courseid);
-                        if (!alreadyEnrolled) {
-                            await enrollUserInPackage(userId, order.courseid, orderId);
-                        }
-                        firstEnrollmentId = orderId;
-                    } else if (itemType === 'tier') {
-                        const tierId = order.custom_data?.tierId;
-                        const { enrollUserInTier } = await import('../../../lib/enrollmentService');
-                        if (tierId) {
-                            const result = await enrollUserInTier(userId, order.courseid, tierId);
-                            firstEnrollmentId = result.enrollmentId;
-                        }
-                    } else {
-                        const { data: existingEnrollment, error: existingEnrollmentError } = await supabase
-                            .from('myuni_enrollments')
-                            .select('id, is_active')
-                            .eq('user_id', userId)
-                            .eq('course_id', order.courseid)
-                            .maybeSingle();
-
-                        if (existingEnrollmentError) {
-                            console.error('Existing enrollment lookup error:', order.courseid, existingEnrollmentError);
-                        }
-
-                        if (!existingEnrollment) {
-                            const { data: newEnrollment } = await supabase
-                                .from('myuni_enrollments')
-                                .insert({
-                                    user_id: userId,
-                                    course_id: order.courseid,
-                                    enrolled_at: new Date().toISOString(),
-                                    progress_percentage: 0,
-                                    is_active: true
-                                }).select().single();
-                            firstEnrollmentId = newEnrollment?.id;
-                        } else {
-                            if (!existingEnrollment.is_active) {
-                                await supabase.from('myuni_enrollments').update({ 
-                                    is_active: true, 
-                                    enrolled_at: new Date().toISOString() 
-                                }).eq('id', existingEnrollment.id);
-                            }
-                            firstEnrollmentId = existingEnrollment.id;
-                        }
-                    }
-                    deliveredItemsDetails.push(order.coursename);
                 }
 
-                // Siparişi başarıyla güncelle
-                await supabase.from('orders').update({ 
-                    status: 'completed', 
-                    enrolled: true, 
-                    enrollmentid: firstEnrollmentId || null,
-                    updated_at: new Date().toISOString(),
-                    amount: paidPriceNum,
-                    custom_data: {
-                        ...order.custom_data,
-                        // orderSnapshot.paidTotal/items[].paidPrice are already reconciled
-                        // with paidPriceNum (see rescaleSnapshotForActualPaid above).
-                        orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
-                        iyzico_paymentId: result.paymentId,
-                        iyzico_authCode: result.authCode
+                // ---- Course / package / product / cart delivery (idempotent) ----
+                if (!order.custom_data?.userId || !String(order.custom_data.userId).startsWith('user_')) {
+                    console.error(
+                      `CRITICAL: Order ${orderId} missing Clerk userId — refusing silent email-based enrollment. userId=`,
+                      userId
+                    );
+                    await supabase
+                      .from('orders')
+                      .update({
+                        status: 'payment_error',
+                        updated_at: new Date().toISOString(),
+                        custom_data: {
+                          ...order.custom_data,
+                          deliveryError: 'missing_clerk_user_id',
+                        },
+                      })
+                      .eq('orderid', orderId)
+                      .eq('status', 'processing');
+                    resolve(NextResponse.redirect(new URL(`/${locale}/payment-failed?error=delivery_error`, baseUrl), 303));
+                    return;
+                }
+
+                const priceByItemId = new Map(
+                  [...snapshotById.entries()].map(([id, snap]) => [id, snap.paidPrice] as const)
+                );
+                const delivery = await deliverOrderAccess(order, priceByItemId);
+
+                if (!delivery.success) {
+                    console.error(
+                      `CRITICAL: Partial/failed delivery for paid order ${orderId}:`,
+                      delivery.errors
+                    );
+                    await supabase
+                      .from('orders')
+                      .update({
+                        status: 'payment_error',
+                        enrolled: false,
+                        enrollmentid: delivery.firstEnrollmentId || null,
+                        updated_at: new Date().toISOString(),
+                        amount: paidPriceNum,
+                        custom_data: {
+                          ...order.custom_data,
+                          orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
+                          iyzico_paymentId: result.paymentId,
+                          iyzico_authCode: result.authCode,
+                          deliveryErrors: delivery.errors,
+                        },
+                      })
+                      .eq('orderid', orderId)
+                      .eq('status', 'processing');
+
+                    // Buyer was charged — if nothing was delivered, fail visibly.
+                    // If some items were delivered, still send them to success; retry/admin repairs the rest.
+                    if (delivery.deliveredTitles.length === 0) {
+                      resolve(NextResponse.redirect(new URL(`/${locale}/payment-failed?error=delivery_error`, baseUrl), 303));
+                      return;
                     }
-                }).eq('orderid', orderId);
+                }
+
+                const firstEnrollmentId = delivery.firstEnrollmentId;
+                const deliveredItemsDetails = delivery.deliveredTitles;
+
+                // Siparişi başarıyla güncelle (yalnızca tam teslimatta completed)
+                if (delivery.success) {
+                  await supabase.from('orders').update({ 
+                      status: 'completed', 
+                      enrolled: true, 
+                      enrollmentid: firstEnrollmentId || null,
+                      updated_at: new Date().toISOString(),
+                      amount: paidPriceNum,
+                      custom_data: {
+                          ...order.custom_data,
+                          orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
+                          iyzico_paymentId: result.paymentId,
+                          iyzico_authCode: result.authCode
+                      }
+                  }).eq('orderid', orderId);
+                }
                 
                 // İndirim kodu tüketimi + Referrals / Affiliate Ödüllerini Tetikle
                 try {

@@ -949,11 +949,8 @@ export async function POST(request: Request) {
               });
             }
           } else if (item.type === 'package') {
-            const { checkUserPackageEnrollment, enrollUserInPackage } = await import('../../../lib/enrollmentService');
-            const alreadyEnrolled = await checkUserPackageEnrollment(userIdForEnrollment, item.id);
-            if (!alreadyEnrolled) {
-              await enrollUserInPackage(userIdForEnrollment, item.id, orderId);
-            }
+            const { enrollUserInPackage } = await import('../../../lib/enrollmentService');
+            await enrollUserInPackage(userIdForEnrollment, item.id, orderId);
           } else if (item.type === 'tier') {
             const { enrollUserInTier } = await import('../../../lib/enrollmentService');
             if (item.courseId && item.tierId) {

@@ -315,34 +315,36 @@ export async function checkUserPackageEnrollment(userId: string, packageId: stri
   }
 }
 
-// Kullanıcıyı pakete kaydet ve paketin içindeki tüm kurslara da kaydet
+// Kullanıcıyı pakete kaydet ve paketin içindeki tüm kurslara da kaydet.
+// Idempotent: paket kaydı zaten varsa bile kurs enrollments eksikse tamamlanır.
 export async function enrollUserInPackage(userId: string, packageId: string, orderId?: string): Promise<boolean> {
   try {
     if (!userId || !packageId) return false;
 
-    // Önce zaten kayıtlı mı kontrol et
     const alreadyEnrolled = await checkUserPackageEnrollment(userId, packageId);
-    if (alreadyEnrolled) {
-      console.log('User already enrolled in package:', packageId);
-      return true;
+
+    if (!alreadyEnrolled) {
+      // 1. Package enrollment oluştur
+      const { error: packageError } = await supabase
+        .from('myuni_package_enrollments')
+        .insert({
+          user_id: userId,
+          package_id: packageId,
+          order_id: orderId || null,
+          is_active: true
+        });
+
+      if (packageError) {
+        // Unique race: başka istek aynı anda eklemiş olabilir — kurslara devam et
+        console.error('Error enrolling user in package:', packageError);
+        const stillMissing = !(await checkUserPackageEnrollment(userId, packageId));
+        if (stillMissing) return false;
+      } else {
+        console.log('Package enrollment created:', packageId);
+      }
+    } else {
+      console.log('Package enrollment already exists, ensuring course enrollments:', packageId);
     }
-
-    // 1. Package enrollment oluştur
-    const { error: packageError } = await supabase
-      .from('myuni_package_enrollments')
-      .insert({
-        user_id: userId,
-        package_id: packageId,
-        order_id: orderId || null,
-        is_active: true
-      });
-
-    if (packageError) {
-      console.error('Error enrolling user in package:', packageError);
-      return false;
-    }
-
-    console.log('Package enrollment created:', packageId);
 
     // 2. Paketin içindeki tüm kursları al
     const { data: packageCourses, error: coursesError } = await supabase
@@ -353,7 +355,7 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
 
     if (coursesError) {
       console.error('Error fetching package courses:', coursesError);
-      return true; // Package enrollment başarılı ama course enrollment başarısız
+      return false;
     }
 
     if (!packageCourses || packageCourses.length === 0) {
