@@ -23,3 +23,5 @@ node_modules
 .test_prompt.mjs
 .supabase/
 .test_prompt.mjs
+.vercel
+.env*
