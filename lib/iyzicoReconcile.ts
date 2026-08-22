@@ -394,3 +394,97 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     errors: delivery.errors,
   };
 }
+
+export type BatchReconcileResult = {
+  scanned: number;
+  reconciled: number;
+  completed: number;
+  stillPending: number;
+  failed: number;
+  paymentReview: number;
+  errors: number;
+  results: ReconcileResult[];
+};
+
+/**
+ * Sweep stuck orders that still have an Iyzico checkout token and reconcile each
+ * against Iyzico. This is the safety net for dropped/failed callbacks: a buyer
+ * who paid (Iyzico SUCCESS) but whose callback never arrived — and who never
+ * reached /payment-success — would otherwise stay 'pending' forever with no
+ * access and no email. Meant to be run on a schedule (cron) and on demand.
+ *
+ * Only orders with `custom_data.iyzicoCheckoutToken` are considered, because
+ * without a token we cannot query Iyzico. Older pre-token orders need the
+ * manual admin fix endpoint.
+ */
+export async function reconcilePendingOrders(options?: {
+  maxAgeHours?: number;
+  minAgeMinutes?: number;
+  limit?: number;
+}): Promise<BatchReconcileResult> {
+  const maxAgeHours = options?.maxAgeHours ?? 24 * 14; // look back 14 days
+  const minAgeMinutes = options?.minAgeMinutes ?? 3; // let the normal callback win first
+  const limit = options?.limit ?? 100;
+
+  const now = Date.now();
+  const notBefore = new Date(now - maxAgeHours * 3600_000).toISOString();
+  const notAfter = new Date(now - minAgeMinutes * 60_000).toISOString();
+
+  const { data: candidates, error } = await supabase
+    .from('orders')
+    .select('orderid, status, custom_data, created_at')
+    .in('status', ['pending', 'processing', 'payment_error', 'payment_review'])
+    .gte('created_at', notBefore)
+    .lte('created_at', notAfter)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  const summary: BatchReconcileResult = {
+    scanned: 0,
+    reconciled: 0,
+    completed: 0,
+    stillPending: 0,
+    failed: 0,
+    paymentReview: 0,
+    errors: 0,
+    results: [],
+  };
+
+  if (error || !candidates) {
+    return summary;
+  }
+
+  const withToken = candidates.filter(
+    (o) => o?.custom_data?.iyzicoCheckoutToken
+  );
+  summary.scanned = withToken.length;
+
+  for (const order of withToken) {
+    try {
+      const result = await reconcileOrderWithIyzico(order.orderid);
+      summary.results.push(result);
+      summary.reconciled++;
+      switch (result.orderStatus) {
+        case 'completed':
+          summary.completed++;
+          break;
+        case 'pending':
+          summary.stillPending++;
+          break;
+        case 'failed':
+          summary.failed++;
+          break;
+        case 'payment_review':
+          summary.paymentReview++;
+          break;
+        default:
+          if (!result.success) summary.errors++;
+      }
+    } catch (e) {
+      summary.errors++;
+      console.error('Batch reconcile error for', order.orderid, e);
+    }
+  }
+
+  return summary;
+}
