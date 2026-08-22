@@ -9,8 +9,8 @@ name: Iyzico Order Reconcile
 # Vercel's Hobby daily-cron limit). Also runnable manually from the Actions tab.
 #
 # Requires two repository secrets (Settings -> Secrets and variables -> Actions):
-RECONCILE_BASE_URL: https://www.myunilab.net
-CRON_SECRET: ${{ secrets.CRON_SECRET }}
+#   RECONCILE_BASE_URL  e.g. https://www.myunilab.net
+#   CRON_SECRET         same value set in Vercel env vars
 
 on:
   schedule:
