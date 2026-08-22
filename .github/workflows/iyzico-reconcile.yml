@@ -1,0 +1,37 @@
+name: Iyzico Order Reconcile
+
+# Safety net for dropped Iyzico callbacks: sweeps stuck, token-bearing orders
+# and reconciles each with Iyzico so paid buyers always get access + email,
+# even if the payment callback never arrived and the user never returned to
+# the payment-success page.
+#
+# Runs every 15 minutes (GitHub Actions schedules are free and not subject to
+# Vercel's Hobby daily-cron limit). Also runnable manually from the Actions tab.
+#
+# Requires two repository secrets (Settings -> Secrets and variables -> Actions):
+#   RECONCILE_BASE_URL  e.g. https://www.myunilab.net
+#   CRON_SECRET         same value set in Vercel env vars
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reconcile sweep
+        run: |
+          BASE_URL="${{ secrets.RECONCILE_BASE_URL }}"
+          if [ -z "$BASE_URL" ]; then
+            echo "RECONCILE_BASE_URL secret is not set"; exit 1
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" \
+            -X GET "$BASE_URL/api/iyzico-reconcile?limit=100&maxAgeHours=336&minAgeMinutes=3" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $HTTP_CODE"
+          cat /tmp/out.json || true
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Reconcile sweep failed with HTTP $HTTP_CODE"; exit 1
+          fi
