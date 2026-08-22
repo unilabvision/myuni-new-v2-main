@@ -5,8 +5,9 @@ name: Iyzico Order Reconcile
 # even if the payment callback never arrived and the user never returned to
 # the payment-success page.
 #
-# Runs every 15 minutes (GitHub Actions schedules are free and not subject to
-# Vercel's Hobby daily-cron limit). Also runnable manually from the Actions tab.
+# Runs every 5 minutes (GitHub's minimum schedule interval; schedules are free
+# and not subject to Vercel's Hobby daily-cron limit). Also runnable manually
+# from the Actions tab.
 #
 # Requires two repository secrets (Settings -> Secrets and variables -> Actions):
 #   RECONCILE_BASE_URL  e.g. https://www.myunilab.net
@@ -14,7 +15,7 @@ name: Iyzico Order Reconcile
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -28,7 +29,7 @@ jobs:
             echo "RECONCILE_BASE_URL secret is not set"; exit 1
           fi
           HTTP_CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" \
-            -X GET "$BASE_URL/api/iyzico-reconcile?limit=100&maxAgeHours=336&minAgeMinutes=3" \
+            -X GET "$BASE_URL/api/iyzico-reconcile?limit=100&maxAgeHours=336&minAgeMinutes=1" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
           echo "HTTP $HTTP_CODE"
           cat /tmp/out.json || true
