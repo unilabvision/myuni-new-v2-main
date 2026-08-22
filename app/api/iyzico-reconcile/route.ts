@@ -7,6 +7,9 @@ import {
   reconcilePendingOrders,
 } from '@/lib/iyzicoReconcile';
 
+// Route: supports POST (single order) and GET (cron/admin batch sweep).
+export const dynamic = 'force-dynamic';
+
 /**
  * Reconcile a pending Iyzico order by querying Iyzico with the stored checkout token.
  * Use when callback was lost (network/timeout) so status becomes:
