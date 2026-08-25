@@ -124,8 +124,10 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const cartItemNames = rawNames ? decodeUrlString(rawNames).split(', ') : [];
 
   // Callback kaçtıysa Iyzico'dan durumu çek (pending → completed / payment_review / failed)
+  // Event certificate siparişleri de dahil — guest ödemelerde callback düşerse
+  // sadece bu sayfa + cron reconcile kurtarabilir.
   useEffect(() => {
-    if (!orderId || isFreePurchase || isEventApplication) return;
+    if (!orderId || isFreePurchase) return;
     let cancelled = false;
     (async () => {
       try {
@@ -145,7 +147,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [orderId, isFreePurchase, isEventApplication]);
+  }, [orderId, isFreePurchase]);
 
   const [itemSlug, setItemSlug] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState<string | null>(null);

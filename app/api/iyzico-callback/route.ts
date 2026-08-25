@@ -154,6 +154,39 @@ export async function POST(request: Request) {
                     resolve(NextResponse.redirect(holdUrl, 303));
                     return;
                 }
+
+                // Fraud rejected — paymentStatus may still be SUCCESS; never deliver
+                if (Number(result.fraudStatus) === -1) {
+                    const { data: rejectOrder } = await supabase
+                      .from('orders')
+                      .select('custom_data')
+                      .eq('orderid', orderId)
+                      .maybeSingle();
+                    await supabase
+                      .from('orders')
+                      .update({
+                        status: 'failed',
+                        updated_at: new Date().toISOString(),
+                        custom_data: {
+                          ...(rejectOrder?.custom_data || {}),
+                          iyzicoPaymentStatus: 'SUCCESS',
+                          iyzicoFraudStatus: -1,
+                          iyzicoCallbackAt: new Date().toISOString(),
+                          iyzico_paymentId: result.paymentId,
+                          iyzico_authCode: result.authCode,
+                        },
+                      })
+                      .eq('orderid', orderId)
+                      .in('status', ['pending', 'failed', 'payment_review', 'payment_error', 'processing']);
+                    const localeReject = rejectOrder?.custom_data?.locale || 'tr';
+                    resolve(
+                      NextResponse.redirect(
+                        new URL(`/${localeReject}/payment-failed?error=fraud_rejected`, baseUrl),
+                        303
+                      )
+                    );
+                    return;
+                }
                 
                 // Siparişi al. maybeSingle() kullanıyoruz ki "sipariş bulunamadı"
                 // ile gerçek bir DB hatası birbirinden ayrılıp loglanabilsin —

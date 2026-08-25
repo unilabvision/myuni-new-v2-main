@@ -160,6 +160,16 @@ export async function deliverOrderAccess(
   const deliveredTitles: string[] = [];
   let firstEnrollmentId: string | undefined;
 
+  if (order?.custom_data?.itemType === 'event_certificate') {
+    return {
+      success: false,
+      deliveredTitles: [],
+      errors: [
+        'event_certificate orders must be finalized via markSiteApplicationPaid, not enrollment delivery',
+      ],
+    };
+  }
+
   const userId = resolveUserId(order);
   if (!userId) {
     return {
@@ -220,6 +230,11 @@ export async function deliverOrderAccess(
  * Used by callback retries for completed-but-missing-enrollment cases.
  */
 export async function orderNeedsDelivery(order: any): Promise<boolean> {
+  // Guest event certificates have no Clerk enrollment — payment is on the application row.
+  if (order?.custom_data?.itemType === 'event_certificate') {
+    return false;
+  }
+
   if (order?.enrolled === false || order?.enrolled == null) {
     // Still check — enrolled flag can be wrong
   }

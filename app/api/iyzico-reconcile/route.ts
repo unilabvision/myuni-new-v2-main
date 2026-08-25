@@ -47,7 +47,16 @@ export async function POST(request: NextRequest) {
     const ownerId = order.custom_data?.userId || order.custom_data?.clerkUserId;
     const isOwner = Boolean(userId && ownerId && userId === ownerId);
 
-    if (!isCron && !admin && !isOwner) {
+    // Guest event-certificate checkouts have no Clerk userId. Allow reconcile by
+    // opaque orderId alone so /payment-success can heal dropped callbacks.
+    const isGuestEventCertificate =
+      order.custom_data?.itemType === 'event_certificate' &&
+      !ownerId &&
+      ['pending', 'processing', 'payment_error', 'payment_review'].includes(
+        String(order.status || '')
+      );
+
+    if (!isCron && !admin && !isOwner && !isGuestEventCertificate) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

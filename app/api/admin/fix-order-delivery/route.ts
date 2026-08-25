@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { deliverOrderAccess, orderNeedsDelivery } from '@/lib/orderDelivery';
+import {
+  markSiteApplicationPaid,
+  notifyUniboardPaymentConfirm,
+} from '@/lib/siteApplications/applicationPayments';
 
 /**
  * Admin recovery: re-deliver enrollments/purchases for a paid order
  * that is completed/payment_error/pending but missing access.
+ * Event certificates are repaired via application payment_status, not enrollments.
  *
  * POST { orderId: "MYU-IYZ-..." }
  */
@@ -34,6 +39,66 @@ export async function POST(request: NextRequest) {
     }
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (order.custom_data?.itemType === 'event_certificate') {
+      const siteApplicationId =
+        (typeof order.custom_data?.siteApplicationId === 'string' &&
+          order.custom_data.siteApplicationId.trim()) ||
+        order.courseid;
+
+      if (!siteApplicationId) {
+        return NextResponse.json(
+          { error: 'Event certificate order missing siteApplicationId' },
+          { status: 422 }
+        );
+      }
+
+      const paymentResult = await markSiteApplicationPaid(
+        String(siteApplicationId),
+        orderId,
+        order.paymentmethod || 'iyzico'
+      );
+
+      if (!paymentResult.success && !paymentResult.alreadyPaid) {
+        return NextResponse.json(
+          {
+            success: false,
+            orderId,
+            errors: [paymentResult.error || 'Application payment update failed'],
+          },
+          { status: 422 }
+        );
+      }
+
+      await notifyUniboardPaymentConfirm(String(siteApplicationId), orderId);
+
+      await supabase
+        .from('orders')
+        .update({
+          status: 'completed',
+          enrolled: false,
+          updated_at: new Date().toISOString(),
+          custom_data: {
+            ...order.custom_data,
+            siteApplicationId,
+            adminDeliveryRepair: {
+              at: new Date().toISOString(),
+              by: admin.userId,
+              success: true,
+              type: 'event_certificate',
+            },
+          },
+        })
+        .eq('orderid', orderId);
+
+      return NextResponse.json({
+        success: true,
+        orderId,
+        status: 'completed',
+        alreadyPaid: paymentResult.alreadyPaid || false,
+        message: 'Event certificate application marked paid',
+      });
     }
 
     const needs = await orderNeedsDelivery(order);

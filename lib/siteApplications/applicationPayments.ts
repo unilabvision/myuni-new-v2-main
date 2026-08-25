@@ -58,11 +58,17 @@ export async function notifyUniboardPaymentConfirm(
     process.env.UNIBOARD_URL;
   const secret = process.env.SITE_APPLICATION_PAYMENT_SECRET;
 
-  if (!adminUrl || !secret) return;
+  if (!adminUrl || !secret) {
+    console.warn(
+      '[siteApplications] uniboard payment confirm skipped: missing UNIBOARD_ADMIN_URL / SITE_APPLICATION_PAYMENT_SECRET',
+      { applicationId, orderId }
+    );
+    return;
+  }
 
   try {
     const base = adminUrl.replace(/\/$/, '');
-    await fetch(`${base}/api/site-applications/payments/confirm`, {
+    const res = await fetch(`${base}/api/site-applications/payments/confirm`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -74,7 +80,20 @@ export async function notifyUniboardPaymentConfirm(
         paymentMethod: 'iyzico',
       }),
     });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(
+        '[siteApplications] uniboard payment confirm non-2xx:',
+        res.status,
+        body.slice(0, 500),
+        { applicationId, orderId, base }
+      );
+    }
   } catch (err) {
-    console.error('[siteApplications] uniboard payment confirm failed:', err);
+    console.error('[siteApplications] uniboard payment confirm failed:', err, {
+      applicationId,
+      orderId,
+    });
   }
 }

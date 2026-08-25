@@ -12,6 +12,127 @@ import {
   retrieveCheckoutForm,
   type IyzicoCheckoutRetrieveResult,
 } from './iyzicoClient';
+import {
+  markSiteApplicationPaid,
+  notifyUniboardPaymentConfirm,
+} from './siteApplications/applicationPayments';
+
+function isEventCertificateOrder(order: any): boolean {
+  return order?.custom_data?.itemType === 'event_certificate';
+}
+
+function resolveSiteApplicationId(order: any): string | null {
+  const fromCustom = order?.custom_data?.siteApplicationId;
+  if (typeof fromCustom === 'string' && fromCustom.trim()) return fromCustom.trim();
+  if (order?.courseid) return String(order.courseid);
+  return null;
+}
+
+/**
+ * Finalize a paid guest event-certificate order: mark application paid,
+ * notify Uniboard, complete the order. Does NOT create Clerk enrollments.
+ */
+async function finalizeEventCertificateOrder(
+  order: any,
+  paidPriceNum: number,
+  baseCustom: Record<string, unknown>,
+  retrieve: IyzicoCheckoutRetrieveResult,
+  orderSnapshot: OrderSnapshot
+): Promise<ReconcileResult> {
+  const orderId = order.orderid;
+  const siteApplicationId = resolveSiteApplicationId(order);
+
+  if (!siteApplicationId) {
+    await supabase
+      .from('orders')
+      .update({
+        status: 'payment_error',
+        enrolled: false,
+        amount: paidPriceNum,
+        updated_at: new Date().toISOString(),
+        custom_data: {
+          ...baseCustom,
+          orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+          deliveryErrors: ['Missing siteApplicationId on event_certificate order'],
+        },
+      })
+      .eq('orderid', orderId);
+
+    return {
+      success: false,
+      orderId,
+      orderStatus: 'payment_error',
+      iyzicoPaymentStatus: String(baseCustom.iyzicoPaymentStatus || ''),
+      fraudStatus: (baseCustom.iyzicoFraudStatus as number | null) ?? null,
+      message: 'Iyzico SUCCESS but event application id missing',
+      errors: ['Missing siteApplicationId on event_certificate order'],
+    };
+  }
+
+  const paymentResult = await markSiteApplicationPaid(
+    siteApplicationId,
+    orderId,
+    'iyzico'
+  );
+
+  if (!paymentResult.success && !paymentResult.alreadyPaid) {
+    await supabase
+      .from('orders')
+      .update({
+        status: 'payment_error',
+        enrolled: false,
+        amount: paidPriceNum,
+        updated_at: new Date().toISOString(),
+        custom_data: {
+          ...baseCustom,
+          orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+          deliveryErrors: [paymentResult.error || 'Application payment update failed'],
+        },
+      })
+      .eq('orderid', orderId);
+
+    return {
+      success: false,
+      orderId,
+      orderStatus: 'payment_error',
+      iyzicoPaymentStatus: String(baseCustom.iyzicoPaymentStatus || ''),
+      fraudStatus: (baseCustom.iyzicoFraudStatus as number | null) ?? null,
+      message: 'Iyzico SUCCESS but application payment update failed',
+      errors: [paymentResult.error || 'Application payment update failed'],
+    };
+  }
+
+  await notifyUniboardPaymentConfirm(siteApplicationId, orderId);
+
+  await supabase
+    .from('orders')
+    .update({
+      status: 'completed',
+      enrolled: false,
+      amount: paidPriceNum,
+      updated_at: new Date().toISOString(),
+      custom_data: {
+        ...baseCustom,
+        orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+        siteApplicationId,
+        reconciledVia: 'iyzico-reconcile',
+        eventCertificateFinalizedAt: new Date().toISOString(),
+      },
+    })
+    .eq('orderid', orderId);
+
+  return {
+    success: true,
+    orderId,
+    orderStatus: 'completed',
+    iyzicoPaymentStatus: String(baseCustom.iyzicoPaymentStatus || ''),
+    fraudStatus: (baseCustom.iyzicoFraudStatus as number | null) ?? null,
+    delivered: [order.coursename || siteApplicationId],
+    message: paymentResult.alreadyPaid
+      ? 'Iyzico SUCCESS — event certificate already paid; order completed'
+      : 'Iyzico SUCCESS — event certificate marked paid, Uniboard notified',
+  };
+}
 
 export type ReconcileResult = {
   success: boolean;
@@ -80,8 +201,28 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     };
   }
 
-  // Already finalized — still repair delivery if needed
+  // Already finalized — still repair delivery if needed (courses only)
   if (order.status === 'completed') {
+    if (isEventCertificateOrder(order)) {
+      const siteApplicationId = resolveSiteApplicationId(order);
+      if (siteApplicationId) {
+        const paymentResult = await markSiteApplicationPaid(
+          siteApplicationId,
+          orderId,
+          'iyzico'
+        );
+        if (paymentResult.success) {
+          await notifyUniboardPaymentConfirm(siteApplicationId, orderId);
+        }
+      }
+      return {
+        success: true,
+        orderId,
+        orderStatus: 'completed',
+        message: 'Event certificate order already completed',
+      };
+    }
+
     const needs = await orderNeedsDelivery(order);
     if (needs) {
       const delivery = await deliverOrderAccess(order);
@@ -215,11 +356,12 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
   }
 
   // ---- SUCCESS / approved → claim + deliver ----
+  // Include `processing` so stuck mid-callback / mid-reconcile orders can be finalized.
   const { data: claimed, error: claimError } = await supabase
     .from('orders')
     .update({ status: 'processing', updated_at: new Date().toISOString() })
     .eq('orderid', orderId)
-    .in('status', ['pending', 'failed', 'payment_error', 'payment_review'])
+    .in('status', ['pending', 'failed', 'payment_error', 'payment_review', 'processing'])
     .select()
     .maybeSingle();
 
@@ -230,6 +372,43 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
       .select('*')
       .eq('orderid', orderId)
       .maybeSingle();
+
+    if (fresh && isEventCertificateOrder(fresh) && fresh.status !== 'completed') {
+      const repairSnapshot: OrderSnapshot =
+        fresh.custom_data?.orderSnapshot &&
+        Array.isArray(fresh.custom_data.orderSnapshot.items) &&
+        fresh.custom_data.orderSnapshot.items.length > 0
+          ? rescaleSnapshotForActualPaid(
+              fresh.custom_data.orderSnapshot as OrderSnapshot,
+              paidPriceNum
+            )
+          : buildOrderSnapshot(
+              [
+                {
+                  id: fresh.courseid,
+                  title: fresh.coursename,
+                  price: Number(fresh.amount) || paidPriceNum,
+                  type: 'event_certificate',
+                },
+              ],
+              {
+                paidTotal: paidPriceNum,
+                discountAmount: 0,
+                discountCodes: '',
+              }
+            );
+      return finalizeEventCertificateOrder(
+        fresh,
+        paidPriceNum,
+        {
+          ...fresh.custom_data,
+          ...baseCustom,
+        },
+        retrieve,
+        repairSnapshot
+      );
+    }
+
     if (fresh && (await orderNeedsDelivery(fresh))) {
       const repair = await deliverOrderAccess(fresh);
       return {
@@ -282,6 +461,17 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
             discountCodes: order.discountcode || order.custom_data?.discountCodes || '',
           }
         );
+
+  // Guest webinar / event certificate — no Clerk enrollment
+  if (isEventCertificateOrder(claimed) || isEventCertificateOrder(order)) {
+    return finalizeEventCertificateOrder(
+      { ...order, ...claimed, custom_data: { ...order.custom_data, ...claimed.custom_data } },
+      paidPriceNum,
+      baseCustom,
+      retrieve,
+      orderSnapshot
+    );
+  }
 
   const priceByItemId = new Map(
     orderSnapshot.items.map((item) => [item.id, item.paidPrice] as const)
