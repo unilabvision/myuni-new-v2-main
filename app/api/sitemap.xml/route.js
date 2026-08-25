@@ -1,6 +1,7 @@
 // app/api/sitemap.xml/route.js - Complete Sitemap With Blog Service
 import { NextResponse } from 'next/server';
 import { getAllCourses } from '../../../lib/courseService';
+import { resolvePublicBaseUrl } from '../../../lib/publicBaseUrl';
 // Blog service import - try different possible paths
 let getUnilabBlogPosts, getCurrentSite;
 try {
@@ -304,8 +305,8 @@ ${routes.map(route => `  <url>
 // Main sitemap generation function
 export async function GET() {
   try {
-    // Get base URL from environment or use default - sonundaki slash'ı temizle
-    const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net').replace(/\/+$/, '');
+    // Get base URL (never localhost in production)
+    const baseUrl = resolvePublicBaseUrl();
     
     console.log('🚀 Generating sitemap for:', baseUrl);
     
@@ -343,8 +344,8 @@ export async function GET() {
   } catch (error) {
     console.error('❌ Error generating sitemap:', error);
     
-    // Return minimal sitemap on error - sonundaki slash'ı temizle
-    const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net').replace(/\/+$/, '');
+    // Return minimal sitemap on error - never use localhost in production
+    const baseUrl = resolvePublicBaseUrl();
     const fallbackXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>

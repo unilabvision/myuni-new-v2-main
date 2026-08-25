@@ -1,6 +1,24 @@
 // app/_services/commentNotificationService.js - Comment Notification Service
 import nodemailer from 'nodemailer';
 
+function getPublicSiteBase() {
+  try {
+    const { resolvePublicBaseUrl } = require('../../lib/publicBaseUrl');
+    return resolvePublicBaseUrl();
+  } catch {
+    const raw = String(process.env.NEXT_PUBLIC_BASE_URL || '')
+      .trim()
+      .replace(/\/$/, '');
+    if (
+      (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') &&
+      (!raw || /localhost|127\.0\.0\.1/i.test(raw))
+    ) {
+      return 'https://www.myunilab.net';
+    }
+    return raw || 'https://www.myunilab.net';
+  }
+}
+
 // Send comment notification to admin
 const sendCommentNotificationToAdmin = async (commentData, contentInfo, locale = 'tr', contentType = 'course') => {
   try {
@@ -258,7 +276,7 @@ const sendCommentNotificationToAdmin = async (commentData, contentInfo, locale =
       <div class="course-info">
         <div class="course-title">${isTurkish ? `${contentTypeText} Bilgileri` : `${contentTypeText} Information`}</div>
         <div style="margin-bottom: 10px;"><strong>${isTurkish ? `${contentTypeText}:` : `${contentTypeText}:`}</strong> ${contentInfo.title}</div>
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="course-link">
+        <a href="${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="course-link">
           ${isTurkish ? `${contentTypeText}i Görüntüle` : `View ${contentTypeText}`}
         </a>
       </div>
@@ -287,7 +305,7 @@ const sendCommentNotificationToAdmin = async (commentData, contentInfo, locale =
       </div>
       
       <div class="action-buttons">
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="cta-button">
+        <a href="${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="cta-button">
           ${isTurkish ? `${contentTypeText}i Görüntüle` : `View ${contentTypeText}`}
         </a>
         <a href="mailto:${commentData.email}" class="secondary-button">
@@ -315,12 +333,12 @@ ${isTurkish ? 'Puan' : 'Rating'}: ${commentData.rating}/5 ⭐
 ${isTurkish ? 'Tarih' : 'Date'}: ${new Date().toLocaleDateString(isTurkish ? 'tr-TR' : 'en-US')}
 
 ${isTurkish ? contentTypeText : contentTypeText}: ${contentInfo.title}
-${isTurkish ? `${contentTypeText} Linki` : `${contentTypeText} Link`}: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
+${isTurkish ? `${contentTypeText} Linki` : `${contentTypeText} Link`}: ${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
 
 ${isTurkish ? 'Yorum' : 'Comment'}:
 "${commentData.comment}"
 
-${isTurkish ? `${contentTypeText}i görüntülemek için` : `To view the ${contentType.toLowerCase()}`}: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
+${isTurkish ? `${contentTypeText}i görüntülemek için` : `To view the ${contentType.toLowerCase()}`}: ${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
 
 ${isTurkish ? 'Yanıtlamak için' : 'To reply'}: ${commentData.email}
 
@@ -574,7 +592,7 @@ const sendThankYouEmailToCommenter = async (commentData, contentInfo, locale = '
       </div>
       
       <div class="button-section">
-        <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="cta-button">
+        <a href="${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}" class="cta-button">
           ${isTurkish ? `${contentTypeText}i Görüntüle` : `View ${contentTypeText}`}
         </a>
       </div>
@@ -612,7 +630,7 @@ ${isTurkish
 ${isTurkish ? 'Yardım Formu' : 'Help Form'}: https://myunilab.net/tr/iletisim
 ` : ''}
 
-${isTurkish ? `${contentTypeText}i görüntülemek için` : `To view the ${contentType.toLowerCase()}`}: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net'}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
+${isTurkish ? `${contentTypeText}i görüntülemek için` : `To view the ${contentType.toLowerCase()}`}: ${getPublicSiteBase()}/${locale}/${isEvent ? (locale === 'tr' ? 'etkinlik' : 'event') : 'kurs'}/${contentInfo.slug}
 
 ${isTurkish 
   ? 'Eğitim yolculuğunuzda başarılar dileriz!'

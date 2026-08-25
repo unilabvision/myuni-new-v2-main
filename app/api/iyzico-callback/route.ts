@@ -14,13 +14,14 @@ import {
   deliverOrderAccess,
   orderNeedsDelivery,
 } from '@/lib/orderDelivery';
+import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 import Iyzipay from 'iyzipay';
 
 export async function POST(request: Request) {
     try {
         const formData = await request.formData();
         const token = formData.get('token')?.toString();
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        const baseUrl = resolvePublicBaseUrl(request);
         
         // Fail fast instead of silently constructing the Iyzico client with
         // empty credentials, and make it impossible to miss in logs when
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
                                },
                              })
                              .eq('orderid', result.basketId)
-                             .in('status', ['pending', 'failed', 'payment_review']);
+                             .in('status', ['pending', 'failed', 'payment_review', 'cancelled']);
                            const reviewUrl = new URL('/tr/payment-success', baseUrl);
                            reviewUrl.searchParams.set('orderId', result.basketId);
                            resolve(NextResponse.redirect(reviewUrl, 303));
@@ -147,7 +148,7 @@ export async function POST(request: Request) {
                         },
                       })
                       .eq('orderid', orderId)
-                      .in('status', ['pending', 'failed', 'payment_review', 'payment_error']);
+                      .in('status', ['pending', 'failed', 'payment_review', 'payment_error', 'cancelled']);
                     const localeHold = reviewOrder?.custom_data?.locale || 'tr';
                     const holdUrl = new URL(`/${localeHold}/payment-success`, baseUrl);
                     holdUrl.searchParams.set('orderId', orderId);
@@ -209,19 +210,21 @@ export async function POST(request: Request) {
                 // buyer may resubmit the same token/hit back-button), and two
                 // such requests can race each other concurrently. Atomically
                 // claim the order by requiring it be in a fresh state
-                // ('pending', 'failed', or a previously stuck 'payment_error') —
-                // this excludes BOTH 'completed' AND 'processing', so only ONE
+                // ('pending', 'failed', stuck 'payment_error', or 'cancelled'
+                // after a retry cancelled the row while Iyzico already charged)
+                // — this excludes BOTH 'completed' AND 'processing', so only ONE
                 // concurrent request can ever win the claim; every other
                 // (replayed or racing) request affects zero rows here and is
                 // redirected without re-running enrollment / referral rewards /
                 // emails again. Including 'payment_error' lets a retry recover
                 // an order that got stuck after a delivery exception (see catch
                 // block below) instead of leaving it stuck forever.
+                // Including 'cancelled' recovers the lost-callback + retry race.
                 const { data: claimedOrder, error: claimError } = await supabase
                     .from('orders')
                     .update({ status: 'processing', updated_at: new Date().toISOString() })
                     .eq('orderid', orderId)
-                    .in('status', ['pending', 'failed', 'payment_error', 'payment_review'])
+                    .in('status', ['pending', 'failed', 'payment_error', 'payment_review', 'cancelled'])
                     .select()
                     .maybeSingle();
 
@@ -675,6 +678,6 @@ export async function POST(request: Request) {
 
     } catch (error) {
         console.error("Iyzico callback error:", error);
-        return NextResponse.redirect(new URL('/tr/payment-failed?error=internal_error', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'), 303);
+        return NextResponse.redirect(new URL('/tr/payment-failed?error=internal_error', resolvePublicBaseUrl(request)), 303);
     }
 }

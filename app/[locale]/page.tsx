@@ -8,6 +8,7 @@ import EventListFilter from '../components/EventListFilter';
 // Yeni section'ları import edin
 import WhyChooseSection from '../components/WhyChooseSection';
 import { supabase } from '@/lib/supabase';
+import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 
 
 // Type definition for better type safety
@@ -91,8 +92,8 @@ export async function generateMetadata({ params }: HomePageProps) {
   const locale = resolvedParams.locale;
   const validLocale: SupportedLocale = isValidLocale(locale) ? locale : 'tr';
 
-  // Build base URL - sonundaki slash'ı temizle
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net').replace(/\/+$/, '');
+  // Build base URL — never localhost in production
+  const baseUrl = resolvePublicBaseUrl();
 
   // Canonical URLs
   const canonicalUrl = `${baseUrl}/${validLocale}`;

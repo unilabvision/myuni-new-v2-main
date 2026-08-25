@@ -1,10 +1,11 @@
 // app/api/robots.txt/route.js - Dynamic Robots.txt
 import { NextResponse } from 'next/server';
+import { resolvePublicBaseUrl } from '../../../lib/publicBaseUrl';
 
 export async function GET() {
   try {
-    // Get base URL from environment
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+    // Get base URL from environment (never localhost in production)
+    const baseUrl = resolvePublicBaseUrl();
     
     // Check if this is production environment
     const isProduction = process.env.NODE_ENV === 'production';

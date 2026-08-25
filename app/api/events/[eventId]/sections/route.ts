@@ -19,17 +19,11 @@ export async function GET(
 
     console.log('API: Fetching sections for event:', eventId);
 
-    // Use the existing getEventSections function
+    // Empty agenda is valid (upcoming webinars often have no sections yet).
+    // Return 200 + [] so the page does not treat this as a hard failure.
     const sections = await getEventSections(eventId);
 
-    if (!sections || sections.length === 0) {
-      return NextResponse.json(
-        { error: 'No sections found for this event' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(sections, {
+    return NextResponse.json(sections || [], {
       status: 200,
       headers: {
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',

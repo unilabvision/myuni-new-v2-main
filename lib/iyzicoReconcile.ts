@@ -361,7 +361,7 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     .from('orders')
     .update({ status: 'processing', updated_at: new Date().toISOString() })
     .eq('orderid', orderId)
-    .in('status', ['pending', 'failed', 'payment_error', 'payment_review', 'processing'])
+    .in('status', ['pending', 'failed', 'payment_error', 'payment_review', 'processing', 'cancelled'])
     .select()
     .maybeSingle();
 
@@ -623,7 +623,15 @@ export async function reconcilePendingOrders(options?: {
   const { data: candidates, error } = await supabase
     .from('orders')
     .select('orderid, status, custom_data, created_at')
-    .in('status', ['pending', 'processing', 'payment_error', 'payment_review'])
+    .in('status', [
+      'pending',
+      'processing',
+      'payment_error',
+      'payment_review',
+      // Retry may cancel a pending row after Iyzico already charged — still healable via token
+      'cancelled',
+      'failed',
+    ])
     .gte('created_at', notBefore)
     .lte('created_at', notAfter)
     .order('created_at', { ascending: false })

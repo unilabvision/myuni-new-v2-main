@@ -162,7 +162,8 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
             : 'Your course is ready. You can start immediately.');
     }
     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+    const { resolvePublicBaseUrl } = require('../../lib/publicBaseUrl');
+    const baseUrl = resolvePublicBaseUrl();
     const courseUrl = isCertificate && orderInfo.certificateUrl 
       ? orderInfo.certificateUrl 
       : (isProduct || isCart)

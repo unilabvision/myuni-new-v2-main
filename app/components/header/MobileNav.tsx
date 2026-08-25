@@ -3,7 +3,7 @@
 import Link from "next/link";
 import MobileSearchBar from './MobileSearchbar';
 import { useUser } from '@clerk/nextjs';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { getNavItems } from './navItems';
 import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
@@ -15,9 +15,16 @@ interface MobileNavProps {
 }
 
 export default function MobileNav({ toggleMobileMenu, locale, siteForms }: MobileNavProps) {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [authMounted, setAuthMounted] = useState(false);
   const items = useMemo(() => getNavItems(locale, siteForms), [locale, siteForms]);
+
+  useEffect(() => {
+    setAuthMounted(true);
+  }, []);
+
+  const authReady = authMounted && isLoaded;
 
   const handleDropdownToggle = (label: string) => {
     setOpenDropdown(openDropdown === label ? null : label);
@@ -76,7 +83,7 @@ export default function MobileNav({ toggleMobileMenu, locale, siteForms }: Mobil
         ))}
 
         {/* Giriş Yap Butonu - Sadece giriş yapmamış kullanıcılar için */}
-        {!isSignedIn && (
+        {authReady && !isSignedIn && (
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <Link
               href={locale === 'tr' ? '/tr/login' : '/en/login'}
@@ -89,7 +96,7 @@ export default function MobileNav({ toggleMobileMenu, locale, siteForms }: Mobil
         )}
 
         {/* Kurslarım Butonu - Sadece giriş yapmış kullanıcılar için */}
-        {isSignedIn && (
+        {authReady && isSignedIn && (
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <Link
               href={`/${locale}/dashboard`}

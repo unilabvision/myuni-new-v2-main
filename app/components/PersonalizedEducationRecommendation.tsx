@@ -767,11 +767,8 @@ export default function PersonalizedEducationRecommendation({
                   </div>
                   <button 
                     onClick={() => {
-                      // Kurs detay sayfasına yönlendir
-                      const baseUrl = process.env.NODE_ENV === 'production' 
-                        ? 'https://myunilab.net/' // Production URL'ini buraya koy
-                        : 'http://localhost:3000';
-                      window.location.href = `${baseUrl}/${safeLocale}/kurs/${rec.slug}`;
+                      // Same-origin relative path — never hardcode localhost (breaks prod if misbuilt)
+                      window.location.href = `/${safeLocale}/kurs/${rec.slug}`;
                     }}
                     className="bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center transform hover:scale-105 touch-manipulation text-sm sm:text-base"
                   >

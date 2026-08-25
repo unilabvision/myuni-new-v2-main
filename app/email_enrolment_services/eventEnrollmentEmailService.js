@@ -64,7 +64,8 @@ const sendEventEnrollmentEmail = async (userInfo, eventInfo, enrollmentInfo, loc
       ? 'Etkinlik kaydınız tamamlandı. Etkinlik detayları aşağıda yer almaktadır.'
       : 'Your event registration is complete. Event details are provided below.';
     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+    const { resolvePublicBaseUrl } = require('../../lib/publicBaseUrl');
+    const baseUrl = resolvePublicBaseUrl();
     const eventUrl = `${baseUrl}/${locale}/etkinlik/${eventInfo.slug}`;
     const dashboardUrl = `${baseUrl}/${locale}/dashboard`;
     

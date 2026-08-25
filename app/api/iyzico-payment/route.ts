@@ -8,6 +8,8 @@ import {
   buildOrderSnapshot,
   resolveEmailCourseType,
 } from '@/lib/orderSnapshot';
+import { reconcileOrderWithIyzico } from '@/lib/iyzicoReconcile';
+import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 import Iyzipay from 'iyzipay';
 
 interface CartItemInput {
@@ -656,6 +658,43 @@ export async function POST(request: Request) {
           }
         }
 
+        // Açık pending siparişleri kapatmadan önce: callback kaçtıysa Iyzico'da
+        // SUCCESS olmuş olabilir. Pending'i cancelled yaparsak callback/reconcile
+        // claim edemezdi — önce token ile reconcile et.
+        const { data: openPendingOrders } = await supabase
+          .from('orders')
+          .select('orderid, custom_data, status')
+          .eq('courseid', applicationId)
+          .eq('status', 'pending');
+
+        for (const pending of openPendingOrders || []) {
+          const token = pending.custom_data?.iyzicoCheckoutToken;
+          if (!token || typeof token !== 'string') continue;
+          try {
+            const reconciled = await reconcileOrderWithIyzico(pending.orderid);
+            if (
+              reconciled.orderStatus === 'completed' ||
+              String(reconciled.iyzicoPaymentStatus || '').toUpperCase() === 'SUCCESS'
+            ) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: 'Certificate already paid for this application',
+                  orderId: pending.orderid,
+                  alreadyPaid: true,
+                },
+                { status: 409 }
+              );
+            }
+          } catch (e) {
+            console.warn(
+              'Pending order reconcile before cancel failed:',
+              pending.orderid,
+              e
+            );
+          }
+        }
+
         // Açık pending siparişleri kapat — her checkout'ta yeni pending birikmesin
         await supabase
           .from('orders')
@@ -820,7 +859,7 @@ export async function POST(request: Request) {
     }
 
     const orderId = `MYU-IYZ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const baseUrl = resolvePublicBaseUrl(request);
     const isTierPurchase = !isCartMode && body.itemType === 'tier';
 
     // Sipariş bilgilerini kaydet

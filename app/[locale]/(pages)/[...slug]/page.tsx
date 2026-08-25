@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { default as aboutContentModule } from '@/app/components/pages/about/content';
 import { default as contactContentModule } from '@/app/components/pages/contact/content';
 import { getUnilabBlogContent } from '@/app/services/unilabBlogService';
+import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 
 // Define the interface for the page props
 interface PageParams {
@@ -144,7 +145,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   }
 
   // Build base URL - sonundaki slash'ı temizle
-  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net').replace(/\/+$/, '');
+  const baseUrl = resolvePublicBaseUrl();
 
   // Get current page slug
   const currentSlug = pageRoutes[pageType as keyof typeof pageRoutes]?.[locale as 'tr' | 'en'] || slugString;

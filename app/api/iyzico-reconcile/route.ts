@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const isGuestEventCertificate =
       order.custom_data?.itemType === 'event_certificate' &&
       !ownerId &&
-      ['pending', 'processing', 'payment_error', 'payment_review'].includes(
+      ['pending', 'processing', 'payment_error', 'payment_review', 'cancelled', 'failed'].includes(
         String(order.status || '')
       );
 

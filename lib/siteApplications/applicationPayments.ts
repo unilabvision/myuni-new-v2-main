@@ -3,6 +3,7 @@ import 'server-only';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from './config';
 import type { ApplicationPaymentStatus } from './packages';
+import { resolveUniboardAdminUrl } from '@/lib/publicBaseUrl';
 
 type SubmissionData = Record<string, unknown>;
 
@@ -52,10 +53,7 @@ export async function notifyUniboardPaymentConfirm(
   applicationId: string,
   orderId: string
 ): Promise<void> {
-  const adminUrl =
-    process.env.UNIBOARD_ADMIN_URL ||
-    process.env.NEXT_PUBLIC_UNIBOARD_URL ||
-    process.env.UNIBOARD_URL;
+  const adminUrl = resolveUniboardAdminUrl();
   const secret = process.env.SITE_APPLICATION_PAYMENT_SECRET;
 
   if (!adminUrl || !secret) {

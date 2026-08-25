@@ -29,7 +29,16 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [logoSrc, setLogoSrc] = useState('/myuni-logo.png'); // Default logo for SSR
   const [blogPostAlternateSlug, setBlogPostAlternateSlug] = useState<string | null>(null);
+  // Defer auth UI until after mount so SSR HTML matches the first client render
+  // (Clerk isLoaded can differ between server and client and causes hydration errors).
+  const [authMounted, setAuthMounted] = useState(false);
   const siteForms = useSiteApplicationNavForms(locale);
+
+  useEffect(() => {
+    setAuthMounted(true);
+  }, []);
+
+  const authReady = authMounted && isLoaded;
 
   // Determine if the current path is under /tr/watch/ or /en/watch/
   const isWatchPage = pathname.startsWith(`/${locale}/watch/`);
@@ -137,8 +146,8 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
             />
             <CartIconButton locale={locale} />
             
-            {/* Auth Section */}
-            {isLoaded ? (
+            {/* Auth Section — only after mount + Clerk loaded to avoid hydration mismatch */}
+            {authReady ? (
               <>
                 {isSignedIn ? (
                   <div className="flex items-center justify-center space-x-3">
@@ -179,7 +188,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
               </>
             ) : (
               <div className="flex items-center justify-center">
-                <div className="w-8 h-8 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
+                <div className="w-8 h-8 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse" />
               </div>
             )}
           </div>
@@ -194,7 +203,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
             <CartIconButton locale={locale} />
             
             {/* Mobile Auth */}
-            {isLoaded ? (
+            {authReady ? (
               isSignedIn && (
                 <div className="flex items-center justify-center">
                   <UserButton
@@ -209,7 +218,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
               )
             ) : (
               <div className="flex items-center justify-center">
-                <div className="w-7 h-7 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
+                <div className="w-7 h-7 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse" />
               </div>
             )}
             

@@ -296,26 +296,33 @@ const EventMainContent: React.FC<EventMainContentProps> = ({
     try {
       setLoading(true);
       console.log('Fetching sections for event:', eventId);
-      
+
       const response = await fetch(`/api/events/${eventId}/sections`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // 404 / empty agenda: show page without agenda, do not throw (avoids Next overlay)
+      if (response.status === 404) {
+        setSections([]);
+        return;
       }
-      
+      if (!response.ok) {
+        console.warn('Event sections request failed:', response.status);
+        setSections([]);
+        return;
+      }
+
       const data = await response.json();
       console.log('Received sections data:', data);
-      
-      // Data should be an array of EventSection objects
+
       if (Array.isArray(data)) {
         setSections(data);
+      } else if (Array.isArray(data?.data)) {
+        setSections(data.data);
       } else {
         console.warn('Expected array but received:', typeof data);
         setSections([]);
       }
-    } catch (error) {
-      console.error('Error fetching event sections:', error);
-      setError('Failed to load event agenda');
-      setSections([]); // Set empty array on error
+    } catch (err) {
+      console.warn('Error fetching event sections:', err);
+      setSections([]);
     } finally {
       setLoading(false);
     }

@@ -66,7 +66,8 @@ const sendClubApplicationConfirmationEmail = async (clubInfo, applicationData, l
       ? 'Başvurunuz değerlendirildikten sonra sizinle iletişime geçeceğiz.'
       : 'We will contact you after your application is evaluated.';
     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+    const { resolvePublicBaseUrl } = require('../../lib/publicBaseUrl');
+    const baseUrl = resolvePublicBaseUrl();
     const contactEmail = 'info@myunilab.net';
     
     // HTML email template
