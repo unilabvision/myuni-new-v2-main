@@ -440,16 +440,70 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
     }
   }, [course.id, fetchLatestCourses]);
 
-  const handleEnrollment = () => {
-    if (!isSignedIn) {
-      const currentPath = window.location.pathname;
-      const redirectUrl = `/${locale}/login?redirect=${encodeURIComponent(currentPath)}`;
-      router.push(redirectUrl);
-      return;
+  const buildApplicationUrl = (opts?: { tierId?: string; type?: string }) => {
+    const courseRoute = locale === 'tr' ? 'kurs' : 'course';
+    const action = locale === 'tr' ? 'basvuru' : 'application';
+    const qs = new URLSearchParams();
+    qs.set('id', course.id);
+    if (opts?.tierId) {
+      qs.set('tierId', opts.tierId);
+      qs.set('type', opts.type || 'tier');
+    }
+    if (typeof window !== 'undefined') {
+      const refCode = new URLSearchParams(window.location.search).get('ref');
+      if (refCode) qs.set('ref', refCode);
+    } else if (refCode) {
+      qs.set('ref', refCode);
+    }
+    return `/${locale}/${courseRoute}/${slug}/${action}?${qs.toString()}`;
+  };
+
+  const buildCheckoutUrl = (opts?: { tierId?: string; type?: string }) => {
+    let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
+    if (opts?.tierId) {
+      checkoutUrl += `&tierId=${encodeURIComponent(opts.tierId)}&type=${encodeURIComponent(opts.type || 'tier')}`;
+    }
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ref = urlParams.get('ref');
+      if (ref) checkoutUrl += `&ref=${encodeURIComponent(ref)}`;
+    } else if (refCode) {
+      checkoutUrl += `&ref=${encodeURIComponent(refCode)}`;
+    }
+    return checkoutUrl;
+  };
+
+  const goToCheckoutOrApplication = async (opts?: { tierId?: string; type?: string }) => {
+    // 1) Yayınlı başvuru formu varsa önce forma git; submit sonrası checkout
+    try {
+      const res = await fetch(
+        `/api/site-applications/public/forms/by-course/${encodeURIComponent(slug)}?locale=${locale}`,
+        { cache: 'no-store', headers: { Accept: 'application/json' } }
+      );
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const payload = await res.json().catch(() => null);
+        if (payload?.form) {
+          router.push(buildApplicationUrl(opts));
+          return;
+        }
+      }
+    } catch {
+      // fall through to checkout
     }
 
+    // 2) Form yoksa doğrudan ödeme (giriş gerekli)
+    const checkoutUrl = buildCheckoutUrl(opts);
+    if (!isSignedIn) {
+      router.push(`/${locale}/login?redirect=${encodeURIComponent(checkoutUrl)}`);
+      return;
+    }
+    router.push(checkoutUrl);
+  };
+
+  const handleEnrollment = () => {
     // Eğer kullanıcı kursa kayıtlıysa, kayıt durumu ne olursa olsun kursa devam edebilsin
-    if (isEnrolled) {
+    if (isSignedIn && isEnrolled) {
       router.push(`/${locale}/watch/course/${slug}`);
       return;
     }
@@ -459,32 +513,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
       return;
     }
 
-    if (course.price === 0) {
-      // Free course logic here
-      let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        const refCode = urlParams.get('ref');
-        
-        if (refCode) {
-          checkoutUrl += `&ref=${encodeURIComponent(refCode)}`;
-        }
-      }
-      router.push(checkoutUrl);
-    } else {
-      // Site checkout (ödeme API entegrasyonu)
-      let checkoutUrl = `/${locale}/checkout?id=${encodeURIComponent(course.id)}`;
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        const refCode = urlParams.get('ref');
-        
-        if (refCode) {
-          checkoutUrl += `&ref=${encodeURIComponent(refCode)}`;
-        }
-      }
-      
-      router.push(checkoutUrl);
-    }
+    void goToCheckoutOrApplication();
   };
 
   const handleLatestCourseClick = (courseSlug: string) => {

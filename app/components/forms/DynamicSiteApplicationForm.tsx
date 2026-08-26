@@ -37,9 +37,19 @@ interface DynamicSiteApplicationFormProps {
   locale: string;
   formSlug?: string;
   eventSlug?: string;
+  courseSlug?: string;
   variant?: 'page' | 'sidebar';
   initialForm?: PublicSiteApplicationForm;
   registrationTier?: RegistrationTier;
+  /** After successful course application, redirect to checkout */
+  checkoutNext?: {
+    courseId?: string;
+    tierId?: string;
+    type?: string;
+    ref?: string;
+    cartIds?: string;
+    mode?: string;
+  };
 }
 
 const ui = {
@@ -163,9 +173,11 @@ export default function DynamicSiteApplicationForm({
   locale,
   formSlug,
   eventSlug,
+  courseSlug,
   variant = 'page',
   initialForm,
   registrationTier = 'free',
+  checkoutNext,
 }: DynamicSiteApplicationFormProps) {
   const router = useRouter();
   const isSidebar = variant === 'sidebar';
@@ -190,6 +202,11 @@ export default function DynamicSiteApplicationForm({
       formConfig?.event_slug ||
       formConfig?.event_id ||
       formConfig?.form_type === 'event'
+  );
+  const isCourseForm = Boolean(
+    courseSlug ||
+      (formConfig as { course_slug?: string } | null)?.course_slug ||
+      formConfig?.form_type === 'course'
   );
 
   const mapServerFieldError = (code: string) => {
@@ -223,7 +240,7 @@ export default function DynamicSiteApplicationForm({
     let cancelled = false;
 
     const load = async () => {
-      if (!eventSlug && !formSlug) {
+      if (!eventSlug && !formSlug && !courseSlug) {
         if (!initialForm && !cancelled) {
           setFormConfig(null);
           setLoading(false);
@@ -233,7 +250,9 @@ export default function DynamicSiteApplicationForm({
 
       if (!initialForm) setLoading(true);
       try {
-        const url = eventSlug
+        const url = courseSlug
+          ? `/api/site-applications/public/forms/by-course/${encodeURIComponent(courseSlug)}?locale=${locale}`
+          : eventSlug
           ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
           : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
 
@@ -264,7 +283,7 @@ export default function DynamicSiteApplicationForm({
     return () => {
       cancelled = true;
     };
-  }, [formSlug, eventSlug, locale, initialForm]);
+  }, [formSlug, eventSlug, courseSlug, locale, initialForm]);
 
   const progress = useMemo(() => {
     if (!formConfig) return 0;
@@ -460,10 +479,12 @@ export default function DynamicSiteApplicationForm({
         body: JSON.stringify({
           formSlug: formConfig.slug,
           eventSlug: eventSlug || formConfig.event_slug || undefined,
+          courseSlug: courseSlug || (formConfig as { course_slug?: string }).course_slug || undefined,
           locale,
           registrationTier,
           fields: submissionFields,
           honeypot,
+          checkoutNext: checkoutNext || undefined,
           ...attachmentMeta,
         }),
       });
@@ -482,6 +503,35 @@ export default function DynamicSiteApplicationForm({
 
       if (data.requiresPayment && data.checkoutUrl) {
         router.push(data.checkoutUrl);
+        return;
+      }
+
+      // Course flow: application first, then purchase
+      if (data.checkoutUrl || (isCourseForm && checkoutNext?.courseId)) {
+        const url =
+          data.checkoutUrl ||
+          (() => {
+            if (checkoutNext?.mode === 'cart' && checkoutNext?.cartIds) {
+              const qs = new URLSearchParams();
+              qs.set('cartIds', checkoutNext.cartIds);
+              qs.set('mode', 'cart');
+              if (data.applicationId || data.submissionId) {
+                qs.set('applicationId', String(data.applicationId || data.submissionId));
+              }
+              if (checkoutNext?.ref) qs.set('ref', checkoutNext.ref);
+              return `/${locale}/checkout?${qs.toString()}`;
+            }
+            const qs = new URLSearchParams();
+            qs.set('id', String(checkoutNext!.courseId));
+            if (checkoutNext?.tierId) qs.set('tierId', checkoutNext.tierId);
+            if (checkoutNext?.type) qs.set('type', checkoutNext.type);
+            if (checkoutNext?.ref) qs.set('ref', checkoutNext.ref);
+            if (data.applicationId || data.submissionId) {
+              qs.set('applicationId', String(data.applicationId || data.submissionId));
+            }
+            return `/${locale}/checkout?${qs.toString()}`;
+          })();
+        router.push(url);
         return;
       }
 

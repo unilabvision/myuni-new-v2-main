@@ -21,8 +21,48 @@ async function resolveForm(
   supabase: ReturnType<typeof getSiteApplicationsSupabase>,
   locale: string,
   formSlug: string,
-  eventSlug?: string
+  eventSlug?: string,
+  courseSlug?: string
 ) {
+  if (courseSlug) {
+    const { data: course } = await supabase
+      .from('myuni_courses')
+      .select('id, slug, title, is_active, is_registration_open, price')
+      .eq('slug', courseSlug)
+      .maybeSingle();
+
+    if (!course) return { error: 'Course not found', status: 404 as const };
+
+    let form: Record<string, unknown> | null = null;
+    const byCourse = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('*')
+      .eq('course_id', course.id)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (!byCourse.error && byCourse.data?.[0]) {
+      form = byCourse.data[0] as Record<string, unknown>;
+    } else {
+      const normalized = courseSlug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+      const bySlug = await supabase
+        .from(siteApplicationsDb.forms)
+        .select('*')
+        .or(`slug_tr.eq.kurs-${normalized},slug_en.eq.course-${normalized}`)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      form = (bySlug.data?.[0] as Record<string, unknown>) || null;
+    }
+
+    if (!form) {
+      return { error: 'Form not found or inactive', status: 404 as const };
+    }
+
+    return { form, event: null, course };
+  }
+
   if (eventSlug) {
     const { data: event } = await supabase
       .from('myuni_events')
@@ -46,7 +86,7 @@ async function resolveForm(
       return { error: 'Form not found or inactive', status: 404 as const };
     }
 
-    return { form, event };
+    return { form, event, course: null };
   }
 
   const slugColumn = locale === 'en' ? 'slug_en' : 'slug_tr';
@@ -62,7 +102,7 @@ async function resolveForm(
     return { error: 'Form not found or inactive', status: 404 as const };
   }
 
-  return { form, event: null };
+  return { form, event: null, course: null };
 }
 
 export async function POST(request: NextRequest) {
@@ -75,21 +115,36 @@ export async function POST(request: NextRequest) {
 
     const formSlug = String(body.formSlug || '').trim();
     const eventSlug = String(body.eventSlug || '').trim() || undefined;
+    const courseSlug = String(body.courseSlug || '').trim() || undefined;
     const locale = body.locale === 'en' ? 'en' : 'tr';
     const fieldValues = (body.fields || {}) as Record<string, unknown>;
     const registrationTierInput = String(body.registrationTier || 'free').trim() as RegistrationTier;
+    const checkoutNext =
+      body.checkoutNext && typeof body.checkoutNext === 'object'
+        ? (body.checkoutNext as {
+            courseId?: string;
+            tierId?: string;
+            type?: string;
+            ref?: string;
+            cartIds?: string;
+            mode?: string;
+          })
+        : null;
 
-    if (!formSlug && !eventSlug) {
-      return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
+    if (!formSlug && !eventSlug && !courseSlug) {
+      return NextResponse.json(
+        { error: 'Form slug, event slug, or course slug required' },
+        { status: 400 }
+      );
     }
 
     const supabase = getSiteApplicationsSupabase();
-    const resolved = await resolveForm(supabase, locale, formSlug, eventSlug);
+    const resolved = await resolveForm(supabase, locale, formSlug, eventSlug, courseSlug);
     if ('error' in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
-    const { form, event } = resolved;
+    const { form, event, course } = resolved;
     const packageSettings = parsePackageSettings(form.package_settings);
 
     if (
@@ -154,6 +209,11 @@ export async function POST(request: NextRequest) {
       Boolean(event) ||
       Boolean(form.event_id) ||
       form.form_type === 'event';
+    const isCourseApplication =
+      Boolean(course) ||
+      Boolean((form as { course_id?: string }).course_id) ||
+      form.form_type === 'course' ||
+      Boolean(courseSlug);
 
     const certificatePrice = getCertificatePrice(packageSettings);
     const requiresPayment =
@@ -164,7 +224,7 @@ export async function POST(request: NextRequest) {
     const packagePrice =
       isEventApplication && registrationTierInput === 'certificate' ? certificatePrice : 0;
 
-    // Events: always auto-accept (no admin review). Certificate fee tracked via payment_status.
+    // Events: always auto-accept. Course applications stay pending until payment/admin.
     const initialStatus = isEventApplication ? 'accepted' : 'pending';
 
     const submissionData: Record<string, unknown> = {
@@ -176,6 +236,15 @@ export async function POST(request: NextRequest) {
             package_price: packagePrice,
           }
         : {}),
+      ...(isCourseApplication && course
+        ? {
+            course_id: course.id,
+            course_slug: course.slug,
+            course_title: course.title,
+            ...(checkoutNext?.tierId ? { tier_id: checkoutNext.tierId } : {}),
+            ...(checkoutNext?.type ? { checkout_type: checkoutNext.type } : {}),
+          }
+        : {}),
     };
 
     const contact = extractContactFromSubmission(typedFields, normalized);
@@ -185,9 +254,10 @@ export async function POST(request: NextRequest) {
       event?.title ||
       null;
 
-    const row = {
+    const row: Record<string, unknown> = {
       form_id: form.id,
       event_id: event?.id || form.event_id || null,
+      course_id: course?.id || (form as { course_id?: string }).course_id || null,
       application_type: effectiveSlug,
       first_name: contact.firstName,
       last_name: contact.lastName,
@@ -204,7 +274,11 @@ export async function POST(request: NextRequest) {
       message: typeof normalized.message === 'string' ? normalized.message : null,
       motivation: typeof normalized.motivation === 'string' ? normalized.motivation : null,
       locale,
-      source: isEventApplication ? 'event_website' : 'website',
+      source: isEventApplication
+        ? 'event_website'
+        : isCourseApplication
+          ? 'course_website'
+          : 'website',
       user_agent: request.headers.get('user-agent'),
       status: initialStatus,
       submission_data: submissionData,
@@ -215,11 +289,22 @@ export async function POST(request: NextRequest) {
       attachment_expires_at: attachmentStoragePath ? computeAttachmentExpiresAt() : null,
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from(siteApplicationsDb.applications)
       .insert(row)
       .select('id')
       .single();
+
+    if (error && String(error.message || '').toLowerCase().includes('course_id')) {
+      const { course_id: _omit, ...leanRow } = row;
+      const retry = await supabase
+        .from(siteApplicationsDb.applications)
+        .insert(leanRow)
+        .select('id')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Site application insert error:', error);
@@ -249,20 +334,45 @@ export async function POST(request: NextRequest) {
     }
 
     const resolvedEventSlug = event?.slug || eventSlug || '';
-    const checkoutUrl =
+    let checkoutUrl: string | null =
       requiresPayment && resolvedEventSlug
         ? getEventApplicationCheckoutPath(locale, data.id, resolvedEventSlug)
         : null;
+
+    // Course purchase: after application → course checkout
+    if (!checkoutUrl && isCourseApplication) {
+      if (checkoutNext?.mode === 'cart' && checkoutNext?.cartIds) {
+        const qs = new URLSearchParams();
+        qs.set('cartIds', String(checkoutNext.cartIds));
+        qs.set('mode', 'cart');
+        qs.set('applicationId', String(data.id));
+        if (checkoutNext?.ref) qs.set('ref', String(checkoutNext.ref));
+        checkoutUrl = `/${locale}/checkout?${qs.toString()}`;
+      } else {
+        const courseId = checkoutNext?.courseId || course?.id;
+        if (courseId) {
+          const qs = new URLSearchParams();
+          qs.set('id', String(courseId));
+          if (checkoutNext?.tierId) qs.set('tierId', String(checkoutNext.tierId));
+          if (checkoutNext?.type) qs.set('type', String(checkoutNext.type));
+          else if (checkoutNext?.tierId) qs.set('type', 'tier');
+          if (checkoutNext?.ref) qs.set('ref', String(checkoutNext.ref));
+          qs.set('applicationId', String(data.id));
+          checkoutUrl = `/${locale}/checkout?${qs.toString()}`;
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,
       submissionId: data.id,
       applicationId: data.id,
       status: initialStatus,
-      requiresPayment,
+      requiresPayment: Boolean(requiresPayment || (isCourseApplication && checkoutUrl)),
       registrationTier: registrationTierInput,
       paymentStatus,
       eventSlug: resolvedEventSlug || undefined,
+      courseSlug: course?.slug || courseSlug || undefined,
       checkoutUrl,
     });
   } catch (err) {

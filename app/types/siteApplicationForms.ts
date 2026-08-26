@@ -50,7 +50,7 @@ export interface SiteApplicationForm {
   is_active: boolean;
   show_on_website: boolean;
   allows_attachment: boolean;
-  form_type?: 'team' | 'event' | null;
+  form_type?: 'team' | 'event' | 'course' | null;
   event_id: string | null;
   package_settings?: unknown;
   created_by: string | null;
@@ -75,7 +75,7 @@ export interface PublicSiteApplicationForm {
   subtitle: string | null;
   success_message: string | null;
   allows_attachment: boolean;
-  form_type?: 'team' | 'event' | null;
+  form_type?: 'team' | 'event' | 'course' | null;
   event_id?: string | null;
   event_slug?: string | null;
   event_title?: string | null;

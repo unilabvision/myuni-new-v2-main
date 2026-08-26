@@ -157,6 +157,94 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
   };
 }
 
+function buildCourseFormSlugs(courseSlug: string) {
+  const normalized = courseSlug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  return {
+    slug_tr: `kurs-${normalized}`,
+    slug_en: `course-${normalized}`,
+  };
+}
+
+/** Kurs başvuru formu — Uniboard LMS “Başvuru Formu” sekmesinden yayınlanır */
+export async function getPublicFormByCourseSlug(courseSlug: string, locale: string) {
+  const supabase = getSiteApplicationsSupabase();
+
+  const { data: course, error: courseError } = await supabase
+    .from('myuni_courses')
+    .select('id, slug, title, is_active, is_registration_open, price')
+    .eq('slug', courseSlug)
+    .maybeSingle();
+
+  if (courseError || !course) {
+    return null;
+  }
+
+  let form: Record<string, unknown> | null = null;
+
+  const byCourse = await supabase
+    .from(siteApplicationsDb.forms)
+    .select('*')
+    .eq('course_id', course.id)
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (!byCourse.error && byCourse.data?.[0]) {
+    form = byCourse.data[0] as Record<string, unknown>;
+  } else {
+    const slugs = buildCourseFormSlugs(course.slug);
+    const bySlug = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('*')
+      .or(`slug_tr.eq.${slugs.slug_tr},slug_en.eq.${slugs.slug_en}`)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (!bySlug.error && bySlug.data?.[0]) {
+      form = bySlug.data[0] as Record<string, unknown>;
+    }
+  }
+
+  if (!form) {
+    return null;
+  }
+
+  const { data: fields, error: fieldsError } = await supabase
+    .from(siteApplicationsDb.formFields)
+    .select('*')
+    .eq('form_id', form.id)
+    .order('order_index', { ascending: true });
+
+  if (fieldsError) {
+    return null;
+  }
+
+  const publicForm = toPublicForm(
+    { ...(form as unknown as SiteApplicationForm), form_type: 'course' },
+    (fields ?? []) as SiteApplicationFormField[],
+    locale
+  );
+
+  return {
+    form: {
+      ...publicForm,
+      course_id: course.id,
+      course_slug: course.slug,
+      course_title: course.title,
+      form_type: 'course' as const,
+    },
+    course: {
+      id: course.id,
+      slug: course.slug,
+      title: course.title,
+      is_active: course.is_active,
+      is_registration_open: course.is_registration_open ?? true,
+      price: course.price,
+    },
+    locale,
+  };
+}
+
 export async function getEventApplicationSummary(eventSlug: string, locale: string) {
   const supabase = getSiteApplicationsSupabase();
   const isEn = locale === 'en';

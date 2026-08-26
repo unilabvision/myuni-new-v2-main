@@ -161,7 +161,7 @@ export default function CourseTierSelector({
     });
   };
 
-  const handleBuySelected = () => {
+  const handleBuySelected = async () => {
     const purchasable = selectedTiers.filter(
       (t) =>
         !enrolledTierIds.includes(t.id) &&
@@ -169,25 +169,68 @@ export default function CourseTierSelector({
     );
     if (purchasable.length === 0) return;
 
-    if (!isSignedIn) {
-      router.push(
-        `/${locale}/login?redirect=${encodeURIComponent(window.location.pathname)}`
-      );
+    const courseRoute = locale === 'tr' ? 'kurs' : 'course';
+    const action = locale === 'tr' ? 'basvuru' : 'application';
+    const ref = new URLSearchParams(window.location.search).get('ref');
+
+    const pushCheckout = (url: string) => {
+      if (!isSignedIn) {
+        router.push(`/${locale}/login?redirect=${encodeURIComponent(url)}`);
+        return;
+      }
+      router.push(url);
+    };
+
+    const hasPublishedCourseForm = async () => {
+      try {
+        const res = await fetch(
+          `/api/site-applications/public/forms/by-course/${encodeURIComponent(course.slug)}?locale=${locale}`,
+          { cache: 'no-store', headers: { Accept: 'application/json' } }
+        );
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) return false;
+        const payload = await res.json().catch(() => null);
+        return Boolean(payload?.form);
+      } catch {
+        return false;
+      }
+    };
+
+    // Single package → application form then checkout
+    if (purchasable.length === 1) {
+      const tier = purchasable[0];
+      if (await hasPublishedCourseForm()) {
+        const qs = new URLSearchParams();
+        qs.set('id', course.id);
+        qs.set('tierId', tier.id);
+        qs.set('type', 'tier');
+        if (ref) qs.set('ref', ref);
+        router.push(`/${locale}/${courseRoute}/${course.slug}/${action}?${qs.toString()}`);
+        return;
+      }
+
+      let url = `/${locale}/checkout?id=${encodeURIComponent(course.id)}&tierId=${encodeURIComponent(tier.id)}&type=tier`;
+      if (ref) url += `&ref=${encodeURIComponent(ref)}`;
+      pushCheckout(url);
       return;
     }
 
-    if (purchasable.length === 1) {
-      const tier = purchasable[0];
-      let url = `/${locale}/checkout?id=${encodeURIComponent(course.id)}&tierId=${encodeURIComponent(tier.id)}&type=tier`;
-      const ref = new URLSearchParams(window.location.search).get('ref');
-      if (ref) url += `&ref=${encodeURIComponent(ref)}`;
-      router.push(url);
+    // Multi-package cart: application once, then cart checkout
+    if (await hasPublishedCourseForm()) {
+      addItems(purchasable.map(buildCartItem));
+      const ids = purchasable.map((t) => t.id).join(',');
+      const qs = new URLSearchParams();
+      qs.set('id', course.id);
+      qs.set('cartIds', ids);
+      qs.set('mode', 'cart');
+      if (ref) qs.set('ref', ref);
+      router.push(`/${locale}/${courseRoute}/${course.slug}/${action}?${qs.toString()}`);
       return;
     }
 
     addItems(purchasable.map(buildCartItem));
     const ids = purchasable.map((t) => t.id).join(',');
-    router.push(`/${locale}/checkout?cartIds=${encodeURIComponent(ids)}&mode=cart`);
+    pushCheckout(`/${locale}/checkout?cartIds=${encodeURIComponent(ids)}&mode=cart`);
   };
 
   const handleAddSelectedToCart = () => {
