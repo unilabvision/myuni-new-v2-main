@@ -15,6 +15,10 @@ export const pageRoutes = {
     tr: 'mentorluk',
     en: 'mentorship'
   },
+  packages: {
+    tr: 'paket',
+    en: 'package'
+  },
   deneme: {
     tr: 'deneme',
     en: 'deneme'

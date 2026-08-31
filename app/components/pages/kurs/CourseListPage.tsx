@@ -1054,7 +1054,7 @@ export default function CourseListPage({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {packages.map((pkg) => (
                 <Link
-                  href={addRefToUrl(`/${locale}/paket/${pkg.slug}`)}
+                  href={addRefToUrl(`/${locale}/${locale === 'en' ? 'package' : 'paket'}/${pkg.slug}`)}
                   key={pkg.id}
                   className="bg-white dark:bg-neutral-900 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group"
                 >

@@ -15,6 +15,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/kurs', label: 'Tüm Kurslar' },
         { href: '/{locale}/mentorluk', label: 'Mentörlükler' },
+        { href: '/{locale}/paket', label: 'Eğitim Paketleri' },
       ],
     },
     { href: '/{locale}/etkinlik', label: 'Etkinlikler', navKey: 'events' } as NavItem & { navKey?: string },
@@ -51,6 +52,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/course', label: 'All Courses' },
         { href: '/{locale}/mentorship', label: 'Mentorships' },
+        { href: '/{locale}/package', label: 'Training Packages' },
       ],
     },
     { href: '/{locale}/event', label: 'Events', navKey: 'events' } as NavItem & { navKey?: string },
