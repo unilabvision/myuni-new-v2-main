@@ -9,88 +9,20 @@ import type {
 import { toPublicForm } from './forms';
 import {
   getEventApplicationPath,
-  getSiteApplicationPublicPath,
   siteApplicationsDb,
 } from './config';
-import { getTeamFormPublicPath } from './teamPaths';
 import {
   getPublicRegistrationPackages,
   parsePackageSettings,
 } from './packages';
 import type { PublicRegistrationPackage } from '@/app/types/siteApplicationForms';
 
-type FormWithEvent = {
-  id: string;
-  slug_tr: string;
-  slug_en: string;
-  title_tr: string;
-  title_en: string;
-  subtitle_tr: string | null;
-  subtitle_en: string | null;
-  event_id: string | null;
-  myuni_events: {
-    slug: string;
-    title: string;
-    is_active: boolean;
-  } | null;
-};
-
 export async function getVisibleSiteApplicationForms(
-  locale: string
+  _locale: string
 ): Promise<PublicSiteApplicationNavForm[]> {
-  try {
-    const supabase = getSiteApplicationsSupabase();
-    const isEn = locale === 'en';
-
-    const { data, error } = await supabase
-      .from(siteApplicationsDb.forms)
-      .select(
-        'id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id, myuni_events ( slug, title, is_active )'
-      )
-      .eq('is_active', true)
-      .eq('show_on_website', true)
-      .order('created_at', { ascending: false });
-
-    if (error || !data) {
-      console.error('[siteApplications] visible forms fetch error:', error?.message);
-      return [];
-    }
-
-    const results: PublicSiteApplicationNavForm[] = [];
-
-    for (const row of data as FormWithEvent[]) {
-      const slug = isEn ? row.slug_en : row.slug_tr;
-
-      // Event forms never belong in About Us / team nav
-      if (row.event_id) {
-        continue;
-      }
-      const blob = `${row.slug_tr || ''} ${row.slug_en || ''} ${row.title_tr || ''} ${row.title_en || ''}`;
-      if (/(?:^|[\s_-])(etkinlik|event)(?:[\s_-]|$)/i.test(blob)) {
-        continue;
-      }
-      if (
-        /etkinlik-basvuru|event-application/i.test(String(row.slug_tr || '')) ||
-        /etkinlik-basvuru|event-application/i.test(String(row.slug_en || ''))
-      ) {
-        continue;
-      }
-
-      results.push({
-        id: row.id,
-        slug,
-        title: isEn ? row.title_en : row.title_tr,
-        subtitle: isEn ? row.subtitle_en : row.subtitle_tr,
-        url: getTeamFormPublicPath(locale, slug),
-        navSection: 'about',
-      });
-    }
-
-    return results;
-  } catch (err) {
-    console.error('[siteApplications] visible forms error:', err);
-    return [];
-  }
+  // Başvuru formları Hakkımızda menüsünde listelenmez; kurs/etkinlik
+  // sayfalarındaki katılma & satın al butonlarından açılır.
+  return [];
 }
 
 export async function getPublicFormByEventSlug(eventSlug: string, locale: string) {
@@ -107,6 +39,8 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
     return null;
   }
 
+  let form: Record<string, unknown> | null = null;
+
   const { data: forms, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
     .select('*')
@@ -115,27 +49,37 @@ export async function getPublicFormByEventSlug(eventSlug: string, locale: string
     .order('updated_at', { ascending: false })
     .limit(1);
 
-  if (formError) {
-    return null;
+  if (!formError && forms?.[0]) {
+    form = forms[0] as Record<string, unknown>;
   }
-  const form = forms?.[0];
+
+  // Hakkımızda'dan taşınan formlar: event_id yoksa slug/başlık ile eşle
+  if (!form) {
+    const { data: candidates } = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('*')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    const match = (candidates as Record<string, unknown>[] | null)?.find(
+      (row) =>
+        !row.event_id &&
+        formMatchesEntity(row, { slug: event.slug, title: event.title })
+    );
+    if (match) form = match;
+  }
+
   if (!form) {
     return null;
   }
 
-  const { data: fields, error: fieldsError } = await supabase
-    .from(siteApplicationsDb.formFields)
-    .select('*')
-    .eq('form_id', form.id)
-    .order('order_index', { ascending: true });
-
-  if (fieldsError) {
-    return null;
-  }
+  const fields = await loadFormFields(form.id);
+  if (!fields) return null;
 
   const publicForm = toPublicForm(
-    form as SiteApplicationForm,
-    (fields ?? []) as SiteApplicationFormField[],
+    form as unknown as SiteApplicationForm,
+    fields,
     locale
   );
 
@@ -163,6 +107,65 @@ function buildCourseFormSlugs(courseSlug: string) {
     slug_tr: `kurs-${normalized}`,
     slug_en: `course-${normalized}`,
   };
+}
+
+function normalizeMatchKey(value: string | null | undefined): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/İ/g, 'i')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function isInternshipOrTeamForm(form: Record<string, unknown>): boolean {
+  const blob = [form.slug_tr, form.slug_en, form.title_tr, form.title_en, form.form_type]
+    .map((v) => String(v || '').toLowerCase())
+    .join(' ');
+  return /(staj|internship|kariyer|career|ekip-basvuru|team-application)/i.test(blob);
+}
+
+function formMatchesEntity(
+  form: Record<string, unknown>,
+  entity: { slug: string; title?: string | null }
+): boolean {
+  if (isInternshipOrTeamForm(form)) return false;
+
+  const entitySlug = normalizeMatchKey(entity.slug);
+  const entityTitle = normalizeMatchKey(entity.title);
+  if (!entitySlug && !entityTitle) return false;
+
+  const candidates = [form.slug_tr, form.slug_en, form.title_tr, form.title_en].map((v) =>
+    normalizeMatchKey(String(v || ''))
+  );
+
+  for (const candidate of candidates) {
+    if (!candidate || candidate.length < 6) continue;
+    if (entitySlug && (candidate.includes(entitySlug) || entitySlug.includes(candidate))) {
+      return true;
+    }
+    if (
+      entityTitle &&
+      entityTitle.length >= 10 &&
+      (candidate.includes(entityTitle) || entityTitle.includes(candidate))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function loadFormFields(formId: unknown) {
+  const supabase = getSiteApplicationsSupabase();
+  const { data: fields, error: fieldsError } = await supabase
+    .from(siteApplicationsDb.formFields)
+    .select('*')
+    .eq('form_id', formId)
+    .order('order_index', { ascending: true });
+
+  if (fieldsError) return null;
+  return (fields ?? []) as SiteApplicationFormField[];
 }
 
 /** Kurs başvuru formu — Uniboard LMS “Başvuru Formu” sekmesinden yayınlanır */
@@ -205,23 +208,34 @@ export async function getPublicFormByCourseSlug(courseSlug: string, locale: stri
     }
   }
 
+  // Hakkımızda'dan taşınan formlar: slug/başlık ile kursa bağla
+  if (!form) {
+    const { data: candidates, error: candidatesError } = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('*')
+      .eq('is_active', true)
+      .is('event_id', null)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    if (!candidatesError && candidates?.length) {
+      const match = (candidates as Record<string, unknown>[]).find((row) =>
+        formMatchesEntity(row, { slug: course.slug, title: course.title })
+      );
+      if (match) form = match;
+    }
+  }
+
   if (!form) {
     return null;
   }
 
-  const { data: fields, error: fieldsError } = await supabase
-    .from(siteApplicationsDb.formFields)
-    .select('*')
-    .eq('form_id', form.id)
-    .order('order_index', { ascending: true });
-
-  if (fieldsError) {
-    return null;
-  }
+  const fields = await loadFormFields(form.id);
+  if (!fields) return null;
 
   const publicForm = toPublicForm(
     { ...(form as unknown as SiteApplicationForm), form_type: 'course' },
-    (fields ?? []) as SiteApplicationFormField[],
+    fields,
     locale
   );
 
@@ -260,18 +274,48 @@ export async function getEventApplicationSummary(eventSlug: string, locale: stri
     return null;
   }
 
+  let form: {
+    id: string;
+    title_tr: string;
+    title_en: string;
+    package_settings: unknown;
+    slug_tr?: string;
+    slug_en?: string;
+    event_id?: string | null;
+    form_type?: string | null;
+  } | null = null;
+
   const { data: forms, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
-    .select('id, title_tr, title_en, package_settings')
+    .select('id, title_tr, title_en, package_settings, slug_tr, slug_en, event_id, form_type')
     .eq('event_id', event.id)
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
     .limit(1);
 
-  if (formError) {
-    return null;
+  if (!formError && forms?.[0]) {
+    form = forms[0];
   }
-  const form = forms?.[0];
+
+  if (!form) {
+    const { data: candidates } = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('id, title_tr, title_en, package_settings, slug_tr, slug_en, event_id, form_type')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    const match = (candidates || []).find(
+      (row) =>
+        !row.event_id &&
+        formMatchesEntity(row as Record<string, unknown>, {
+          slug: event.slug,
+          title: event.title,
+        })
+    );
+    if (match) form = match;
+  }
+
   if (!form) {
     return null;
   }

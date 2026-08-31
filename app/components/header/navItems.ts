@@ -1,5 +1,4 @@
 import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
-import { TEAM_FORM_SLUGS } from '@/lib/siteApplications/config';
 
 export interface NavItem {
   href: string;
@@ -94,34 +93,12 @@ function localizeItems(items: NavItem[], locale: string): NavItem[] {
 
 function injectSiteForms(
   items: NavItem[],
-  locale: string,
-  siteForms: PublicSiteApplicationNavForm[]
+  _locale: string,
+  _siteForms: PublicSiteApplicationNavForm[]
 ): NavItem[] {
-  // Team forms (UNILAB vb.) Staj Fırsatları'nda iş ortaklığı olarak gösterilir; Hakkımızda'ya eklenmez
-  const aboutForms = siteForms.filter(
-    (f) => f.navSection === 'about' && !TEAM_FORM_SLUGS.has(f.slug)
-  );
-
-  return items.map((item) => {
-    const navKey = (item as NavItem & { navKey?: string }).navKey;
-
-    if (navKey === 'about' && aboutForms.length > 0 && item.children) {
-      const staticHrefs = new Set(item.children.map((child) => child.href));
-      const dynamicTeamForms = aboutForms
-        .filter((form) => !staticHrefs.has(form.url))
-        .map((form) => ({
-          href: form.url,
-          label: form.title,
-        }));
-
-      return {
-        ...item,
-        children: [...item.children, ...dynamicTeamForms],
-      };
-    }
-
-    return item;
-  });
+  // Kurs / etkinlik / staj başvuru formları ilgili sayfadaki katılma & satın al
+  // butonlarından açılır. Hakkımızda menüsüne dinamik form eklenmez.
+  return items;
 }
 
 export function getNavItems(
