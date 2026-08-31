@@ -160,7 +160,7 @@ export async function getAllCourses(
       image: course.thumbnail_url || course.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
       thumbnail_url: course.thumbnail_url,
       banner_url: course.banner_url,
-      featured: Math.random() > 0.7,
+      featured: Boolean(course.featured ?? course.is_featured),
       banner: {
         url: course.banner_url || course.thumbnail_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=1200&h=600&fit=crop`
       },
@@ -483,7 +483,7 @@ export async function getLiveCourses() {
       image: course.thumbnail_url || course.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
       thumbnail_url: course.thumbnail_url,
       banner_url: course.banner_url,
-      featured: Math.random() > 0.7,
+      featured: Boolean(course.featured ?? course.is_featured),
       course_type: course.course_type,
       live_start_date: course.live_start_date,
       live_end_date: course.live_end_date,

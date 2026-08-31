@@ -37,6 +37,7 @@ interface ListItem {
   workMode?: string;
   deadline?: string;
   isRecommended?: boolean;
+  isFeatured?: boolean;
   matchReasons?: string[];
   logo?: string;
 }
@@ -50,7 +51,8 @@ const texts = {
       'Staj ilanları ve gönüllü ekip çağrıları tek yerde. Eğitim geçmişinize uyan ilanlar üstte listelenir.',
     viewAll: 'Tüm Fırsatları Görüntüle',
     exploreMore: 'Detayları İncele',
-    featuredTitle: 'Öne Çıkan Fırsat',
+    featuredTitle: 'Öne Çıkanlar',
+    featuredEmpty: 'Öne çıkan fırsat yakında eklenecek',
     allTitle: 'Tüm Fırsatlar',
     statOpen: 'Açık Fırsat',
     statVolunteer: 'Gönüllü',
@@ -89,7 +91,8 @@ const texts = {
       'Internship listings and volunteer team calls in one place. Opportunities matching your learning history appear first.',
     viewAll: 'View All Opportunities',
     exploreMore: 'Explore Details',
-    featuredTitle: 'Featured Opportunity',
+    featuredTitle: 'Featured',
+    featuredEmpty: 'Featured opportunities coming soon',
     allTitle: 'All Opportunities',
     statOpen: 'Open Roles',
     statVolunteer: 'Volunteer',
@@ -142,6 +145,7 @@ export default function InternshipsListPage({
   const [loading, setLoading] = useState(true);
   const [activeKind, setActiveKind] = useState<'all' | ListItemKind>('all');
   const [activeMode, setActiveMode] = useState('all');
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   const allItemsRef = useRef<HTMLElement>(null);
   const basePath = locale === 'tr' ? 'stajlar' : 'internships';
@@ -189,6 +193,7 @@ export default function InternshipsListPage({
         workMode: opp.work_mode || undefined,
         deadline: opp.application_deadline || undefined,
         isRecommended: opp.is_recommended,
+        isFeatured: Boolean(opp.is_featured),
         matchReasons: opp.match_reasons,
         logo,
       };
@@ -200,6 +205,22 @@ export default function InternshipsListPage({
     ];
   }, [opportunities, locale, basePath]);
 
+  const featuredItems = useMemo(() => {
+    const featured = items.filter((i) => i.isFeatured);
+    if (featured.length > 0) return featured;
+    const recommended = items.filter((i) => i.isRecommended);
+    if (recommended.length > 0) return recommended.slice(0, 3);
+    return items.slice(0, 1);
+  }, [items]);
+
+  useEffect(() => {
+    if (featuredItems.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % featuredItems.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [featuredItems.length]);
+
   const filteredItems = items.filter((item) => {
     const kindMatch = activeKind === 'all' || item.kind === activeKind;
     const modeMatch = activeMode === 'all' || item.workMode === activeMode;
@@ -208,12 +229,6 @@ export default function InternshipsListPage({
 
   const volunteerCount = items.filter((i) => i.kind === 'volunteer').length;
   const recommendedCount = items.filter((i) => i.isRecommended).length;
-
-  // Find the volunteer item (UNILAB Vision volunteer opportunity)
-  const volunteerItem = useMemo(() => {
-    const slug = locale === 'en' ? UNILAB_VOLUNTEER_SLUG.en : UNILAB_VOLUNTEER_SLUG.tr;
-    return items.find((i) => i.kind === 'volunteer' && i.href.includes(slug));
-  }, [items, locale]);
 
   const scrollToAll = () => {
     allItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -426,9 +441,9 @@ export default function InternshipsListPage({
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </button>
 
-                {volunteerItem && (
+                {featuredItems[0] && (
                   <Link
-                    href={volunteerItem.href}
+                    href={featuredItems[0].href}
                     className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium transition-colors text-center"
                   >
                     {t.exploreMore}
@@ -437,97 +452,184 @@ export default function InternshipsListPage({
               </div>
             </div>
 
-            {/* Featured — UNILAB Vision */}
-            {volunteerItem && (
+            {/* Featured carousel */}
             <div className="order-1 lg:order-2">
-              <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg">
-                <div className="p-6 lg:p-8 h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-4 lg:mb-6">
-                    <h3 className="text-lg lg:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-                      {t.featuredTitle}
-                    </h3>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#990000]">
-                      <Handshake className="w-4 h-4" />
-                      {t.volunteerBadge}
-                    </span>
+              {featuredItems.length > 0 ? (
+                <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg">
+                  <div className="p-6 lg:p-8 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-4 lg:mb-6">
+                      <h3 className="text-lg lg:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                        {t.featuredTitle}
+                      </h3>
+                      {featuredItems.length > 1 && (
+                        <div className="flex space-x-2">
+                          {featuredItems.map((_, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              aria-label={`Slide ${index + 1}`}
+                              onClick={() => setCurrentSlide(index)}
+                              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                                index === currentSlide
+                                  ? 'bg-[#990000] w-6'
+                                  : 'bg-neutral-300 dark:bg-neutral-600'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 relative overflow-hidden min-h-0">
+                      <div
+                        className="flex transition-transform duration-500 ease-out h-full"
+                        style={{
+                          transform: `translateX(-${currentSlide * 100}%)`,
+                        }}
+                      >
+                        {featuredItems.map((item) => {
+                          const isVolunteer = item.kind === 'volunteer';
+                          return (
+                            <div
+                              key={item.id}
+                              className="w-full flex-shrink-0 h-full"
+                            >
+                              <Link
+                                href={item.href}
+                                className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 block cursor-pointer group"
+                              >
+                                <div
+                                  className={`relative h-32 lg:h-48 overflow-hidden flex-shrink-0 flex items-center justify-center ${
+                                    item.logo
+                                      ? 'bg-white'
+                                      : 'bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-600 dark:to-neutral-700'
+                                  }`}
+                                >
+                                  {item.logo ? (
+                                    <Image
+                                      src={
+                                        item.kind === 'volunteer' &&
+                                        item.href.includes(
+                                          locale === 'en'
+                                            ? UNILAB_VOLUNTEER_SLUG.en
+                                            : UNILAB_VOLUNTEER_SLUG.tr
+                                        )
+                                          ? UNILAB_VISION_BANNER
+                                          : item.logo
+                                      }
+                                      alt={item.company || item.title}
+                                      width={1024}
+                                      height={300}
+                                      className="w-[78%] max-h-[55%] object-contain transition-transform duration-300 group-hover:scale-105"
+                                      priority
+                                    />
+                                  ) : (
+                                    <Briefcase className="w-14 h-14 text-neutral-400" />
+                                  )}
+                                  <div className="absolute top-3 left-3">
+                                    <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+                                      {isVolunteer ? (
+                                        <Handshake className="w-4 h-4" />
+                                      ) : (
+                                        <Briefcase className="w-4 h-4" />
+                                      )}
+                                      {isVolunteer
+                                        ? t.volunteerBadge
+                                        : t.internshipBadge}
+                                    </div>
+                                  </div>
+                                  <div className="absolute top-3 right-3">
+                                    {item.isRecommended ? (
+                                      <div className="bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+                                        <Sparkles className="w-3 h-3" />
+                                        {t.recommended}
+                                      </div>
+                                    ) : (
+                                      <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                        {t.open}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="p-4 lg:p-6 flex-1 flex flex-col min-h-0">
+                                  {modeText(item.workMode) && (
+                                    <div className="mb-2 lg:mb-3 flex-shrink-0">
+                                      <span className="inline-block px-2 py-1 lg:px-3 rounded-lg text-xs lg:text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                        {modeText(item.workMode)}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 text-base lg:text-lg mb-2 lg:mb-3 leading-tight group-hover:text-[#990000] transition-colors flex-shrink-0">
+                                    {item.title}
+                                  </h4>
+
+                                  {item.description && (
+                                    <p className="text-xs lg:text-sm text-neutral-600 dark:text-neutral-300 mb-3 lg:mb-4 flex-1 leading-relaxed overflow-hidden line-clamp-3">
+                                      {item.description}
+                                    </p>
+                                  )}
+
+                                  <div className="grid grid-cols-2 gap-2 text-xs lg:text-sm text-neutral-500 dark:text-neutral-400 mb-3 lg:mb-4 flex-shrink-0">
+                                    {item.company && (
+                                      <div>
+                                        <span className="font-medium block">
+                                          {t.companyLabel}
+                                        </span>
+                                        <span className="text-neutral-700 dark:text-neutral-200">
+                                          {item.company}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {item.location && (
+                                      <div>
+                                        <span className="font-medium block">
+                                          {t.locationLabel}
+                                        </span>
+                                        <span className="text-neutral-700 dark:text-neutral-200">
+                                          {item.location}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center justify-between flex-shrink-0 mt-auto">
+                                    <span className="flex items-center text-xs lg:text-sm text-neutral-600 dark:text-neutral-400">
+                                      {item.location ? (
+                                        <>
+                                          <MapPin className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
+                                          {item.location}
+                                        </>
+                                      ) : item.company ? (
+                                        <>
+                                          <Building2 className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
+                                          {item.company}
+                                        </>
+                                      ) : null}
+                                    </span>
+                                    <span className="text-[#990000] hover:text-[#cc0000] transition-colors text-xs lg:text-sm font-medium flex items-center flex-shrink-0">
+                                      {isVolunteer ? t.exploreMore : t.apply}
+                                      <ArrowRight className="w-3 h-3 ml-1" />
+                                    </span>
+                                  </div>
+                                </div>
+                              </Link>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-
-                  <Link
-                    href={volunteerItem.href}
-                    className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 flex-1 flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 group min-h-0"
-                  >
-                    <div className="relative h-32 lg:h-48 flex-shrink-0 bg-white flex items-center justify-center overflow-hidden">
-                      <Image
-                        src={UNILAB_VISION_BANNER}
-                        alt="UNILAB Vision"
-                        width={1024}
-                        height={300}
-                        className="w-[78%] max-h-[55%] object-contain transition-transform duration-300 group-hover:scale-105"
-                        priority
-                      />
-                      <div className="absolute top-3 left-3">
-                        <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
-                          <Handshake className="w-4 h-4" />
-                          {t.volunteerBadge}
-                        </div>
-                      </div>
-                      <div className="absolute top-3 right-3">
-                        <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
-                          {t.open}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 lg:p-6 flex-1 flex flex-col min-h-0">
-                      <div className="mb-2 lg:mb-3 flex gap-2 flex-shrink-0">
-                        <span className="inline-block px-2 py-1 lg:px-3 rounded-lg text-xs lg:text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          {t.modes.hybrid}
-                        </span>
-                      </div>
-
-                      <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 text-base lg:text-lg mb-2 lg:mb-3 leading-tight group-hover:text-[#990000] transition-colors flex-shrink-0">
-                        {volunteerItem.title}
-                      </h4>
-
-                      <p className="text-xs lg:text-sm text-neutral-600 dark:text-neutral-300 mb-3 lg:mb-4 flex-1 leading-relaxed overflow-hidden line-clamp-4">
-                        {volunteerItem.description}
-                      </p>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs lg:text-sm text-neutral-500 dark:text-neutral-400 mb-3 lg:mb-4 flex-shrink-0">
-                        <div>
-                          <span className="font-medium block">
-                            {t.companyLabel}
-                          </span>
-                          <span className="text-neutral-700 dark:text-neutral-200">
-                            UNILAB Vision
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium block">
-                            {t.modeShort}
-                          </span>
-                          <span className="text-neutral-700 dark:text-neutral-200">
-                            {t.modes.hybrid}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between flex-shrink-0 mt-auto">
-                        <span className="flex items-center text-xs lg:text-sm text-neutral-600 dark:text-neutral-400">
-                          <Building2 className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-                          {volunteerItem.location || t.modes.hybrid}
-                        </span>
-                        <span className="text-[#990000] hover:text-[#cc0000] transition-colors text-xs lg:text-sm font-medium flex items-center flex-shrink-0">
-                          {t.exploreMore}
-                          <ArrowRight className="w-3 h-3 ml-1" />
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
                 </div>
-              </div>
+              ) : (
+                <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
+                  <p className="text-neutral-500 dark:text-neutral-400 px-6 text-center">
+                    {t.featuredEmpty}
+                  </p>
+                </div>
+              )}
             </div>
-            )}
           </div>
         </div>
       </section>

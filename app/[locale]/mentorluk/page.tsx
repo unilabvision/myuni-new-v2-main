@@ -34,5 +34,6 @@ export async function generateMetadata({
 }
 
 export default async function MentorlukPage({ params }: PageProps) {
-  return <MentorshipListPage params={params} />;
+  const { locale } = await params;
+  return <MentorshipListPage locale={locale} />;
 }
