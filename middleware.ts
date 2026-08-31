@@ -71,6 +71,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/event-application(.*)',
   '/tr/ekip-basvuru(.*)',
   '/en/team-application(.*)',
+  '/tr/basvuru(.*)',
+  '/en/application(.*)',
   '/tr/stajlar(.*)',
   '/en/internships(.*)',
   // API routes
@@ -206,6 +208,8 @@ const isValidRoute = createRouteMatcher([
   '/en/event-application(.*)',
   '/tr/ekip-basvuru(.*)',
   '/en/team-application(.*)',
+  '/tr/basvuru(.*)',
+  '/en/application(.*)',
   '/tr/stajlar(.*)',
   '/en/internships(.*)',
   '/tr/search(.*)',
