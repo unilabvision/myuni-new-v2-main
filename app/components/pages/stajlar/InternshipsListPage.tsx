@@ -254,11 +254,11 @@ export default function InternshipsListPage({
         href={item.href}
         className="bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group flex flex-col"
       >
-        {/* Media header — event card ile aynı oran */}
+        {/* Media header — kapak fotoğrafı alanı doldurur */}
         <div
-          className={`relative w-full h-48 overflow-hidden flex items-center justify-center ${
+          className={`relative w-full h-48 overflow-hidden ${
             item.logo
-              ? 'bg-white'
+              ? 'bg-neutral-200 dark:bg-neutral-700'
               : 'bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-700 dark:to-neutral-800'
           }`}
         >
@@ -266,15 +266,18 @@ export default function InternshipsListPage({
             <Image
               src={item.logo}
               alt={item.company || item.title}
-              width={1024}
-              height={300}
-              className="w-[78%] max-h-[52%] object-contain transition-transform duration-300 group-hover:scale-105"
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover object-center transition-transform duration-300 group-hover:scale-105"
+              unoptimized
             />
           ) : (
-            <Briefcase className="w-14 h-14 text-neutral-400 dark:text-neutral-500 transition-transform duration-300 group-hover:scale-105" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Briefcase className="w-14 h-14 text-neutral-400 dark:text-neutral-500 transition-transform duration-300 group-hover:scale-105" />
+            </div>
           )}
 
-          <div className="absolute top-3 left-3">
+          <div className="absolute top-3 left-3 z-10">
             <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
               {isVolunteer ? (
                 <Handshake className="w-4 h-4" />
@@ -285,7 +288,7 @@ export default function InternshipsListPage({
             </div>
           </div>
 
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 z-10">
             {item.isRecommended ? (
               <div className="bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
@@ -499,9 +502,9 @@ export default function InternshipsListPage({
                                 className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 block cursor-pointer group"
                               >
                                 <div
-                                  className={`relative h-32 lg:h-48 overflow-hidden flex-shrink-0 flex items-center justify-center ${
+                                  className={`relative h-32 lg:h-48 overflow-hidden flex-shrink-0 ${
                                     item.logo
-                                      ? 'bg-white'
+                                      ? 'bg-neutral-200 dark:bg-neutral-700'
                                       : 'bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-600 dark:to-neutral-700'
                                   }`}
                                 >
@@ -518,15 +521,18 @@ export default function InternshipsListPage({
                                           : item.logo
                                       }
                                       alt={item.company || item.title}
-                                      width={1024}
-                                      height={300}
-                                      className="w-[78%] max-h-[55%] object-contain transition-transform duration-300 group-hover:scale-105"
+                                      fill
+                                      sizes="(max-width: 1024px) 100vw, 60vw"
+                                      className="object-cover object-center transition-transform duration-300 group-hover:scale-105"
                                       priority
+                                      unoptimized
                                     />
                                   ) : (
-                                    <Briefcase className="w-14 h-14 text-neutral-400" />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <Briefcase className="w-14 h-14 text-neutral-400" />
+                                    </div>
                                   )}
-                                  <div className="absolute top-3 left-3">
+                                  <div className="absolute top-3 left-3 z-10">
                                     <div className="bg-white/90 text-neutral-800 px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
                                       {isVolunteer ? (
                                         <Handshake className="w-4 h-4" />
