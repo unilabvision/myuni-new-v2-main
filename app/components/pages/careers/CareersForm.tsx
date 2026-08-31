@@ -8,6 +8,11 @@ import {
   ChevronDown, Check
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface DynamicFormProps {
   formName: string;
@@ -573,6 +578,11 @@ export default function DynamicForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
   
   // User info state
   const [userInfo, setUserInfo] = useState({
@@ -859,6 +869,17 @@ export default function DynamicForm({
     if (!captchaToken) {
       newErrors['captcha'] = 'Lütfen robot olmadığınızı doğrulayın';
     }
+
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    setLegalErrors(consentErrors);
+    Object.assign(newErrors, {
+      ...(consentErrors.privacyAccepted
+        ? { privacyAccepted: consentErrors.privacyAccepted }
+        : {}),
+      ...(consentErrors.termsAccepted
+        ? { termsAccepted: consentErrors.termsAccepted }
+        : {}),
+    });
     
     // Eğer hata varsa ilk hatalı alana kaydır
     if (Object.keys(newErrors).length > 0) {
@@ -937,6 +958,9 @@ export default function DynamicForm({
         cv_file_size: cvFileSize,
         cv_mime_type: cvMimeType,
         user_agent: navigator.userAgent,
+        privacyAccepted: legalConsent.privacyAccepted,
+        termsAccepted: legalConsent.termsAccepted,
+        locale,
       };
       
       console.log('📤 Application Data being sent:', applicationData);
@@ -959,6 +983,9 @@ export default function DynamicForm({
             cv_storage_path: cvStoragePath,
             cv_file_name: cvFileName,
             user_agent: navigator.userAgent,
+            privacyAccepted: legalConsent.privacyAccepted,
+            termsAccepted: legalConsent.termsAccepted,
+            locale,
           }),
         });
       } else {
@@ -1691,7 +1718,7 @@ export default function DynamicForm({
           {config.terms_and_conditions && (
             <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg">
               <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-3">
-                Kullanım Şartları ve Koşulları
+                {locale === 'en' ? 'Terms and Conditions' : 'Kullanım Şartları ve Koşulları'}
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 {getLocalizedCopy(
@@ -1707,13 +1734,28 @@ export default function DynamicForm({
           {config.privacy_notice && (
             <div className="mt-8 p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <h3 className="text-lg font-medium text-green-900 dark:text-green-100 mb-3">
-                Kişisel Verilerin Korunması Hakkında Bilgilendirme
+                {locale === 'en'
+                  ? 'Personal Data Protection Information'
+                  : 'Kişisel Verilerin Korunması Hakkında Bilgilendirme'}
               </h3>
               <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
                 {getLocalizedCopy(config.privacy_notice, locale, '')}
               </p>
             </div>
           )}
+
+          <div className="mt-8">
+            <LegalConsentFields
+              locale={locale}
+              value={legalConsent}
+              onChange={(next) => {
+                setLegalConsent(next);
+                setLegalErrors({});
+              }}
+              errors={legalErrors}
+              idPrefix="careers"
+            />
+          </div>
 
           {/* HCAPTCHA */}
           <div className="pt-6">

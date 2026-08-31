@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Send, User, Phone, MessageSquare, AlertCircle, CheckCircle, Mail, Building, Heart, Share2 } from 'lucide-react';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface KulupFormProps {
   locale?: string;
@@ -54,6 +59,11 @@ export default function KulupForm({ locale = 'tr' }: KulupFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
 
   // Fetch form configuration
   useEffect(() => {
@@ -78,10 +88,6 @@ export default function KulupForm({ locale = 'tr' }: KulupFormProps) {
               initialData[field.field_key] = '';
             }
           });
-          // Initialize privacy consent
-          initialData.privacy_consent = false;
-          // Initialize terms consent
-          initialData.terms_consent = false;
           setFormData(initialData);
           
           // Scroll to form after it's loaded
@@ -152,19 +158,14 @@ export default function KulupForm({ locale = 'tr' }: KulupFormProps) {
         newErrors[field.field_key] = error;
       }
     });
-    
-    // Validate privacy consent if privacy notice exists
-    if (formConfig?.privacy_notice && !formData.privacy_consent) {
-      newErrors.privacy_consent = locale === 'en' 
-        ? 'You must accept the privacy policy to continue' 
-        : 'Devam etmek için gizlilik politikasını kabul etmelisiniz';
+
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    setLegalErrors(consentErrors);
+    if (consentErrors.privacyAccepted) {
+      newErrors.privacyAccepted = consentErrors.privacyAccepted;
     }
-    
-    // Validate terms consent if terms and conditions exist
-    if (formConfig?.terms_and_conditions && !formData.terms_consent) {
-      newErrors.terms_consent = locale === 'en' 
-        ? 'You must accept the terms and conditions to continue' 
-        : 'Devam etmek için kullanım şartlarını kabul etmelisiniz';
+    if (consentErrors.termsAccepted) {
+      newErrors.termsAccepted = consentErrors.termsAccepted;
     }
     
     setErrors(newErrors);
@@ -195,15 +196,20 @@ export default function KulupForm({ locale = 'tr' }: KulupFormProps) {
     
     try {
       console.log('Submitting form data:', formData);
-      console.log('Privacy consent:', formData.privacy_consent);
-      console.log('Terms consent:', formData.terms_consent);
       
       const response = await fetch('/api/kulup-basvuru', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          privacy_consent: legalConsent.privacyAccepted,
+          terms_consent: legalConsent.termsAccepted,
+          privacyAccepted: legalConsent.privacyAccepted,
+          termsAccepted: legalConsent.termsAccepted,
+          locale,
+        }),
       });
       
       const result = await response.json();
@@ -445,107 +451,18 @@ export default function KulupForm({ locale = 'tr' }: KulupFormProps) {
             });
           })()}
           
-          {/* Privacy Notice (KVKK) */}
-          {formConfig.privacy_notice && (
-            <div className="mt-8 p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-              <h3 className="text-lg font-medium text-green-900 dark:text-green-100 mb-3">
-                {locale === 'en' ? 'Personal Data Protection Information' : 'Kişisel Verilerin Korunması Hakkında Bilgilendirme'}
-              </h3>
-              <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed mb-4">
-                {formConfig.privacy_notice[locale] || formConfig.privacy_notice['tr']}
-                <br />
-                <a 
-                  href={locale === 'en' ? '/en/privacy' : '/tr/gizlilik'} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-[#990000] dark:text-[#ff6666] hover:underline font-medium"
-                >
-                  {locale === 'en' ? 'Read our full Privacy Policy' : 'Gizlilik Politikamızı okuyun'}
-                </a>
-              </p>
-              
-              {/* Consent Checkbox */}
-              <div className="flex items-start gap-3" data-field="privacy_consent">
-                <div className="flex items-center h-5">
-                  <input
-                    type="checkbox"
-                    id="privacy_consent"
-                    checked={formData.privacy_consent as boolean || false}
-                    onChange={(e) => handleInputChange('privacy_consent', e.target.checked)}
-                    className={`w-4 h-4 text-[#990000] bg-gray-100 rounded focus:ring-[#990000] focus:ring-2 ${
-                      errors.privacy_consent ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                </div>
-                <div className="text-sm">
-                  <label htmlFor="privacy_consent" className="font-medium text-green-900 dark:text-green-100 cursor-pointer">
-                    {locale === 'en' 
-                      ? 'I have read and accept the privacy policy.' 
-                      : 'Gizlilik politikasını okudum ve kabul ediyorum.'}
-                  </label>
-                </div>
-              </div>
-              
-              {/* Privacy Consent Error */}
-              {errors.privacy_consent && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
-                  {errors.privacy_consent}
-                </p>
-              )}
-            </div>
-          )}
-          
-          {/* Terms and Conditions */}
-          {formConfig.terms_and_conditions && (
-            <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg">
-              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-3">
-                {locale === 'en' ? 'Terms and Conditions' : 'Kullanım Şartları ve Koşulları'}
-              </h3>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed mb-4">
-                {formConfig.terms_and_conditions[locale] || formConfig.terms_and_conditions['tr']}
-                <br />
-                <a 
-                  href={locale === 'en' ? '/en/terms' : '/tr/sartlar-ve-kosullar'} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-[#990000] dark:text-[#ff6666] hover:underline font-medium"
-                >
-                  {locale === 'en' ? 'Read our full Terms and Conditions' : 'Kullanım Şartları ve Koşullarını okuyun'}
-                </a>
-              </p>
-              
-              {/* Terms Consent Checkbox */}
-              <div className="flex items-start gap-3" data-field="terms_consent">
-                <div className="flex items-center h-5">
-                  <input
-                    type="checkbox"
-                    id="terms_consent"
-                    checked={formData.terms_consent as boolean || false}
-                    onChange={(e) => handleInputChange('terms_consent', e.target.checked)}
-                    className={`w-4 h-4 text-[#990000] bg-gray-100 rounded focus:ring-[#990000] focus:ring-2 ${
-                      errors.terms_consent ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                </div>
-                <div className="text-sm">
-                  <label htmlFor="terms_consent" className="font-medium text-neutral-900 dark:text-neutral-100 cursor-pointer">
-                    {locale === 'en' 
-                      ? 'I have read and accept the terms and conditions.' 
-                      : 'Kullanım şartları ve koşullarını okudum ve kabul ediyorum.'}
-                  </label>
-                </div>
-              </div>
-              
-              {/* Terms Consent Error */}
-              {errors.terms_consent && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
-                  {errors.terms_consent}
-                </p>
-              )}
-            </div>
-          )}
+          {/* Legal consent (privacy + terms) */}
+          <LegalConsentFields
+            locale={locale}
+            value={legalConsent}
+            onChange={(next) => {
+              setLegalConsent(next);
+              setLegalErrors({});
+            }}
+            errors={legalErrors}
+            idPrefix="kulup"
+            className="mt-8"
+          />
           
           {/* Form Error */}
           {errors.form && (

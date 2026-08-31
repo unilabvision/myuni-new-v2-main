@@ -67,6 +67,8 @@ interface CourseListPageProps {
     locale: string;
     courseType: string;
   }>;
+  /** When 'mentorship', lists program_type=mentorship only */
+  variant?: 'courses' | 'mentorship';
 }
 
 // Language texts
@@ -103,6 +105,7 @@ const texts = {
     loading: "Kurslar yükleniyor...",
     error: "Kurslar yüklenemedi",
     noCourses: "Henüz kurs bulunamadı",
+    emptySubtitle: "Yakında yeni kurslar eklenecek.",
     retry: "Tekrar Dene",
     noFilterResults: "Filtreye uygun kurs bulunamadı",
     showAll: "Tümünü Göster",
@@ -153,6 +156,7 @@ const texts = {
     loading: "Loading courses...",
     error: "Failed to load courses",
     noCourses: "No courses found yet",
+    emptySubtitle: "New courses will be added soon.",
     retry: "Retry",
     noFilterResults: "No courses found for this filter",
     showAll: "Show All",
@@ -173,7 +177,45 @@ const texts = {
   }
 };
 
-export default function CourseListPage({ params }: CourseListPageProps) {
+const mentorshipTexts = {
+  tr: {
+    badge: "Mentörlük",
+    title: "Alanında uzman mentörlerle birebir gelişim programlarını keşfedin.",
+    subtitle: "Kariyer hedeflerinize özel mentörlük programlarıyla rehberlik alın.",
+    featuredTitle: "Öne Çıkan Mentörlükler",
+    allCoursesTitle: "Tüm Mentörlükler",
+    loading: "Mentörlükler yükleniyor...",
+    error: "Mentörlükler yüklenemedi",
+    noCourses: "Yakında mentörlükler listelenecektir",
+    emptySubtitle: "Mentörlük programlarımız hazırlanıyor; yakında burada yer alacak.",
+    noFilterResults: "Filtreye uygun mentörlük bulunamadı",
+    tryDifferentFilter: "Farklı bir filtre seçeneğini deneyin veya tüm mentörlükleri görüntüleyin.",
+    comingSoon: "Öne çıkan mentörlükler yakında eklenecek",
+    viewAll: "Tüm Mentörlükleri Görüntüle",
+    loadMore: "Daha Fazla Mentörlük Yükle",
+  },
+  en: {
+    badge: "Mentorship",
+    title: "Discover one-to-one development programs with expert mentors.",
+    subtitle: "Get guided support with mentorship programs tailored to your career goals.",
+    featuredTitle: "Featured Mentorships",
+    allCoursesTitle: "All Mentorships",
+    loading: "Loading mentorships...",
+    error: "Failed to load mentorships",
+    noCourses: "Mentorships will be listed soon",
+    emptySubtitle: "Our mentorship programs are being prepared and will appear here soon.",
+    noFilterResults: "No mentorships found for this filter",
+    tryDifferentFilter: "Try a different filter or view all mentorships.",
+    comingSoon: "Featured mentorships coming soon",
+    viewAll: "View All Mentorships",
+    loadMore: "Load More Mentorships",
+  },
+};
+
+export default function CourseListPage({
+  params,
+  variant = 'courses',
+}: CourseListPageProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [ratingMap, setRatingMap] = useState<Record<string, { avg: number; count: number }>>({});
@@ -188,11 +230,15 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
   const resolvedParams = use(params);
   const { locale, courseType } = resolvedParams;
+  const isMentorship = variant === 'mentorship';
 
   const validCourseTypes = {
-    tr: 'kurs',
-    en: 'course'
+    tr: isMentorship ? 'mentorluk' : 'kurs',
+    en: isMentorship ? 'mentorship' : 'course',
   };
+
+  // Detail pages live under kurs/course even for mentorship programs
+  const detailCourseType = locale === 'en' ? 'course' : 'kurs';
 
   // Ref parametresini yakala
   const [refCode, setRefCode] = useState<string | null>(null);
@@ -221,16 +267,27 @@ export default function CourseListPage({ params }: CourseListPageProps) {
     notFound();
   }
 
-  const t = texts[locale as keyof typeof texts] || texts.tr;
+  const t = {
+    ...(texts[locale as keyof typeof texts] || texts.tr),
+    ...(isMentorship
+      ? mentorshipTexts[locale as keyof typeof mentorshipTexts] || mentorshipTexts.tr
+      : {}),
+  };
 
   const getCourses = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/public/courses?locale=${encodeURIComponent(locale)}`, {
-        cache: 'no-store',
-      });
+      const programTypeQuery = isMentorship
+        ? '&program_type=mentorship'
+        : '';
+      const response = await fetch(
+        `/api/public/courses?locale=${encodeURIComponent(locale)}${programTypeQuery}`,
+        {
+          cache: 'no-store',
+        }
+      );
       const payload = await response.json();
 
       if (!response.ok || !payload.success) {
@@ -252,7 +309,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
       });
 
       setCourses(mappedCourses);
-      setPackages(Array.isArray(payload.packages) ? payload.packages : []);
+      setPackages(isMentorship ? [] : (Array.isArray(payload.packages) ? payload.packages : []));
       setRatingMap(payload.ratingMap || {});
 
       const courseIds = mappedCourses.map((c) => String(c.id));
@@ -275,7 +332,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [locale]);
+  }, [locale, isMentorship, t.error]);
 
   useEffect(() => {
     getCourses();
@@ -421,7 +478,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
 
     return (
       <Link
-        href={addRefToUrl(`/${locale}/${courseType}/${course.slug}`)}
+        href={addRefToUrl(`/${locale}/${detailCourseType}/${course.slug}`)}
         className={`bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group ${featured ? 'col-span-1' : ''
           }`}
       >
@@ -618,7 +675,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
               {t.noCourses}
             </h1>
             <p className="text-neutral-600 dark:text-neutral-400 mb-8">
-              Yakında yeni kurslar eklenecek.
+              {t.emptySubtitle}
             </p>
           </div>
         </div>
@@ -712,7 +769,7 @@ export default function CourseListPage({ params }: CourseListPageProps) {
                         {featuredCourses.map((course) => (
                           <div key={course.id} className="w-full flex-shrink-0 h-full">
                             <Link
-                              href={addRefToUrl(`/${locale}/${courseType}/${course.slug}`)}
+                              href={addRefToUrl(`/${locale}/${detailCourseType}/${course.slug}`)}
                               className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 block cursor-pointer group"
                             >
                               <div className="relative h-32 lg:h-48 overflow-hidden flex-shrink-0">

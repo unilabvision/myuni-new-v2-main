@@ -10,7 +10,14 @@ export interface NavItem {
 const baseNavItems: Record<string, NavItem[]> = {
   tr: [
     { href: '/{locale}', label: 'Ana Sayfa' },
-    { href: '/{locale}/kurs', label: 'Kurslar' },
+    {
+      href: '/{locale}/kurs',
+      label: 'Kurslar',
+      children: [
+        { href: '/{locale}/kurs', label: 'Tüm Kurslar' },
+        { href: '/{locale}/mentorluk', label: 'Mentörlükler' },
+      ],
+    },
     { href: '/{locale}/etkinlik', label: 'Etkinlikler', navKey: 'events' } as NavItem & { navKey?: string },
     { href: '/{locale}/collection', label: 'Koleksiyon' },
     { href: '/{locale}/stajlar', label: 'Staj & Kariyer' },
@@ -39,7 +46,14 @@ const baseNavItems: Record<string, NavItem[]> = {
   ],
   en: [
     { href: '/{locale}', label: 'Home' },
-    { href: '/{locale}/course', label: 'Courses' },
+    {
+      href: '/{locale}/course',
+      label: 'Courses',
+      children: [
+        { href: '/{locale}/course', label: 'All Courses' },
+        { href: '/{locale}/mentorship', label: 'Mentorships' },
+      ],
+    },
     { href: '/{locale}/event', label: 'Events', navKey: 'events' } as NavItem & { navKey?: string },
     { href: '/{locale}/collection', label: 'Collection' },
     { href: '/{locale}/internships', label: 'Internships & Career' },

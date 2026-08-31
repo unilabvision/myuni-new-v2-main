@@ -4,6 +4,11 @@ import React, { Suspense, use, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Shield } from 'lucide-react';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface CheckoutPageProps {
   params: Promise<{ locale: string }>;
@@ -77,6 +82,11 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
     district: '',
     zipCode: '34000',
   });
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
 
   const eventSegment = locale === 'en' ? 'event' : 'etkinlik';
   const eventHref = eventSlug ? `/${locale}/${eventSegment}/${eventSlug}` : `/${locale}/${eventSegment}`;
@@ -142,6 +152,13 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
       return;
     }
 
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    if (Object.keys(consentErrors).length > 0) {
+      setLegalErrors(consentErrors);
+      return;
+    }
+    setLegalErrors({});
+
     setProcessing(true);
     setError(null);
 
@@ -163,6 +180,8 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
           locale,
           itemType: 'event_certificate',
           eventSlug: application.eventSlug,
+          privacyAccepted: legalConsent.privacyAccepted,
+          termsAccepted: legalConsent.termsAccepted,
         }),
       });
 
@@ -286,10 +305,28 @@ function EventApplicationCheckoutContent({ locale }: { locale: string }) {
                 <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
 
+              <div className="mt-6">
+                <LegalConsentFields
+                  locale={locale}
+                  value={legalConsent}
+                  onChange={(next) => {
+                    setLegalConsent(next);
+                    setLegalErrors({});
+                  }}
+                  errors={legalErrors}
+                  idPrefix="event-cert"
+                  compact
+                />
+              </div>
+
               <button
                 type="button"
                 onClick={handlePayment}
-                disabled={processing}
+                disabled={
+                  processing ||
+                  !legalConsent.privacyAccepted ||
+                  !legalConsent.termsAccepted
+                }
                 className="mt-6 w-full rounded-lg bg-[#990000] hover:bg-[#770000] text-white py-3 font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {processing ? (

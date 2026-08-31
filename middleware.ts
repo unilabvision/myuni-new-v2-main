@@ -36,6 +36,8 @@ const isPublicRoute = createRouteMatcher([
   '/tr/iletisim(.*)',
   '/tr/kurs(.*)', // TR için course route'ları - course detail pages
   '/en/course(.*)', // EN için course route'ları - course detail pages
+  '/tr/mentorluk(.*)',
+  '/en/mentorship(.*)',
   '/tr/paket(.*)',
   '/en/package(.*)',
   '/en/contact(.*)',
@@ -163,6 +165,7 @@ const isValidRoute = createRouteMatcher([
   '/tr/cart(.*)',
   '/en/cart(.*)',
   '/tr/kurs(.*)',
+  '/tr/mentorluk(.*)',
   '/tr/etkinlik(.*)',
   '/en/event(.*)',
   '/tr/sign-in(.*)',
@@ -184,6 +187,7 @@ const isValidRoute = createRouteMatcher([
   '/tr/paket(.*)',
   '/en/package(.*)',
   '/en/course(.*)',
+  '/en/mentorship(.*)',
   '/tr/watch(.*)', // Course watching pages
   '/en/watch(.*)', // Course watching pages
   '/tr/kariyer(.*)',

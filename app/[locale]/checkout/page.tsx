@@ -12,6 +12,11 @@ import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
 import supabase from '../../_services/supabaseClient.js';
 import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
 import { itemMatchesApplicableCourses } from '@/lib/discountRestrictions';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -295,8 +300,11 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   });
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [termsError, setTermsError] = useState('');
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
   
   // Early bird countdown state
   const [countdown, setCountdown] = useState<{
@@ -1085,11 +1093,12 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       return;
     }
 
-    if (!agreedToTerms) {
-      setTermsError(t.termsError);
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    if (Object.keys(consentErrors).length > 0) {
+      setLegalErrors(consentErrors);
       return;
     }
-    setTermsError('');
+    setLegalErrors({});
     
     setLoading(true);
     setError('');
@@ -1137,6 +1146,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           clerkUserId: user.id,
           userId: user.id,
           itemType: 'cart',
+          privacyAccepted: legalConsent.privacyAccepted,
+          termsAccepted: legalConsent.termsAccepted,
         };
       } else {
         // ---- SINGLE ITEM MODE (original flow) ----
@@ -1163,6 +1174,8 @@ function CheckoutContent({ params }: CheckoutPageProps) {
           clerkUserId: user.id,
           userId: user.id,
           itemType: itemType,
+          privacyAccepted: legalConsent.privacyAccepted,
+          termsAccepted: legalConsent.termsAccepted,
         };
       }
       
@@ -1774,52 +1787,26 @@ function CheckoutContent({ params }: CheckoutPageProps) {
             </div>
 
             {/* Gizlilik ve Kullanım Koşulları Onayı */}
-            <div className="space-y-2">
-              <div className="flex items-start">
-                <input
-                  id="checkout-terms"
-                  name="checkout-terms"
-                  type="checkbox"
-                  checked={agreedToTerms}
-                  onChange={(e) => {
-                    setAgreedToTerms(e.target.checked);
-                    if (e.target.checked) setTermsError('');
-                  }}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:bg-neutral-800"
-                />
-                <label
-                  htmlFor="checkout-terms"
-                  className="ml-3 text-sm text-neutral-700 dark:text-neutral-300"
-                >
-                  {t.agreeToTerms}{' '}
-                  <Link
-                    href={t.termsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:text-neutral-900 dark:hover:text-neutral-100"
-                  >
-                    {t.termsLink}
-                  </Link>
-                  {t.privacyNoteAnd}
-                  <Link
-                    href={t.privacyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline hover:text-neutral-900 dark:hover:text-neutral-100"
-                  >
-                    {t.privacyPolicyLink}
-                  </Link>
-                </label>
-              </div>
-              {termsError && (
-                <p className="text-xs text-red-500">{termsError}</p>
-              )}
-            </div>
+            <LegalConsentFields
+              locale={locale}
+              value={legalConsent}
+              onChange={(next) => {
+                setLegalConsent(next);
+                setLegalErrors({});
+              }}
+              errors={legalErrors}
+              idPrefix="checkout"
+              compact
+            />
             
             {/* Ödeme Butonu */}
             <button
               onClick={proceedToPayment}
-              disabled={loading || !agreedToTerms}
+              disabled={
+                loading ||
+                !legalConsent.privacyAccepted ||
+                !legalConsent.termsAccepted
+              }
               className="w-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 py-3 px-4 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >
               {loading ? (

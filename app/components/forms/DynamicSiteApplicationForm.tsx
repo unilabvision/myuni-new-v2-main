@@ -32,6 +32,11 @@ import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
 import { SITE_APPLICATION_MAX_FILE_BYTES, SITE_APPLICATION_FILE_RETENTION_DAYS } from '@/lib/siteApplications/config';
 import { formatFileSize, validateAttachmentFile } from '@/lib/siteApplications/files';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface DynamicSiteApplicationFormProps {
   locale: string;
@@ -193,6 +198,11 @@ export default function DynamicSiteApplicationForm({
   const [success, setSuccess] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [fieldFiles, setFieldFiles] = useState<Record<string, File>>({});
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [resourceDownloading, setResourceDownloading] = useState<string | null>(null);
@@ -382,8 +392,10 @@ export default function DynamicSiteApplicationForm({
       }
     }
 
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    setLegalErrors(consentErrors);
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    return Object.keys(nextErrors).length === 0 && Object.keys(consentErrors).length === 0;
   };
 
   const handleFile = (file: File | undefined) => {
@@ -485,6 +497,8 @@ export default function DynamicSiteApplicationForm({
           fields: submissionFields,
           honeypot,
           checkoutNext: checkoutNext || undefined,
+          privacyAccepted: legalConsent.privacyAccepted,
+          termsAccepted: legalConsent.termsAccepted,
           ...attachmentMeta,
         }),
       });
@@ -1067,6 +1081,18 @@ export default function DynamicSiteApplicationForm({
                   <span>{generalError}</span>
                 </div>
               )}
+
+              <LegalConsentFields
+                locale={locale}
+                value={legalConsent}
+                onChange={(next) => {
+                  setLegalConsent(next);
+                  setLegalErrors({});
+                }}
+                errors={legalErrors}
+                idPrefix="site-app"
+                compact={isSidebar}
+              />
 
               <button
                 type="submit"

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { sendClubApplicationConfirmationEmail, sendNewClubApplicationNotificationEmail } from '@/app/email_enrolment_services/kulupApplicationEmailService.js';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,18 +28,17 @@ export async function POST(request: NextRequest) {
         missingFields 
       }, { status: 400 });
     }
-    
-    if (!formData.privacy_consent) {
-      return NextResponse.json({ 
-        error: 'Privacy consent is required' 
-      }, { status: 400 });
+
+    const locale = formData.locale || 'tr';
+    const consentError = assertLegalConsent(formData, locale);
+    if (consentError) {
+      return NextResponse.json({ error: consentError }, { status: 400 });
     }
-    
-    if (!formData.terms_consent) {
-      return NextResponse.json({ 
-        error: 'Terms consent is required' 
-      }, { status: 400 });
-    }
+
+    const legalConsent = buildLegalConsentSnapshot({
+      source: 'kulup-basvuru',
+      locale,
+    });
     
     // Insert application data into database
     const { data, error } = await supabase
@@ -43,7 +46,12 @@ export async function POST(request: NextRequest) {
       .insert([
         {
           form_config_id: '4f4db723-e5d9-46be-b8ac-a63f7bbb11c0', // kulup_form config ID
-          submission_data: formData,
+          submission_data: {
+            ...formData,
+            privacy_consent: true,
+            terms_consent: true,
+            ...legalConsent,
+          },
           status: 'pending',
           created_at: new Date().toISOString()
         }

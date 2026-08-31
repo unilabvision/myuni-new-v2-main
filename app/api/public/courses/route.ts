@@ -5,6 +5,7 @@ import { createServerSupabasePublicClient } from '@/lib/supabase-server';
 export async function GET(request: NextRequest) {
   try {
     const locale = request.nextUrl.searchParams.get('locale') || 'tr';
+    const programType = request.nextUrl.searchParams.get('program_type') || undefined;
     
     // Check Supabase connection
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -18,7 +19,12 @@ export async function GET(request: NextRequest) {
     // Create server-side Supabase client for this request
     const supabase = createServerSupabasePublicClient();
     
-    const courses = await getAllCourses(locale);
+    const courses = await getAllCourses(
+      locale,
+      programType
+        ? { programType }
+        : { excludeProgramTypes: ['mentorship'] }
+    );
 
     const { data: packages, error: packagesError } = await supabase
       .from('myuni_packages')

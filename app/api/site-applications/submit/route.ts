@@ -16,6 +16,10 @@ import {
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 
 async function resolveForm(
   supabase: ReturnType<typeof getSiteApplicationsSupabase>,
@@ -138,6 +142,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const consentError = assertLegalConsent(body, locale);
+    if (consentError) {
+      return NextResponse.json({ error: consentError }, { status: 400 });
+    }
+    const legalSnapshot = buildLegalConsentSnapshot({
+      source: 'site-applications/submit',
+      locale,
+    });
+
     const supabase = getSiteApplicationsSupabase();
     const resolved = await resolveForm(supabase, locale, formSlug, eventSlug, courseSlug);
     if ('error' in resolved) {
@@ -229,6 +242,7 @@ export async function POST(request: NextRequest) {
 
     const submissionData: Record<string, unknown> = {
       ...normalized,
+      ...legalSnapshot,
       ...(isEventApplication
         ? {
             registration_tier: registrationTierInput,

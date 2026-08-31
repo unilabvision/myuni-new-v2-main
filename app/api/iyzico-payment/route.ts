@@ -10,6 +10,10 @@ import {
 } from '@/lib/orderSnapshot';
 import { reconcileOrderWithIyzico } from '@/lib/iyzicoReconcile';
 import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 import Iyzipay from 'iyzipay';
 
 interface CartItemInput {
@@ -55,6 +59,8 @@ interface PaymentRequestBody {
   // Cart Mode fields
   cartMode?: boolean;
   cartItems?: CartItemInput[];
+  privacyAccepted?: boolean;
+  termsAccepted?: boolean;
 }
 
 // Extends a date-only (YYYY-MM-DD) deadline to the end of that day so
@@ -286,6 +292,7 @@ async function saveOrderToDatabase(orderData: any) {
           cartItems: orderData.cartItems || [],
           orderSnapshot: orderData.orderSnapshot || null,
           listTotal: orderData.listTotal ?? null,
+          legalConsent: orderData.legalConsent || null,
         },
         discountcode: orderData.discountCodes,
         discountamount: orderData.totalDiscount || 0,
@@ -305,6 +312,15 @@ async function saveOrderToDatabase(orderData: any) {
 export async function POST(request: Request) {
   try {
     const body: PaymentRequestBody = await request.json();
+
+    const consentError = assertLegalConsent(body, body.locale || 'tr');
+    if (consentError) {
+      return NextResponse.json({ success: false, message: consentError }, { status: 400 });
+    }
+    const legalConsentSnapshot = buildLegalConsentSnapshot({
+      source: 'iyzico-payment',
+      locale: body.locale || 'tr',
+    });
 
     // Fail fast instead of silently constructing the Iyzico client with empty
     // credentials — that used to defer the failure to a confusing, opaque
@@ -900,6 +916,7 @@ export async function POST(request: Request) {
       cartItems: orderSnapshot.items,
       orderSnapshot,
       listTotal: orderSnapshot.listTotal,
+      legalConsent: legalConsentSnapshot,
     };
 
     const saveResult = await saveOrderToDatabase(orderData);

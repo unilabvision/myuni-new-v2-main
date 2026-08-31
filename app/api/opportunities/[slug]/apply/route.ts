@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { submitApplication } from '@/lib/applicationService';
 import { getOpportunityBySlug } from '@/lib/opportunityService';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 
 export async function POST(
   request: NextRequest,
@@ -24,19 +28,33 @@ export async function POST(
       cv_storage_path,
       cv_file_name,
       user_agent,
+      locale = 'tr',
     } = body;
+
+    const consentError = assertLegalConsent(body, locale);
+    if (consentError) {
+      return NextResponse.json({ error: consentError }, { status: 400 });
+    }
 
     const opportunity = await getOpportunityBySlug(slug);
     if (!opportunity) {
       return NextResponse.json({ error: 'İlan bulunamadı' }, { status: 404 });
     }
 
+    const legalConsent = buildLegalConsentSnapshot({
+      source: 'opportunity-apply',
+      locale,
+    });
+
     const result = await submitApplication({
       contextType: 'opportunity',
       contextSlug: slug,
       userId,
       applicantEmail: email,
-      submissionData: submission_data as Record<string, unknown>,
+      submissionData: {
+        ...(submission_data as Record<string, unknown>),
+        ...legalConsent,
+      },
       cvStoragePath: cv_storage_path,
       cvFileName: cv_file_name,
       userAgent: user_agent,

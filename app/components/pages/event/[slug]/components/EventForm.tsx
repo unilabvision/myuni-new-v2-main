@@ -8,6 +8,11 @@ import { supabase } from '../../../../../../lib/supabase';
 import { getEventAttendeeCount } from '../../../../../../lib/eventUtils';
 import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import { Check, AlertCircle, Loader2 } from 'lucide-react';
+import LegalConsentFields, {
+  validateLegalConsentClient,
+  type LegalConsentValues,
+  type LegalConsentErrors,
+} from '@/app/components/forms/LegalConsentFields';
 
 interface Event {
   id: string;
@@ -58,6 +63,11 @@ const EventForm: React.FC<EventFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [attendeesCount, setAttendeesCount] = useState<number>(event.current_attendees);
+  const [legalConsent, setLegalConsent] = useState<LegalConsentValues>({
+    privacyAccepted: false,
+    termsAccepted: false,
+  });
+  const [legalErrors, setLegalErrors] = useState<LegalConsentErrors>({});
 
   // Check if user is already registered
   const [isRegistered, setIsRegistered] = useState(false);
@@ -166,6 +176,18 @@ const EventForm: React.FC<EventFormProps> = ({
       return;
     }
 
+    const consentErrors = validateLegalConsentClient(legalConsent, locale);
+    if (Object.keys(consentErrors).length > 0) {
+      setLegalErrors(consentErrors);
+      onError?.(
+        locale === 'tr'
+          ? 'Devam etmek için gizlilik politikası ve kullanım koşullarını kabul etmelisiniz.'
+          : 'You must accept the Privacy Policy and Terms of Use to continue.'
+      );
+      return;
+    }
+    setLegalErrors({});
+
     setIsSubmitting(true);
 
     try {
@@ -213,7 +235,9 @@ const EventForm: React.FC<EventFormProps> = ({
         eventId: event.id,
         locale: locale,
         userEmail: userEmail,
-        userName: userName
+        userName: userName,
+        privacyAccepted: legalConsent.privacyAccepted,
+        termsAccepted: legalConsent.termsAccepted,
       };
       
       console.log('Sending enrollment request:', requestBody);
@@ -417,11 +441,26 @@ const EventForm: React.FC<EventFormProps> = ({
 
   // Registration button
   return (
-    <div className="relative inline-flex w-full">
+    <div className="relative w-full space-y-4">
       {renderSuccessToast()}
+      <LegalConsentFields
+        locale={locale}
+        value={legalConsent}
+        onChange={(next) => {
+          setLegalConsent(next);
+          setLegalErrors({});
+        }}
+        errors={legalErrors}
+        idPrefix="event-enroll"
+        compact
+      />
       <button 
         onClick={handleRegistration}
-        disabled={isSubmitting}
+        disabled={
+          isSubmitting ||
+          !legalConsent.privacyAccepted ||
+          !legalConsent.termsAccepted
+        }
         className="w-full bg-neutral-800 hover:bg-[#990000] dark:bg-neutral-700 dark:hover:bg-[#990000] text-white py-3 px-6 rounded-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
       >
         {isSubmitting ? (

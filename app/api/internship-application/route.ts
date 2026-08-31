@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import type { ApplicationStatus } from '@/lib/database.types';
 import { sendEmail } from '@/lib/email';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 
 interface ApplicationData {
   first_name: string;
@@ -21,6 +25,9 @@ interface ApplicationData {
   cv_mime_type?: string;
   position?: string;
   user_agent?: string;
+  privacyAccepted?: boolean;
+  termsAccepted?: boolean;
+  locale?: string;
 }
 
 interface UpdateData {
@@ -34,6 +41,15 @@ interface UpdateData {
 export async function POST(request: NextRequest) {
   try {
     const body: ApplicationData = await request.json();
+
+    const consentError = assertLegalConsent(body, body.locale || 'tr');
+    if (consentError) {
+      return NextResponse.json({ error: consentError }, { status: 400 });
+    }
+    const legalConsent = buildLegalConsentSnapshot({
+      source: 'internship-application',
+      locale: body.locale || 'tr',
+    });
     
     const { 
       first_name, 
@@ -128,7 +144,8 @@ export async function POST(request: NextRequest) {
         cv_mime_type: cv_mime_type || null,
         position: position || null,
         user_agent: user_agent || null,
-        status: 'pending'
+        status: 'pending',
+        admin_notes: `legal_consent:${JSON.stringify(legalConsent)}`,
       })
       .select()
       .single();

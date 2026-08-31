@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
+import {
+  assertLegalConsent,
+  buildLegalConsentSnapshot,
+} from '@/lib/legalConsent';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +17,15 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { eventId, locale = 'tr', userEmail, userName } = body;
+
+    const consentError = assertLegalConsent(body, locale);
+    if (consentError) {
+      return NextResponse.json({ error: consentError }, { status: 400 });
+    }
+    const legalConsent = buildLegalConsentSnapshot({
+      source: 'event-enrollment',
+      locale,
+    });
 
     if (!eventId) {
       return NextResponse.json({ error: 'Event ID is required' }, { status: 400 });
@@ -101,7 +114,7 @@ export async function POST(request: NextRequest) {
           user_id: userId,
           event_id: eventId,
           attendance_status: 'registered',
-          notes: `Registered via API on ${new Date().toISOString()}`,
+          notes: `Registered via API on ${new Date().toISOString()} | consent:${JSON.stringify(legalConsent)}`,
         },
       ])
       .select()

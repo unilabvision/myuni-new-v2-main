@@ -101,17 +101,48 @@ interface LessonWithSection {
 // COURSE MANAGEMENT
 // ========================================
 
-export async function getAllCourses(locale: string = 'tr') {
+export async function getAllCourses(
+  locale: string = 'tr',
+  options?: { programType?: string; excludeProgramTypes?: string[] }
+) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('myuni_courses')
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (options?.programType) {
+      query = query.eq('program_type', options.programType);
+    }
 
-    const transformedCourses = data?.map(course => ({
+    const { data, error } = await query;
+
+    // Column may not exist yet — treat as empty mentorship list rather than hard-fail
+    if (error) {
+      const msg = error.message || '';
+      if (
+        options?.programType &&
+        (/program_type/i.test(msg) || error.code === '42703' || error.code === 'PGRST204')
+      ) {
+        console.warn(
+          '[getAllCourses] program_type column missing; returning empty list. Apply SQL in docs/sql/add-program-type-mentorship.sql'
+        );
+        return [];
+      }
+      throw error;
+    }
+
+    let rows = data || [];
+    if (options?.excludeProgramTypes?.length) {
+      rows = rows.filter(
+        (course) =>
+          !course.program_type ||
+          !options.excludeProgramTypes!.includes(String(course.program_type))
+      );
+    }
+
+    const transformedCourses = rows.map(course => ({
       id: course.id,
       slug: course.slug,
       name: course.title, // name alanı title'dan gelir
@@ -166,7 +197,8 @@ export async function getAllCourses(locale: string = 'tr') {
       
       // Early bird pricing fields
       early_bird_price: course.early_bird_price || null,
-      early_bird_deadline: course.early_bird_deadline || null
+      early_bird_deadline: course.early_bird_deadline || null,
+      program_type: course.program_type || 'course',
     }));
 
     return transformedCourses || [];

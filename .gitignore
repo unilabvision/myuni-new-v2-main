@@ -25,3 +25,7 @@ node_modules
 .test_prompt.mjs
 .vercel
 .env*
+
+# Local Clerk/user exports (PII)
+exports/
+
