@@ -730,11 +730,86 @@ const translations: TranslationsType = useMemo(
       const [error, setError] = useState('');
       const [secondFactorCode, setSecondFactorCode] = useState('');
       const [secondFactor, setSecondFactor] = useState<{
-        strategy?: string;
+        strategy: string;
         identifier?: string;
+        emailAddressId?: string;
+        phoneNumberId?: string;
       } | null>(null);
       const [secondFactorLoading, setSecondFactorLoading] = useState(false);
+      const [resendLoading, setResendLoading] = useState(false);
+      const [codeSentMessage, setCodeSentMessage] = useState('');
       const router = useRouter();
+
+      const prepareSecondFactorCode = async (
+        result: {
+          supportedSecondFactors?: Array<{
+            strategy: string;
+            emailAddressId?: string;
+            phoneNumberId?: string;
+            safeIdentifier?: string;
+          }>;
+        },
+        fallbackEmail: string
+      ) => {
+        const factors = result.supportedSecondFactors || [];
+        const emailCodeFactor = factors.find((f) => f.strategy === 'email_code');
+        const phoneCodeFactor = factors.find((f) => f.strategy === 'phone_code');
+        const totpFactor = factors.find((f) => f.strategy === 'totp');
+
+        if (emailCodeFactor?.emailAddressId) {
+          // Clerk Device Trust / email MFA: tipler bazen email_code'u prepareSecondFactor'da
+          // eksik bırakıyor; runtime destekliyor (Clerk docs).
+          await (signIn as any).prepareSecondFactor({
+            strategy: 'email_code',
+            emailAddressId: emailCodeFactor.emailAddressId,
+          });
+          setSecondFactor({
+            strategy: 'email_code',
+            identifier: emailCodeFactor.safeIdentifier || fallbackEmail,
+            emailAddressId: emailCodeFactor.emailAddressId,
+          });
+          setCodeSentMessage(
+            normalizedLocale === 'tr'
+              ? `Doğrulama kodu gönderildi: ${emailCodeFactor.safeIdentifier || fallbackEmail}`
+              : `Verification code sent to: ${emailCodeFactor.safeIdentifier || fallbackEmail}`
+          );
+          return;
+        }
+
+        if (phoneCodeFactor?.phoneNumberId) {
+          await signIn!.prepareSecondFactor({
+            strategy: 'phone_code',
+            phoneNumberId: phoneCodeFactor.phoneNumberId,
+          });
+          setSecondFactor({
+            strategy: 'phone_code',
+            identifier: phoneCodeFactor.safeIdentifier,
+            phoneNumberId: phoneCodeFactor.phoneNumberId,
+          });
+          setCodeSentMessage(
+            normalizedLocale === 'tr'
+              ? 'Doğrulama kodu kayıtlı telefonunuza SMS olarak gönderildi.'
+              : 'A verification code was sent via SMS to your registered phone.'
+          );
+          return;
+        }
+
+        if (totpFactor) {
+          setSecondFactor({ strategy: 'totp' });
+          setCodeSentMessage(
+            normalizedLocale === 'tr'
+              ? 'Doğrulama uygulamanızdaki kodu girin.'
+              : 'Enter the code from your authenticator app.'
+          );
+          return;
+        }
+
+        throw new Error(
+          normalizedLocale === 'tr'
+            ? 'Desteklenen ikinci doğrulama yöntemi bulunamadı.'
+            : 'No supported second factor method found.'
+        );
+      };
 
       const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -743,6 +818,7 @@ const translations: TranslationsType = useMemo(
         try {
           setLoading(true);
           setError('');
+          setCodeSentMessage('');
 
           const result = await signIn.create({
             identifier: email.trim(),
@@ -756,19 +832,14 @@ const translations: TranslationsType = useMemo(
             const finalRedirectUrl = searchParams.get('redirect') || redirectUrl;
             console.log('Login successful, redirecting to:', finalRedirectUrl);
             router.push(finalRedirectUrl);
-          } else if (result.status === 'needs_second_factor') {
-            // Clerk ikinci doğrulama (2FA / email/phone code vs.) istiyor.
-            const strategy =
-              (result as any).secondFactorVerification?.strategy ||
-              (result as any).supportedSecondFactors?.[0]?.strategy ||
-              (result as any).secondFactorStrategy ||
-              'totp';
-
+          } else if (
+            result.status === 'needs_second_factor' ||
+            // Device Trust (yeni cihaz) — eski uygulamalarda needs_second_factor,
+            // yenilerde needs_client_trust dönebilir.
+            (result.status as string) === 'needs_client_trust'
+          ) {
             setSecondFactorCode('');
-            setSecondFactor({
-              strategy,
-              identifier: (result as any).identifier,
-            });
+            await prepareSecondFactorCode(result as any, email.trim());
             setError('');
           } else {
             console.error('SignIn incomplete:', JSON.stringify({ status: result.status, firstFactorVerification: result.firstFactorVerification, secondFactorVerification: (result as any).secondFactorVerification, identifier: (result as any).identifier }));
@@ -779,9 +850,48 @@ const translations: TranslationsType = useMemo(
           const authErr = err as { errors?: { message?: string; code?: string; longMessage?: string }[] };
           const clerkMsg = authErr.errors?.[0]?.longMessage || authErr.errors?.[0]?.message || authErr.errors?.[0]?.code;
           console.error('Clerk error detail:', clerkMsg);
-          setError(clerkMsg || t.signin.errorCredentials);
+          setError(clerkMsg || (err instanceof Error ? err.message : t.signin.errorCredentials));
         } finally {
           setLoading(false);
+        }
+      };
+
+      const handleResendSecondFactor = async () => {
+        if (!isLoaded || !signIn || !secondFactor) return;
+        if (secondFactor.strategy === 'totp') return;
+
+        try {
+          setResendLoading(true);
+          setError('');
+
+          if (secondFactor.strategy === 'email_code' && secondFactor.emailAddressId) {
+            await (signIn as any).prepareSecondFactor({
+              strategy: 'email_code',
+              emailAddressId: secondFactor.emailAddressId,
+            });
+            setCodeSentMessage(
+              normalizedLocale === 'tr'
+                ? `Kod yeniden gönderildi: ${secondFactor.identifier || email}`
+                : `Code resent to: ${secondFactor.identifier || email}`
+            );
+          } else if (secondFactor.strategy === 'phone_code' && secondFactor.phoneNumberId) {
+            await signIn.prepareSecondFactor({
+              strategy: 'phone_code',
+              phoneNumberId: secondFactor.phoneNumberId,
+            });
+            setCodeSentMessage(
+              normalizedLocale === 'tr'
+                ? 'SMS kodu yeniden gönderildi.'
+                : 'SMS code was resent.'
+            );
+          }
+        } catch (err: unknown) {
+          console.error('Resend second factor error:', err);
+          const authErr = err as { errors?: { message?: string; code?: string; longMessage?: string }[] };
+          const clerkMsg = authErr.errors?.[0]?.longMessage || authErr.errors?.[0]?.message || authErr.errors?.[0]?.code;
+          setError(clerkMsg || t.signin.errorGeneral);
+        } finally {
+          setResendLoading(false);
         }
       };
 
@@ -906,20 +1016,10 @@ const translations: TranslationsType = useMemo(
           {secondFactor && (
             <form onSubmit={handleSecondFactorSubmit} className="space-y-4">
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-neutral-300">
-                {normalizedLocale === 'tr' ? (
-                  (secondFactor.strategy === 'email_code' &&
-                    `Clerk bu e-posta adresine doğrulama kodu gönderir: ${secondFactor.identifier || email}`) ||
-                  (secondFactor.strategy === 'phone_code' && 'Clerk kayıtlı telefonunuza SMS doğrulama kodu gönderir.') ||
-                  (secondFactor.strategy === 'totp' && 'Clerk TOTP istiyor: doğrulama uygulamanızdaki kodu girin.') ||
-                  'Hesabınız için ikinci doğrulama gerekiyor. Gelen kodu girin.'
-                ) : (
-                  (secondFactor.strategy === 'email_code' &&
-                    `Clerk sends the verification code to: ${secondFactor.identifier || email}`) ||
-                  (secondFactor.strategy === 'phone_code' &&
-                    'Clerk sends an SMS verification code to your registered phone.') ||
-                  (secondFactor.strategy === 'totp' && 'Clerk requires a TOTP code: enter the code from your authenticator app.') ||
-                  'Your account requires a second verification step. Enter the code you received.'
-                )}
+                {codeSentMessage ||
+                  (normalizedLocale === 'tr'
+                    ? 'Hesabınız için ikinci doğrulama gerekiyor. Gelen kodu girin.'
+                    : 'Your account requires a second verification step. Enter the code you received.')}
               </div>
               <div>
                 <label
@@ -934,6 +1034,7 @@ const translations: TranslationsType = useMemo(
                   type="text"
                   inputMode="numeric"
                   required
+                  autoComplete="one-time-code"
                   value={secondFactorCode}
                   onChange={(e) => setSecondFactorCode(e.target.value)}
                   className="mt-1 block w-full rounded-lg border-2 border-neutral-200 bg-white px-4 py-2 text-neutral-900 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 sm:text-sm shadow-sm focus:ring-2 focus:ring-neutral-300 focus:border-neutral-400 dark:focus:ring-neutral-500 dark:focus:border-neutral-500"
@@ -953,6 +1054,22 @@ const translations: TranslationsType = useMemo(
                     ? 'Kodu Doğrula'
                     : 'Verify Code'}
               </button>
+              {secondFactor.strategy !== 'totp' && (
+                <button
+                  type="button"
+                  onClick={handleResendSecondFactor}
+                  disabled={resendLoading}
+                  className="flex w-full justify-center rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-70 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                >
+                  {resendLoading
+                    ? normalizedLocale === 'tr'
+                      ? 'Gönderiliyor...'
+                      : 'Sending...'
+                    : normalizedLocale === 'tr'
+                      ? 'Kodu Yeniden Gönder'
+                      : 'Resend Code'}
+                </button>
+              )}
             </form>
           )}
 
