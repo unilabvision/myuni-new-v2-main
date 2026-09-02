@@ -88,6 +88,32 @@ function getPageTypeFromUrl(url: string, locale: string): {
     }
   }
 
+  if (cleanPath.startsWith('/paket') || cleanPath.startsWith('/package')) {
+    if (cleanPath === '/paket' || cleanPath === '/package') {
+      return {
+        pageType: 'package-listing',
+        title: locale === 'tr'
+          ? "Eğitim Paketleri | MyUNI - Yapay Zeka Destekli Eğitim Platformu"
+          : "Training Packages | MyUNI - AI-Powered Learning Platform",
+        description: locale === 'tr'
+          ? "MyUNI eğitim paketleri birden fazla kursu bir araya getirir. Hedeflerinize daha hızlı ulaşmak için paketleri inceleyin."
+          : "MyUNI training packages combine multiple courses. Browse packages to reach your learning goals faster.",
+        canonical: fullCanonical
+      };
+    }
+    const packageSlug = cleanPath.split('/').pop() || '';
+    return {
+      pageType: 'package-detail',
+      title: locale === 'tr'
+        ? `${packageSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Paketi | MyUNI`
+        : `${packageSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Package | MyUNI`,
+      description: locale === 'tr'
+        ? `${packageSlug.replace(/-/g, ' ')} eğitim paketi ile MyUNI'de birden fazla kursu birlikte tamamlayın.`
+        : `Complete multiple courses together with the ${packageSlug.replace(/-/g, ' ')} training package on MyUNI.`,
+      canonical: fullCanonical
+    };
+  }
+
   if (cleanPath.startsWith('/blog')) {
     if (cleanPath === '/blog') {
       return {
@@ -172,8 +198,102 @@ export async function generateMetadata({
   const currentPath = pathSegments.length > 0 ? `/${pathSegments.join('/')}` : '/';
 
   const pageInfo = getPageTypeFromUrl(currentPath, locale);
-  const trPath = `https://myunilab.net/tr${currentPath === '/' ? '' : currentPath.replace(/\/(course|kurs)/, locale === 'tr' ? '/kurs' : '/course')}`;
-  const enPath = `https://myunilab.net/en${currentPath === '/' ? '' : currentPath.replace(/\/(course|kurs)/, locale === 'tr' ? '/kurs' : '/course')}`;
+  const localizePath = (path: string, targetLocale: 'tr' | 'en') => {
+    let next = path === '/' ? '' : path;
+    next = next
+      .replace(/\/(course|kurs)/, targetLocale === 'tr' ? '/kurs' : '/course')
+      .replace(/\/(package|paket)/, targetLocale === 'tr' ? '/paket' : '/package');
+    return `https://myunilab.net/${targetLocale}${next}`;
+  };
+  const trPath = localizePath(currentPath, 'tr');
+  const enPath = localizePath(currentPath, 'en');
+
+  const sameAs = [
+    "https://x.com/myuniturkiye",
+    "https://linkedin.com/company/myuniturkiye",
+    "https://instagram.com/myuniturkiye",
+    "https://youtube.com/@myuniturkiye",
+  ];
+
+  const organizationNode = {
+    "@type": "EducationalOrganization",
+    "@id": "https://myunilab.net/#organization",
+    name: "MyUNI Eğitim Platformu",
+    alternateName: ["MyUNI", "MyUNI Lab", "myunilab.net"],
+    url: "https://myunilab.net",
+    logo: {
+      "@type": "ImageObject",
+      url: "https://myunilab.net/logo.png",
+    },
+    description: pageInfo.description,
+    sameAs,
+    areaServed: ["TR", "Worldwide"],
+    knowsAbout: locale === 'tr'
+      ? ["yapay zeka eğitimi", "online kurs", "kariyer geliştirme", "eğitim paketleri", "sertifikalı eğitim"]
+      : ["AI education", "online courses", "career development", "training packages", "certified learning"],
+    educationalCredentialAwarded: locale === 'tr' ? "MyUNI Tamamlama Sertifikası" : "MyUNI Completion Certificate",
+  };
+
+  const websiteNode = {
+    "@type": "WebSite",
+    "@id": "https://myunilab.net/#website",
+    name: "MyUNI",
+    alternateName: "MyUNI Lab",
+    url: "https://myunilab.net",
+    inLanguage: ["tr", "en"],
+    publisher: { "@id": "https://myunilab.net/#organization" },
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: locale === 'tr'
+          ? "https://myunilab.net/tr/blog?search={search_term_string}"
+          : "https://myunilab.net/en/blog?search={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
+  const pageEntity =
+    pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
+      ? {
+          "@type": "Course",
+          "@id": `${pageInfo.canonical}#course`,
+          name: pageInfo.pageType === 'course-detail'
+            ? pageInfo.title.split(' | ')[0]
+            : (locale === 'tr' ? "MyUNI Kursları" : "MyUNI Courses"),
+          description: pageInfo.description,
+          url: pageInfo.canonical,
+          provider: { "@id": "https://myunilab.net/#organization" },
+          educationalLevel: "all-levels",
+          teaches: locale === 'tr' ? "Teknoloji ve İş Becerileri" : "Technology and Business Skills",
+        }
+      : pageInfo.pageType === 'package-listing' || pageInfo.pageType === 'package-detail'
+        ? {
+            "@type": "Course",
+            "@id": `${pageInfo.canonical}#package`,
+            name: pageInfo.pageType === 'package-detail'
+              ? pageInfo.title.split(' | ')[0]
+              : (locale === 'tr' ? "MyUNI Eğitim Paketleri" : "MyUNI Training Packages"),
+            description: pageInfo.description,
+            url: pageInfo.canonical,
+            provider: { "@id": "https://myunilab.net/#organization" },
+            educationalLevel: "all-levels",
+            teaches: locale === 'tr' ? "Çoklu kurs eğitim paketleri" : "Multi-course training packages",
+          }
+        : pageInfo.pageType === 'blog-detail'
+          ? {
+              "@type": "Article",
+              "@id": `${pageInfo.canonical}#article`,
+              name: pageInfo.title.split(' | ')[0],
+              description: pageInfo.description,
+              url: pageInfo.canonical,
+              author: { "@id": "https://myunilab.net/#organization" },
+              publisher: { "@id": "https://myunilab.net/#organization" },
+              datePublished: new Date().toISOString(),
+              dateModified: new Date().toISOString(),
+            }
+          : null;
 
   return {
     title: pageInfo.title,
@@ -181,6 +301,8 @@ export async function generateMetadata({
     keywords: locale === 'tr'
       ? [
         "MyUNI",
+        "MyUNI Lab",
+        "myunilab.net",
         "yapay zeka eğitim",
         "online eğitim platformu",
         "kariyer geliştirme",
@@ -191,12 +313,17 @@ export async function generateMetadata({
         ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
           ? ["kurslar", "eğitim", "sertifika", "online kurs"]
           : []),
+        ...(pageInfo.pageType === 'package-listing' || pageInfo.pageType === 'package-detail'
+          ? ["eğitim paketi", "kurs paketi", "sertifika", "online eğitim"]
+          : []),
         ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail'
           ? ["blog", "eğitim haberleri", "teknoloji", "kariyer ipuçları"]
           : [])
       ]
       : [
         "MyUNI",
+        "MyUNI Lab",
+        "myunilab.net",
         "AI education",
         "online learning platform",
         "career development",
@@ -206,6 +333,9 @@ export async function generateMetadata({
         "remote learning",
         ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
           ? ["courses", "education", "certificate", "online course"]
+          : []),
+        ...(pageInfo.pageType === 'package-listing' || pageInfo.pageType === 'package-detail'
+          ? ["training package", "course bundle", "certificate", "online education"]
           : []),
         ...(pageInfo.pageType === 'blog-listing' || pageInfo.pageType === 'blog-detail'
           ? ["blog", "education news", "technology", "career tips"]
@@ -245,55 +375,11 @@ export async function generateMetadata({
     other: {
       "script:ld+json": JSON.stringify({
         "@context": "https://schema.org",
-        "@type": pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail'
-          ? "Course"
-          : pageInfo.pageType === 'blog-detail'
-            ? "Article"
-            : "EducationalOrganization",
-        name: pageInfo.pageType === 'course-detail'
-          ? pageInfo.title.split(' | ')[0]
-          : "MyUNI Eğitim Platformu",
-        alternateName: "MyUNI",
-        url: pageInfo.canonical,
-        logo: "https://myunilab.net/logo.png",
-        description: pageInfo.description,
-        ...(pageInfo.pageType === 'course-listing' || pageInfo.pageType === 'course-detail' ? {
-          provider: {
-            "@type": "EducationalOrganization",
-            name: "MyUNI",
-            url: "https://myunilab.net"
-          },
-          educationalLevel: "all-levels",
-          teaches: locale === 'tr' ? "Teknoloji ve İş Becerileri" : "Technology and Business Skills"
-        } : {
-          sameAs: [
-            "https://x.com/myuniturkiye",
-            "https://linkedin.com/company/myuniturkiye",
-            "https://instagram.com/myuniturkiye",
-            "https://youtube.com/@myuniturkiye"
-          ],
-          educationalCredentialAwarded: locale === 'tr' ? "Sertifika" : "Certificate",
-          hasCredential: {
-            "@type": "EducationalOccupationalCredential",
-            name: locale === 'tr' ? "MyUNI Tamamlama Sertifikası" : "MyUNI Completion Certificate"
-          }
-        }),
-        ...(pageInfo.pageType === 'blog-detail' ? {
-          author: {
-            "@type": "Organization",
-            name: "MyUNI"
-          },
-          publisher: {
-            "@type": "Organization",
-            name: "MyUNI",
-            logo: {
-              "@type": "ImageObject",
-              url: "https://myunilab.net/logo.png"
-            }
-          },
-          datePublished: new Date().toISOString(),
-          dateModified: new Date().toISOString()
-        } : {})
+        "@graph": [
+          organizationNode,
+          websiteNode,
+          ...(pageEntity ? [pageEntity] : []),
+        ],
       }),
     },
   };

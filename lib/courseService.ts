@@ -443,6 +443,39 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
   }
 }
 
+export async function getAllPackages(locale: string = 'tr') {
+  try {
+    const { data, error } = await supabase
+      .from('myuni_packages')
+      .select('id, slug, title, description, price, original_price, level, thumbnail_url, banner_url, is_active, updated_at, created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((pkg) => ({
+      id: pkg.id,
+      slug: pkg.slug,
+      name: pkg.title,
+      title: pkg.title,
+      description: pkg.description || '',
+      price: pkg.price || 0,
+      original_price: pkg.original_price || null,
+      level: pkg.level || 'Beginner',
+      thumbnail_url: pkg.thumbnail_url,
+      banner_url: pkg.banner_url,
+      image: pkg.thumbnail_url || pkg.banner_url || '',
+      is_active: pkg.is_active,
+      created_at: pkg.created_at,
+      updated_at: pkg.updated_at,
+      locale,
+    }));
+  } catch (error) {
+    console.error('Error fetching all packages:', error);
+    throw error;
+  }
+}
+
 
 export async function getLatestQuizResult(userId: string, quickId: string) {
   try {

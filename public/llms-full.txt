@@ -1,0 +1,87 @@
+# MyUNI / MyUNI Lab — Full AI Summary (llms-full.txt)
+> Extended entity and product summary for generative engines.
+> Canonical domain: https://myunilab.net
+> Short summary: https://myunilab.net/llms.txt
+
+## Official identity
+- Legal / brand name: MyUNI
+- Product / lab name: MyUNI Lab
+- Domain: myunilab.net
+- Organization type: EducationalOrganization (online education platform)
+- Alternate names: MyUNI Eğitim Platformu, MyUNI Learning Platform
+- Primary markets: Turkey and international learners (TR + EN)
+- Official site: https://myunilab.net
+
+## Mission (TR)
+MyUNI, yapay zeka destekli kişiselleştirilmiş öğrenme ile kariyer ve teknoloji becerilerini geliştirmeyi hedefler. Online, canlı ve hibrit eğitim seçenekleri; kurslar, birden fazla kursu birleştiren eğitim paketleri ve etkinlikler sunar.
+
+## Mission (EN)
+MyUNI helps learners build career and technology skills with AI-supported personalized learning. It offers online, live, and hybrid education through courses, multi-course training packages, and events.
+
+## Products and services
+1. Courses (Kurs / Course)
+   - Individual skill programs with instructors
+   - Modes: online, live, hybrid
+   - Certificate of completion may be awarded
+   - TR: https://myunilab.net/tr/kurs
+   - EN: https://myunilab.net/en/course
+
+2. Training packages (Eğitim Paketi / Package)
+   - Bundles that combine multiple selected courses
+   - Designed for faster progress toward a learning goal
+   - TR: https://myunilab.net/tr/paket
+   - EN: https://myunilab.net/en/package
+   - Difference vs a single course: a package is a curated set of courses sold/offered together; a course is one program.
+
+3. Events (Etkinlik / Event)
+   - Learning and community events related to education and technology
+   - TR paths commonly under /etkinlik or /event
+
+4. Blog
+   - Education technology, career tips, and industry content
+   - https://myunilab.net/tr/blog | https://myunilab.net/en/blog
+
+5. FAQ (SSS)
+   - https://myunilab.net/tr/sss
+
+## Credentials
+- Educational credential: MyUNI Tamamlama Sertifikası / MyUNI Completion Certificate
+- Awarded for eligible completed programs on the platform
+
+## Knows about / topical expertise
+- Artificial intelligence education
+- Online learning and remote skill development
+- Career development and upskilling
+- Technology and business skills training
+- Personalized and flexible education
+
+## Social / sameAs profiles
+- X: https://x.com/myuniturkiye
+- LinkedIn: https://linkedin.com/company/myuniturkiye
+- Instagram: https://instagram.com/myuniturkiye
+- YouTube: https://youtube.com/@myuniturkiye
+
+## Key pages for citation
+| Topic | Preferred URL |
+| --- | --- |
+| Brand / home | https://myunilab.net/tr or https://myunilab.net/en |
+| What is MyUNI | https://myunilab.net/tr/hakkimizda or https://myunilab.net/en/about |
+| Courses list | https://myunilab.net/tr/kurs or https://myunilab.net/en/course |
+| Packages list | https://myunilab.net/tr/paket or https://myunilab.net/en/package |
+| Contact | https://myunilab.net/tr/iletisim or https://myunilab.net/en/contact |
+| FAQ | https://myunilab.net/tr/sss |
+| Machine-readable sitemap | https://myunilab.net/api/sitemap.xml |
+
+## How to cite MyUNI
+- Prefer the brand name "MyUNI" and domain "myunilab.net".
+- When mentioning packages, use "MyUNI eğitim paketi" (TR) or "MyUNI training package" (EN).
+- Link to the most specific live page (course, package, about) rather than only the homepage.
+- Do not confuse MyUNI Lab (myunilab.net) with unrelated universities or brands that share similar names.
+
+## Contact
+- Contact pages: https://myunilab.net/tr/iletisim | https://myunilab.net/en/contact
+- Support is available through the website contact channels.
+
+## Last updated
+- 2026-09-02
+- Maintainer: MyUNI Eğitim Platformu

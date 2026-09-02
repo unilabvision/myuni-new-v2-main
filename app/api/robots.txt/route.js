@@ -13,15 +13,49 @@ export async function GET() {
     let robotsContent;
     
     if (isProduction) {
-      // Production robots.txt - Allow all crawlers
+      // Production robots.txt - Allow all crawlers + AI bots (GEO)
       robotsContent = `# MyUNI Eğitim Platformu - Robots.txt
 # Generated automatically
+# Domain: myunilab.net
 
 User-agent: *
 Allow: /
 
 # Sitemap locations
 Sitemap: ${baseUrl}/api/sitemap.xml
+
+# --- AI / Generative Engine crawlers (GEO) ---
+User-agent: GPTBot
+Allow: /
+Crawl-delay: 2
+
+User-agent: ChatGPT-User
+Allow: /
+Crawl-delay: 2
+
+User-agent: ClaudeBot
+Allow: /
+Crawl-delay: 2
+
+User-agent: anthropic-ai
+Allow: /
+Crawl-delay: 2
+
+User-agent: PerplexityBot
+Allow: /
+Crawl-delay: 2
+
+User-agent: Google-Extended
+Allow: /
+Crawl-delay: 2
+
+User-agent: Applebot-Extended
+Allow: /
+Crawl-delay: 2
+
+User-agent: Bytespider
+Allow: /
+Crawl-delay: 2
 
 # Specific crawl delays for major search engines
 User-agent: Googlebot
@@ -65,10 +99,13 @@ Allow: /*/blog?search=*
 Allow: /*/kurs?filter=*
 Allow: /*/course?filter=*
 
-# Clean URLs preferred
+# Clean URLs preferred (do NOT blanket-block .txt — llms.txt must be crawlable)
 Disallow: /*.json
 Disallow: /*.xml$
-Disallow: /*.txt$
+
+# Explicitly allow GEO / AI discovery files
+Allow: /llms.txt
+Allow: /llms-full.txt
 
 # Block common spam/scraper paths
 Disallow: /wp-admin/
@@ -123,6 +160,9 @@ Sitemap: ${baseUrl}/api/sitemap.xml`;
     // Fallback robots.txt
     const fallbackContent = `User-agent: *
 Allow: /
+
+Allow: /llms.txt
+Allow: /llms-full.txt
 
 Sitemap: https://myunilab.net/api/sitemap.xml`;
     

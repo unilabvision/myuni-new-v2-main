@@ -5,8 +5,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Package } from 'lucide-react';
 
+interface PackageFaq {
+  question: string;
+  answer: string;
+}
+
 interface PackageListPageProps {
   locale?: string;
+  faqs?: PackageFaq[];
 }
 
 interface PackageItem {
@@ -27,6 +33,10 @@ const texts = {
     title: 'Birden fazla eğitimi bir arada sunan paketlerle ilerleyin.',
     subtitle:
       'Seçili kursları birleştiren eğitim paketlerini inceleyin ve hedeflerinize daha hızlı ulaşın.',
+    geoIntroTitle: 'MyUNI eğitim paketleri nedir?',
+    geoIntro:
+      'MyUNI (myunilab.net) eğitim paketleri, birden fazla kursu tek bir öğrenme yolunda birleştirir. Tek kurs yerine paketlerle kariyer ve beceri hedeflerinize daha hızlı ilerleyebilirsiniz.',
+    faqTitle: 'Sık sorulan sorular',
     viewAll: 'Tüm Paketleri Gör',
     exploreMore: 'Detayları İncele',
     allTitle: 'Eğitim Paketleri',
@@ -43,6 +53,10 @@ const texts = {
     title: 'Advance faster with packages that bundle multiple courses.',
     subtitle:
       'Browse training packages that combine selected courses and help you reach your goals sooner.',
+    geoIntroTitle: 'What are MyUNI training packages?',
+    geoIntro:
+      'MyUNI (myunilab.net) training packages combine multiple courses into one learning path so you can reach career and skill goals faster than taking a single course alone.',
+    faqTitle: 'Frequently asked questions',
     viewAll: 'View All Packages',
     exploreMore: 'Explore Details',
     allTitle: 'Training Packages',
@@ -56,7 +70,10 @@ const texts = {
   },
 };
 
-export default function PackageListPage({ locale = 'tr' }: PackageListPageProps) {
+export default function PackageListPage({
+  locale = 'tr',
+  faqs = [],
+}: PackageListPageProps) {
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const t = texts[locale as keyof typeof texts] || texts.tr;
@@ -122,6 +139,14 @@ export default function PackageListPage({ locale = 'tr' }: PackageListPageProps)
             <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8">
               {t.subtitle}
             </p>
+            <div className="rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/60 p-6">
+              <h2 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-3">
+                {t.geoIntroTitle}
+              </h2>
+              <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                {t.geoIntro}
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -217,6 +242,29 @@ export default function PackageListPage({ locale = 'tr' }: PackageListPageProps)
           )}
         </div>
       </section>
+
+      {faqs.length > 0 ? (
+        <section className="py-16 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800">
+          <div className="max-w-3xl px-6 mx-auto">
+            <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-4">
+              {t.faqTitle}
+            </h2>
+            <div className="w-16 h-px bg-[#990000] mb-8" />
+            <div className="space-y-6">
+              {faqs.map((faq) => (
+                <div key={faq.question}>
+                  <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
+                    {faq.question}
+                  </h3>
+                  <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                    {faq.answer}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

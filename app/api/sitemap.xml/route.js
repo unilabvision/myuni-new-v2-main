@@ -1,6 +1,6 @@
 // app/api/sitemap.xml/route.js - Complete Sitemap With Blog Service
 import { NextResponse } from 'next/server';
-import { getAllCourses } from '../../../lib/courseService';
+import { getAllCourses, getAllPackages } from '../../../lib/courseService';
 import { resolvePublicBaseUrl } from '../../../lib/publicBaseUrl';
 // Blog service import - try different possible paths
 let getUnilabBlogPosts, getCurrentSite;
@@ -29,6 +29,14 @@ const STATIC_ROUTES = {
   courses: {
     tr: 'kurs',
     en: 'course', 
+    priority: '0.9',
+    changefreq: 'weekly'
+  },
+
+  // Eğitim paketleri
+  packages: {
+    tr: 'paket',
+    en: 'package',
     priority: '0.9',
     changefreq: 'weekly'
   },
@@ -282,6 +290,79 @@ async function generateCourseRoutes(baseUrl) {
   return routes;
 }
 
+async function generatePackageRoutes(baseUrl) {
+  const routes = [];
+
+  try {
+    const [trPackages, enPackages] = await Promise.all([
+      getAllPackages('tr'),
+      getAllPackages('en'),
+    ]);
+
+    const packageMap = new Map();
+
+    trPackages.forEach((pkg) => {
+      if (pkg.slug) {
+        packageMap.set(pkg.slug, {
+          tr: pkg.slug,
+          updated_at: pkg.updated_at || pkg.created_at,
+        });
+      }
+    });
+
+    enPackages.forEach((pkg) => {
+      if (pkg.slug) {
+        const existing = packageMap.get(pkg.slug);
+        if (existing) {
+          existing.en = pkg.slug;
+          existing.updated_at = pkg.updated_at || pkg.created_at || existing.updated_at;
+        } else {
+          packageMap.set(pkg.slug, {
+            en: pkg.slug,
+            updated_at: pkg.updated_at || pkg.created_at,
+          });
+        }
+      }
+    });
+
+    packageMap.forEach((slugs) => {
+      const lastmod = formatSitemapDate(slugs.updated_at ? new Date(slugs.updated_at) : new Date());
+
+      if (slugs.tr) {
+        const trUrl = `${baseUrl}/tr/paket/${slugs.tr}`;
+        routes.push({
+          loc: trUrl,
+          lastmod,
+          changefreq: 'weekly',
+          priority: '0.85',
+          alternates: {
+            tr: trUrl,
+            en: slugs.en ? `${baseUrl}/en/package/${slugs.en}` : null,
+          },
+        });
+      }
+
+      if (slugs.en) {
+        const enUrl = `${baseUrl}/en/package/${slugs.en}`;
+        routes.push({
+          loc: enUrl,
+          lastmod,
+          changefreq: 'weekly',
+          priority: '0.85',
+          alternates: {
+            tr: slugs.tr ? `${baseUrl}/tr/paket/${slugs.tr}` : null,
+            en: enUrl,
+          },
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Error generating package routes:', error);
+  }
+
+  return routes;
+}
+
 // Generate XML sitemap
 function generateSitemapXML(routes) {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -310,10 +391,11 @@ export async function GET() {
     
     console.log('🚀 Generating sitemap for:', baseUrl);
     
-    // Generate route types (including blog)
-    const [staticRoutes, courseRoutes, blogRoutes] = await Promise.all([
+    // Generate route types (including blog + packages)
+    const [staticRoutes, courseRoutes, packageRoutes, blogRoutes] = await Promise.all([
       generateStaticRoutes(baseUrl),
       generateCourseRoutes(baseUrl),
+      generatePackageRoutes(baseUrl),
       generateBlogRoutes(baseUrl)
     ]);
     
@@ -321,6 +403,7 @@ export async function GET() {
     const allRoutes = [
       ...staticRoutes,
       ...courseRoutes,
+      ...packageRoutes,
       ...blogRoutes
     ];
     
@@ -328,7 +411,7 @@ export async function GET() {
     allRoutes.sort((a, b) => parseFloat(b.priority) - parseFloat(a.priority));
     
     console.log(`✅ Generated sitemap with ${allRoutes.length} URLs`);
-    console.log(`📊 Static: ${staticRoutes.length}, Courses: ${courseRoutes.length}, Blog: ${blogRoutes.length}`);
+    console.log(`📊 Static: ${staticRoutes.length}, Courses: ${courseRoutes.length}, Packages: ${packageRoutes.length}, Blog: ${blogRoutes.length}`);
     
     // Generate XML
     const xml = generateSitemapXML(allRoutes);
@@ -368,6 +451,18 @@ export async function GET() {
   </url>
   <url>
     <loc>${baseUrl}/en/course</loc>
+    <lastmod>${formatSitemapDate(new Date())}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/tr/paket</loc>
+    <lastmod>${formatSitemapDate(new Date())}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/en/package</loc>
     <lastmod>${formatSitemapDate(new Date())}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
