@@ -35,9 +35,11 @@ const nextConfig = {
     return config;
   },
   images: {
-    // Vercel Image Optimization kotası dolduğunda /_next/image kırılıyor.
-    // Supabase/Clerk görselleri doğrudan kaynak URL'den yüklenir (koleksiyon/dergi fix'i site geneli).
-    unoptimized: true,
+    // Supabase Storage doğrudan tarayıcıya açılınca Cached Egress şişiyor.
+    // Custom loader → /api/media (Vercel CDN cache) → Supabase yalnızca cache miss'te.
+    // Not: Vercel Image Optimization kotası için unoptimized kullanmıyoruz; proxy kendi cache'ler.
+    loader: 'custom',
+    loaderFile: './lib/imageLoader.ts',
     remotePatterns: [
       {
         protocol: 'https',

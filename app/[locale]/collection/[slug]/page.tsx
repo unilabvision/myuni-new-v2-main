@@ -215,7 +215,6 @@ export default function CollectionDetailPage({
                       className="object-cover"
                       priority
                       sizes="(max-width: 1024px) 100vw, 33vw"
-                      unoptimized
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-300 dark:text-neutral-600">
@@ -378,7 +377,6 @@ export default function CollectionDetailPage({
                             alt={product.brand_name}
                             fill
                             className="object-contain p-1"
-                            unoptimized
                           />
                         </div>
                       ) : (

@@ -814,7 +814,7 @@ export async function generateCertificate(data: CertificateData, forceGenerate: 
       course_images: null,
       created_at: now,
       updated_at: now,
-      course_logo: 'https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/Logo/myuni-logo.png',
+      course_logo: '/myuni-logo.png',
       language: 'tr',
       certificate_title: `${certificateTypeText} Başarı Sertifikası`,
       template_id: templateId,
