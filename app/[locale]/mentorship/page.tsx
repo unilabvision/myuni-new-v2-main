@@ -12,7 +12,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const path = locale === 'en' ? 'mentorship' : 'mentorluk';
-  const canonicalUrl = `https://myunilab.net/${locale}/${path}`;
+  const canonicalUrl = `https://www.myunilab.net/${locale}/${path}`;
 
   return {
     title:
@@ -26,8 +26,8 @@ export async function generateMetadata({
     alternates: {
       canonical: canonicalUrl,
       languages: {
-        tr: 'https://myunilab.net/tr/mentorluk',
-        en: 'https://myunilab.net/en/mentorship',
+        tr: 'https://www.myunilab.net/tr/mentorluk',
+        en: 'https://www.myunilab.net/en/mentorship',
       },
     },
   };
