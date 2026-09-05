@@ -28,7 +28,7 @@ type MentorshipDetail = {
 const texts = {
   tr: {
     back: 'Mentörlüklere dön',
-    apply: 'Başvur',
+    apply: 'Başvur ve Teklif Al',
     closed: 'Başvurular kapalı',
     mentor: 'Mentör',
     loading: 'Yükleniyor...',
@@ -37,7 +37,7 @@ const texts = {
   },
   en: {
     back: 'Back to mentorships',
-    apply: 'Apply',
+    apply: 'Apply & Get an Offer',
     closed: 'Applications closed',
     mentor: 'Mentor',
     loading: 'Loading...',
