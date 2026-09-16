@@ -476,6 +476,10 @@ export default async function LocaleLayout({
 
         <ClerkProvider
           afterSignOutUrl={`/${locale}`}
+          signInUrl={`/${locale}/login`}
+          signUpUrl={`/${locale}/login?tab=signup`}
+          signInFallbackRedirectUrl={`/${locale}`}
+          signUpFallbackRedirectUrl={`/${locale}/complete-profile`}
           appearance={{
             variables: {
               colorPrimary: '#3b82f6', // Educational blue theme

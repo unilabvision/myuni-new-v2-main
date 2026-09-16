@@ -2,7 +2,8 @@ import { currentUser } from '@clerk/nextjs/server';
 import { auth } from '@clerk/nextjs/server';
 
 /**
- * Comma-separated list of admin emails. If not set, any signed-in user is allowed (dev only).
+ * Comma-separated list of admin emails.
+ * MUST be set in production — if empty, no one has admin access (fail-closed).
  */
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
   .split(',')
@@ -17,7 +18,9 @@ export async function requireAdmin(): Promise<{ userId: string; email: string } 
   if (!user) return null;
 
   const email = user.emailAddresses?.[0]?.emailAddress?.toLowerCase() ?? '';
-  if (ADMIN_EMAILS.length > 0 && !ADMIN_EMAILS.includes(email)) {
+
+  // Fail-closed: ADMIN_EMAILS tanımsızsa hiç kimse admin değil
+  if (ADMIN_EMAILS.length === 0 || !ADMIN_EMAILS.includes(email)) {
     return null;
   }
 
@@ -25,6 +28,8 @@ export async function requireAdmin(): Promise<{ userId: string; email: string } 
 }
 
 export function isAdminEmail(email: string): boolean {
-  if (ADMIN_EMAILS.length === 0) return true;
+  // Fail-closed: ADMIN_EMAILS tanımsızsa hiç kimse admin değil
+  if (ADMIN_EMAILS.length === 0) return false;
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
+

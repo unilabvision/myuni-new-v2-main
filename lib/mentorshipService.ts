@@ -95,7 +95,7 @@ function mapRow(row: Record<string, unknown>, locale: string): PublicMentorship 
 
 export async function getPublicMentorships(
   locale: string = 'tr',
-  options?: { featuredOnly?: boolean }
+  options?: { featuredOnly?: boolean; limit?: number }
 ): Promise<PublicMentorship[]> {
   let query = supabaseAdmin
     .from('mentorships')
@@ -106,6 +106,10 @@ export async function getPublicMentorships(
 
   if (options?.featuredOnly) {
     query = query.eq('is_featured', true);
+  }
+
+  if (options?.limit) {
+    query = query.limit(options.limit);
   }
 
   const { data, error } = await query;

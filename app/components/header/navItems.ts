@@ -28,7 +28,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/hakkimizda', label: 'Biz Kimiz' },
         { href: '/{locale}/egitmen-ol', label: 'Eğitmen Ol' },
-        { href: '/{locale}/bultenimiz', label: 'Bültenimiz' },
+        { href: '/{locale}/iletisim', label: 'İletişim' },
         { href: '/{locale}/gizlilik', label: 'Gizlilik Politikası' },
         {
           href: '/{locale}/sartlar-ve-kosullar',
@@ -42,7 +42,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       ],
     } as NavItem & { navKey?: string },
     { href: '/{locale}/blog', label: 'Blog' },
-    { href: '/{locale}/iletisim', label: 'İletişim' },
+    { href: '/{locale}/bultenimiz', label: 'Bültenimiz' },
   ],
   en: [
     { href: '/{locale}', label: 'Home' },
@@ -65,7 +65,7 @@ const baseNavItems: Record<string, NavItem[]> = {
       children: [
         { href: '/{locale}/about', label: 'Who We Are' },
         { href: '/{locale}/egitmen-ol', label: 'Become an Instructor' },
-        { href: '/{locale}/newsletter', label: 'Newsletter' },
+        { href: '/{locale}/contact', label: 'Contact' },
         { href: '/{locale}/privacy', label: 'Privacy Policy' },
         { href: '/{locale}/terms', label: 'Terms of Use' },
         { href: '/{locale}/iptal-iade', label: 'Cancellation & Refund' },
@@ -74,7 +74,7 @@ const baseNavItems: Record<string, NavItem[]> = {
     } as NavItem & { navKey?: string },
     { href: '/{locale}/projects', label: 'Projects' },
     { href: '/{locale}/blog', label: 'Blog' },
-    { href: '/{locale}/contact', label: 'Contact' },
+    { href: '/{locale}/newsletter', label: 'Newsletter' },
   ],
 };
 

@@ -29,3 +29,8 @@ node_modules
 # Local Clerk/user exports (PII)
 exports/
 
+# Local-only Next overrides (never deploy)
+next.config.local.json
+
+
+certificates

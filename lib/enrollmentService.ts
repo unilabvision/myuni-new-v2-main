@@ -339,17 +339,13 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
         console.error('Error enrolling user in package:', packageError);
         const stillMissing = !(await checkUserPackageEnrollment(userId, packageId));
         if (stillMissing) return false;
-      } else {
-        console.log('Package enrollment created:', packageId);
       }
-    } else {
-      console.log('Package enrollment already exists, ensuring course enrollments:', packageId);
     }
 
     // 2. Paketin içindeki tüm kursları al
     const { data: packageCourses, error: coursesError } = await supabase
       .from('myuni_package_courses')
-      .select('course_id, myuni_courses(id, title)')
+      .select('course_id')
       .eq('package_id', packageId)
       .order('order_index', { ascending: true });
 
@@ -363,77 +359,71 @@ export async function enrollUserInPackage(userId: string, packageId: string, ord
       return true;
     }
 
-    console.log(`Found ${packageCourses.length} courses in package ${packageId}`);
+    const courseIds = packageCourses.map((pc) => pc.course_id);
 
-    // 3. Her kurs için enrollment oluştur
-    let courseFailures = 0;
-    for (const pc of packageCourses) {
-      const courseId = pc.course_id;
-      const courseTitle = (pc.myuni_courses as any)?.title || 'Unknown';
+    // 3. Mevcut tüm enrollment'ları tek sorguda al (N+1 yerine batch)
+    const { data: existingEnrollments, error: existingError } = await supabase
+      .from('myuni_enrollments')
+      .select('id, course_id, is_active')
+      .eq('user_id', userId)
+      .in('course_id', courseIds);
 
-      try {
-        // Mevcut enrollment var mı kontrol et
-        const { data: existingEnrollment } = await supabase
-          .from('myuni_enrollments')
-          .select('id, is_active')
-          .eq('user_id', userId)
-          .eq('course_id', courseId)
-          .maybeSingle();
-
-        if (existingEnrollment) {
-          if (!existingEnrollment.is_active) {
-            // Pasif enrollment'ı aktif et
-            const { error: activateError } = await supabase
-              .from('myuni_enrollments')
-              .update({ 
-                is_active: true,
-                enrolled_at: new Date().toISOString() 
-              })
-              .eq('id', existingEnrollment.id);
-
-            if (activateError) {
-              console.error(`Error activating enrollment for course ${courseTitle}:`, activateError);
-              courseFailures += 1;
-            } else {
-              console.log(`Activated existing enrollment for course: ${courseTitle}`);
-            }
-          } else {
-            console.log(`User already enrolled in course: ${courseTitle}`);
-          }
-        } else {
-          // Yeni enrollment oluştur
-          const { error: enrollError } = await supabase
-            .from('myuni_enrollments')
-            .insert({
-              user_id: userId,
-              course_id: courseId,
-              enrolled_at: new Date().toISOString(),
-              progress_percentage: 0,
-              is_active: true,
-              welcome_shown: false
-            });
-
-          if (enrollError) {
-            console.error(`Error creating enrollment for course ${courseTitle}:`, enrollError);
-            courseFailures += 1;
-          } else {
-            console.log(`Created enrollment for course: ${courseTitle}`);
-          }
-        }
-      } catch (courseError) {
-        console.error(`Error processing course ${courseId}:`, courseError);
-        courseFailures += 1;
-      }
-    }
-
-    if (courseFailures > 0) {
-      console.error(
-        `Package ${packageId}: ${courseFailures}/${packageCourses.length} course enrollments failed`
-      );
+    if (existingError) {
+      console.error('Error fetching existing enrollments:', existingError);
       return false;
     }
 
-    console.log(`Successfully enrolled user in package ${packageId} with ${packageCourses.length} courses`);
+    const existingMap = new Map(
+      (existingEnrollments || []).map((e) => [e.course_id, e])
+    );
+
+    const now = new Date().toISOString();
+
+    // 4. Pasif olanları toplu aktif et
+    const toActivate = (existingEnrollments || [])
+      .filter((e) => !e.is_active)
+      .map((e) => e.id);
+
+    if (toActivate.length > 0) {
+      const { error: activateError } = await supabase
+        .from('myuni_enrollments')
+        .update({ is_active: true, enrolled_at: now })
+        .in('id', toActivate);
+
+      if (activateError) {
+        console.error('Error activating existing enrollments:', activateError);
+        return false;
+      }
+    }
+
+    // 5. Hiç kaydı olmayanları bulk insert et
+    const toInsert = courseIds
+      .filter((courseId) => !existingMap.has(courseId))
+      .map((courseId) => ({
+        user_id: userId,
+        course_id: courseId,
+        enrolled_at: now,
+        progress_percentage: 0,
+        is_active: true,
+        welcome_shown: false,
+      }));
+
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from('myuni_enrollments')
+        .insert(toInsert);
+
+      if (insertError) {
+        console.error('Error bulk inserting course enrollments:', insertError);
+        return false;
+      }
+    }
+
+    console.log(
+      `Successfully enrolled user in package ${packageId}: ` +
+      `${toInsert.length} new, ${toActivate.length} reactivated, ` +
+      `${courseIds.length - toInsert.length - toActivate.length} already active.`
+    );
     return true;
 
   } catch (error) {

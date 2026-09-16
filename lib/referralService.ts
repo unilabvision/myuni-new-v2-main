@@ -1,3 +1,5 @@
+import 'server-only';
+import { randomBytes } from 'crypto';
 import { supabaseAdmin as supabase } from './supabaseAdmin';
 
 export interface DiscountCode {
@@ -26,6 +28,16 @@ export interface ReferralStats {
   pendingReferrals: number;
 }
 
+/** Cryptographically-secure, collision-resistant referral code üretir. */
+function generateReferralCode(): string {
+  return 'REF' + randomBytes(6).toString('hex').toUpperCase();
+}
+
+/** Cryptographically-secure reward kodu üretir. */
+function generateRewardCode(): string {
+  return 'RWD' + randomBytes(6).toString('hex').toUpperCase();
+}
+
 // Kullanıcı için referral kodu oluştur (0% indirim)
 export async function createReferralCode(userId: string): Promise<{ success: boolean; code?: string; error?: string }> {
   try {
@@ -46,17 +58,24 @@ export async function createReferralCode(userId: string): Promise<{ success: boo
       return { success: true, code: existingCode.code };
     }
 
-    // Yeni referral kodu oluştur - sabit format (kimlik gibi)
-    // userId'den unique bir kod oluştur
-    const userIdHash = userId.replace(/-/g, '').substring(0, 8).toUpperCase();
-    // userId'yi hash'leyerek daha unique yap
-    const hash = userId.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    const hashStr = Math.abs(hash).toString(36).toUpperCase().substring(0, 6);
-    const referralCode = `REF${userIdHash}${hashStr}`;
-    
+    // Cryptographically-secure unique kod oluştur (collision retry ile)
+    let referralCode: string = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = generateReferralCode();
+      const { data: collision } = await supabase
+        .from('discount_codes')
+        .select('code')
+        .eq('code', candidate)
+        .maybeSingle();
+      if (!collision) {
+        referralCode = candidate;
+        break;
+      }
+    }
+    if (!referralCode) {
+      throw new Error('Unique referral kodu üretilemedi, lütfen tekrar deneyin.');
+    }
+
     // 500 yıl geçerli olacak şekilde tarih hesapla
     const validUntil = new Date();
     validUntil.setFullYear(validUntil.getFullYear() + 500);
@@ -74,7 +93,7 @@ export async function createReferralCode(userId: string): Promise<{ success: boo
         is_used: false,
         influencer_id: userId,
         commission: 0,
-        is_referral: true
+        is_referral: true,
       })
       .select('code')
       .single();
@@ -86,9 +105,9 @@ export async function createReferralCode(userId: string): Promise<{ success: boo
     return { success: true, code: data.code };
   } catch (error) {
     console.error('Error creating referral code:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Referral kodu oluşturulamadı' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Referral kodu oluşturulamadı',
     };
   }
 }
@@ -96,55 +115,57 @@ export async function createReferralCode(userId: string): Promise<{ success: boo
 // Referral kod kullanıldığında influencer'a ödül kodu oluştur
 export async function createRewardCode(influencerId: string): Promise<{ success: boolean; code?: string; error?: string }> {
   try {
-    console.log('=== ÖDÜL KODU OLUŞTURMA BAŞLADI ===');
-    console.log('A kişisi (referral sahibi) Influencer ID:', influencerId);
+    // Cryptographically-secure + collision-safe reward kodu oluştur
+    let rewardCode: string = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = generateRewardCode();
+      const { data: collision } = await supabase
+        .from('discount_codes')
+        .select('code')
+        .eq('code', candidate)
+        .maybeSingle();
+      if (!collision) {
+        rewardCode = candidate;
+        break;
+      }
+    }
+    if (!rewardCode) {
+      throw new Error('Unique reward kodu üretilemedi, lütfen tekrar deneyin.');
+    }
 
-    // Ödül kodu oluştur
-    const rewardCode = `REWARD${influencerId.substring(0, 6).toUpperCase()}${Date.now().toString().slice(-4)}`;
-    console.log('Oluşturulan ödül kodu:', rewardCode);
-    
     // 3 gün geçerli olacak şekilde tarih hesapla
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + 3);
-    console.log('Geçerlilik tarihi:', validUntil.toISOString().split('T')[0]);
-
-    const insertData = {
-      code: rewardCode,
-      discount_amount: 15,
-      discount_type: 'percentage',
-      valid_until: validUntil.toISOString().split('T')[0],
-      applicable_courses: [],
-      max_usage: 1, // Ödül kodları tek kullanımlık
-      usage_count: 0,
-      is_used: false,
-      influencer_id: influencerId,
-      commission: 0,
-      is_referral: false
-    };
-
-    console.log('Veritabanına eklenecek veri:', insertData);
 
     const { data, error } = await supabase
       .from('discount_codes')
-      .insert(insertData)
+      .insert({
+        code: rewardCode,
+        discount_amount: 15,
+        discount_type: 'percentage',
+        valid_until: validUntil.toISOString().split('T')[0],
+        applicable_courses: [],
+        max_usage: 1, // Ödül kodları tek kullanımlık
+        usage_count: 0,
+        is_used: false,
+        influencer_id: influencerId,
+        commission: 0,
+        is_referral: false,
+      })
       .select('code')
       .single();
 
-    console.log('Veritabanı insert sonucu:', { data, error });
-
     if (error) {
-      console.error('Veritabanı insert hatası:', error);
+      console.error('Error creating reward code:', error);
       throw error;
     }
 
-    console.log('=== ÖDÜL KODU BAŞARIYLA OLUŞTURULDU ===');
-    console.log('A kişisine oluşturulan REWARDUSER kodu:', data.code);
     return { success: true, code: data.code };
   } catch (error) {
     console.error('Error creating reward code:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Ödül kodu oluşturulamadı' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ödül kodu oluşturulamadı',
     };
   }
 }
@@ -180,13 +201,12 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
       throw error;
     }
 
-    // Kullanıcının kazandığı ödül kodlarını getir
+    // Kullanıcının kazandığı ödül kodlarını getir (discount_amount filtresi yok — oran değişirse kaybolmaz)
     const { data: rewardCodes, error: rewardError } = await supabase
       .from('discount_codes')
       .select('*')
       .eq('influencer_id', userId)
-      .eq('is_referral', false)
-      .eq('discount_amount', 15);
+      .eq('is_referral', false);
 
     if (rewardError) {
       throw rewardError;
@@ -241,7 +261,6 @@ export async function getUserRewardCodes(userId: string): Promise<DiscountCode[]
       .select('*')
       .eq('influencer_id', userId)
       .eq('is_referral', false)
-      .eq('discount_amount', 15)
       .order('created_at', { ascending: false });
 
     if (error) {

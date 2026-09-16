@@ -20,14 +20,23 @@ interface FormEmailData {
   formData: FormFieldValue;
 }
 
-// Create transporter with better error handling
-const createTransporter = () => {
+// Singleton transporter — her e-posta için yeni TCP bağlantısı açılmasını önler.
+// Module-level cache: ilk çağrıda oluşturulur, sonraki çağrılarda yeniden kullanılır.
+// nodemailer.Transporter<unknown> — hem SMTPTransport hem SMTPPool'u kapsar.
+let _transporter: nodemailer.Transporter<unknown> | null = null;
 
+function getTransporter(): nodemailer.Transporter<unknown> {
   if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    throw new Error('Email configuration missing. Please check EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD environment variables.');
+    throw new Error(
+      'Email configuration missing. Please check EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD environment variables.'
+    );
   }
 
-  return nodemailer.createTransport({
+  if (_transporter) return _transporter;
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  _transporter = nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
@@ -37,25 +46,25 @@ const createTransporter = () => {
       pass: process.env.EMAIL_PASSWORD,
     },
     tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
+      // TLS sertifika doğrulaması her zaman açık — MITM koruması
+      rejectUnauthorized: true,
     },
     pool: true,
     maxConnections: 1,
     rateDelta: 20000,
     rateLimit: 5,
-    debug: true,
-    logger: true
+    // debug/logger production'da kapalı: hassas SMTP bilgisi log'a düşmesin
+    debug: !isProduction,
+    logger: !isProduction,
   });
-};
+
+  return _transporter;
+}
 
 // Send email utility with improved error handling
 export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
   try {
-    
-    const transporter = createTransporter();
-    
-    await transporter.verify();
+    const transporter = getTransporter();
 
     const mailOptions = {
       from: `"UNILAB Vision" <${process.env.EMAIL_USER}>`,
@@ -66,16 +75,22 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
     };
 
     await transporter.sendMail(mailOptions);
-    
+
     return true;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const errorCode = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'UNKNOWN';
-    const errorCommand = error && typeof error === 'object' && 'command' in error ? String(error.command) : undefined;
-    const errorResponse = error && typeof error === 'object' && 'response' in error ? String(error.response) : undefined;
-    const errorResponseCode = error && typeof error === 'object' && 'responseCode' in error ? String(error.responseCode) : undefined;
+    const errorCode =
+      error && typeof error === 'object' && 'code' in error ? String(error.code) : 'UNKNOWN';
+    const errorCommand =
+      error && typeof error === 'object' && 'command' in error ? String(error.command) : undefined;
+    const errorResponse =
+      error && typeof error === 'object' && 'response' in error ? String(error.response) : undefined;
+    const errorResponseCode =
+      error && typeof error === 'object' && 'responseCode' in error
+        ? String(error.responseCode)
+        : undefined;
     const errorStack = error instanceof Error ? error.stack : undefined;
-    
+
     console.error('❌ Email sending failed:', {
       to: options.to,
       message: errorMessage,
@@ -85,7 +100,7 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
       responseCode: errorResponseCode,
       stack: errorStack,
     });
-    
+
     throw new Error(`Email sending failed: ${errorMessage} (Code: ${errorCode})`);
   }
 };

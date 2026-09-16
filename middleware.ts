@@ -26,8 +26,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/forgot-password', // Forgot password
   '/tr/verify-email', // Email verification
   '/en/verify-email', // Email verification
-  '/tr/sso-callback', // OAuth callback
-  '/en/sso-callback', // OAuth callback
+  '/tr/sso-callback(.*)', // OAuth callback
+  '/en/sso-callback(.*)', // OAuth callback
   '/tr/complete-profile', // Profile completion
   '/en/complete-profile', // Profile completion
   '/tr/auth(.*)',
@@ -54,6 +54,9 @@ const isPublicRoute = createRouteMatcher([
   '/tr/sartlar-ve-kosullar(.*)',
   '/en/terms(.*)',
   '/en/search(.*)',
+  '/tr/search(.*)',
+  '/tr/kampanyalar(.*)',
+  '/en/campaigns(.*)',
   '/tr/sss(.*)',
   '/en/sss(.*)',
   '/tr/soon(.*)',
@@ -117,8 +120,8 @@ const isAuthRoute = createRouteMatcher([
   '/en/forgot-password',
   '/tr/verify-email',
   '/en/verify-email',
-  '/tr/sso-callback',
-  '/en/sso-callback',
+  '/tr/sso-callback(.*)',
+  '/en/sso-callback(.*)',
   '/tr/complete-profile',
   '/en/complete-profile',
 ]);
@@ -182,8 +185,8 @@ const isValidRoute = createRouteMatcher([
   '/en/verify-email',
   '/tr/auth(.*)',
   '/en/auth(.*)',
-  '/tr/sso-callback',
-  '/en/sso-callback',
+  '/tr/sso-callback(.*)',
+  '/en/sso-callback(.*)',
   '/tr/complete-profile',
   '/en/complete-profile',
   '/tr/paket(.*)',
@@ -214,6 +217,8 @@ const isValidRoute = createRouteMatcher([
   '/en/internships(.*)',
   '/tr/search(.*)',
   '/en/search(.*)',
+  '/tr/kampanyalar(.*)',
+  '/en/campaigns(.*)',
   '/tr/sss(.*)',
   '/en/sss(.*)',
   '/tr/gizlilik(.*)',
@@ -271,6 +276,27 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   const { userId } = await auth();
+
+  // Clerk handshake / catchall — 404 fallback'ına düşmesin
+  if (pathname.includes('_clerk') || pathname.includes('__clerk')) {
+    return NextResponse.next();
+  }
+
+  // /sign-in sayfası yok; login catch-all'a düşür
+  if (
+    pathname === '/tr/sign-in' ||
+    pathname.startsWith('/tr/sign-in/') ||
+    pathname === '/en/sign-in' ||
+    pathname.startsWith('/en/sign-in/')
+  ) {
+    const locale = pathname.startsWith('/tr') ? 'tr' : 'en';
+    const url = req.nextUrl.clone();
+    url.pathname = `/${locale}/login`;
+    if (!url.searchParams.has('tab')) {
+      url.searchParams.set('tab', 'signin');
+    }
+    return NextResponse.redirect(url);
+  }
 
   // Course-preview route'larını özel olarak handle et (next.config.js'te rewrite var)
   if (pathname.startsWith('/course-preview/')) {
@@ -364,7 +390,11 @@ export default clerkMiddleware(async (auth, req) => {
 
   // If user is signed in and trying to access auth routes, redirect to homepage
   if (userId && isAuthRoute(req)) {
-    if (pathname.includes('/complete-profile') || pathname.includes('/verify-email')) {
+    if (
+      pathname.includes('/complete-profile') ||
+      pathname.includes('/verify-email') ||
+      pathname.includes('/sso-callback')
+    ) {
       console.log('✅ Allowing signed-in user to access auth flow routes');
       return response;
     }

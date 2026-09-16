@@ -1,6 +1,7 @@
 // app/[locale]/page.tsx
 import HeroSection from '../components/HeroSection';
 import FeaturedFilter from '../components/FeaturedFilter';
+import FeaturedMentorshipSection from '../components/FeaturedMentorshipSection';
 import DynamicTestimonialSection from '../components/DynamicTestimonialSection';
 import BlogSection from '../components/BlogSection';
 import EventListFilter from '../components/EventListFilter';
@@ -8,6 +9,7 @@ import EventListFilter from '../components/EventListFilter';
 // Yeni section'ları import edin
 import WhyChooseSection from '../components/WhyChooseSection';
 import { supabase } from '@/lib/supabase';
+import { getPublicMentorships, type PublicMentorship } from '@/lib/mentorshipService';
 import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 
 
@@ -32,7 +34,7 @@ export default async function HomePage({ params }: HomePageProps) {
   // Validate locale and fallback to 'tr' if invalid
   const locale: SupportedLocale = isValidLocale(rawLocale) ? rawLocale : 'tr';
 
-  // Server'dan (canlı) veriyi SSR ile burda hızlı çekelim ve Hero'ya bağlayalım.
+  // Server'dan (canlı) veriyi SSR ile burda hızlı çekelim ve Hero'ya bağlyalım.
   let activeCourseCount = 5; // Default fallback
   try {
     const { count, error } = await supabase
@@ -47,6 +49,14 @@ export default async function HomePage({ params }: HomePageProps) {
     console.error("Error fetching active courses for SSR:", err);
   }
 
+  // Mentörlükleri SSR ile çek — hata durumunda sayfa patlamaz
+  let featuredMentorships: PublicMentorship[] = [];
+  try {
+    featuredMentorships = await getPublicMentorships(locale, { limit: 3 });
+  } catch (err) {
+    console.error('Error fetching mentorships for home page:', err);
+  }
+
   return (
     <main className="min-h-screen bg-white dark:bg-neutral-900">
       {/* Hero Section with full width container */}
@@ -57,6 +67,11 @@ export default async function HomePage({ params }: HomePageProps) {
 
       <div className="max-w-7xl mx-auto px-6 lg:px-6 space-y-0">
         <FeaturedFilter locale={locale} />
+      </div>
+
+      {/* Mentorship Programs Section */}
+      <div className="max-w-7xl mx-auto px-6 lg:px-6">
+        <FeaturedMentorshipSection mentorships={featuredMentorships} locale={locale} />
       </div>
 
       {/* Dynamic Testimonials Section */}

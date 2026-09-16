@@ -1175,7 +1175,15 @@ const translations: TranslationsType = useMemo(
     return MobileWelcomeImageComponent;
   }, [currentImage, t.welcomeSignup]);
 
-  if (!mounted || isSignedIn) return null;
+  if (!mounted) return null;
+
+  if (isSignedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white dark:bg-neutral-900">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-600 dark:text-neutral-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-white dark:bg-neutral-900">

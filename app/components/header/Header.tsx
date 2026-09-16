@@ -5,9 +5,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useUser, UserButton } from '@clerk/nextjs';
+import { UserButton } from '@clerk/nextjs';
 import DesktopNav from './DesktopNav';
 import MobileNav from './MobileNav';
+import { useAuthUiReady } from './useAuthUiReady';
 import { useSiteApplicationNavForms } from './useSiteApplicationNavForms';
 import ThemeToggle from './ThemeToggle';
 import SearchBar from './SearchBar';
@@ -24,21 +25,12 @@ type SupportedLocale = 'tr' | 'en';
 
 export default function Header({ primary = '#a90013', locale }: HeaderProps) {
   const pathname = usePathname();
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, authReady } = useAuthUiReady();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [logoSrc, setLogoSrc] = useState('/myuni-logo.png'); // Default logo for SSR
   const [blogPostAlternateSlug, setBlogPostAlternateSlug] = useState<string | null>(null);
-  // Defer auth UI until after mount so SSR HTML matches the first client render
-  // (Clerk isLoaded can differ between server and client and causes hydration errors).
-  const [authMounted, setAuthMounted] = useState(false);
   const siteForms = useSiteApplicationNavForms(locale);
-
-  useEffect(() => {
-    setAuthMounted(true);
-  }, []);
-
-  const authReady = authMounted && isLoaded;
 
   // Determine if the current path is under /tr/watch/ or /en/watch/
   const isWatchPage = pathname.startsWith(`/${locale}/watch/`);

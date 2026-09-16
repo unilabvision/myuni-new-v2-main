@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import MobileSearchBar from './MobileSearchbar';
-import { useUser } from '@clerk/nextjs';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { getNavItems } from './navItems';
+import { useAuthUiReady } from './useAuthUiReady';
 import type { PublicSiteApplicationNavForm } from '@/app/types/siteApplicationForms';
 
 interface MobileNavProps {
@@ -15,16 +15,9 @@ interface MobileNavProps {
 }
 
 export default function MobileNav({ toggleMobileMenu, locale, siteForms }: MobileNavProps) {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, authReady } = useAuthUiReady();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [authMounted, setAuthMounted] = useState(false);
   const items = useMemo(() => getNavItems(locale, siteForms), [locale, siteForms]);
-
-  useEffect(() => {
-    setAuthMounted(true);
-  }, []);
-
-  const authReady = authMounted && isLoaded;
 
   const handleDropdownToggle = (label: string) => {
     setOpenDropdown(openDropdown === label ? null : label);

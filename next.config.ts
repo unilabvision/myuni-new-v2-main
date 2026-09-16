@@ -1,7 +1,23 @@
+import fs from 'fs';
 import path from 'path';
+
+/** Local-only Next overrides. Never applied on Vercel / production builds. */
+function loadLocalDevConfig(): { allowedDevOrigins?: string[] } {
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') return {};
+  const localPath = path.resolve(__dirname, 'next.config.local.json');
+  if (!fs.existsSync(localPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(localPath, 'utf8')) as { allowedDevOrigins?: string[] };
+  } catch {
+    return {};
+  }
+}
+
+const localDev = loadLocalDevConfig();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(localDev.allowedDevOrigins ? { allowedDevOrigins: localDev.allowedDevOrigins } : {}),
   turbopack: {
     root: path.resolve(__dirname),
   },
