@@ -233,13 +233,11 @@ export default function HeroSection({ locale, activeCourseCount }: HeroSectionPr
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
 
-                <Link href={content.servicesLink}>
-                  <Button
-                    variant="secondary"
-                    className="bg-tra nsparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium w-full"
-                  >
-                    {content.secondaryCta}
-                  </Button>
+                <Link
+                  href={content.servicesLink}
+                  className="inline-flex items-center justify-center rounded-md border border-neutral-300 bg-transparent px-8 py-3 text-base font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+                >
+                  {content.secondaryCta}
                 </Link>
               </div>
             </div>
