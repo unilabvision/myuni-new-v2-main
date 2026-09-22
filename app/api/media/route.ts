@@ -33,6 +33,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not a storage object' }, { status: 403 });
   }
 
+  if (request.nextUrl.searchParams.has('w') || request.nextUrl.searchParams.has('q')) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.search = '';
+    canonicalUrl.searchParams.set('u', target.toString());
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
   try {
     const upstream = await fetch(target.toString(), {
       // Prefer CDN/cache when available; still counts as egress on miss only.
@@ -47,16 +54,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-    const body = await upstream.arrayBuffer();
+    const headers = new Headers({
+      'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
+      'Cache-Control': CACHE_CONTROL,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    const contentLength = upstream.headers.get('content-length');
+    const etag = upstream.headers.get('etag');
+    if (contentLength) headers.set('Content-Length', contentLength);
+    if (etag) headers.set('ETag', etag);
 
-    return new NextResponse(body, {
+    return new NextResponse(upstream.body, {
       status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': CACHE_CONTROL,
-        'X-Content-Type-Options': 'nosniff',
-      },
+      headers,
     });
   } catch (error) {
     console.error('[api/media] proxy failed:', error instanceof Error ? error.message : error);

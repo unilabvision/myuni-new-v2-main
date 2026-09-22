@@ -872,6 +872,7 @@ function DashboardContent({ locale }: { locale: string }) {
               src={imageUrl}
               alt={event.title}
               fill
+              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
               className="object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <div className="absolute top-2 right-2 sm:top-4 sm:right-4 flex gap-2">
@@ -1592,6 +1593,7 @@ function DashboardContent({ locale }: { locale: string }) {
               src={imageUrl}
               alt={course.title}
               fill
+              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
               className="object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <div className="absolute top-2 right-2 sm:top-4 sm:right-4">
@@ -2226,6 +2228,7 @@ function DashboardContent({ locale }: { locale: string }) {
                               src={imageUrl}
                               alt={product.title}
                               fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
                               className="object-cover hover:scale-105 transition-transform duration-300"
                             />
                           ) : (

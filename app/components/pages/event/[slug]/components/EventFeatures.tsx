@@ -86,6 +86,7 @@ const CourseFeatures: React.FC<CourseFeaturesProps> = ({
                 src={feature.backgroundImage}
                 alt={feature.title}
                 fill
+                sizes="(min-width: 1024px) 33vw, 100vw"
                 className="object-cover"
               />
 

@@ -481,6 +481,7 @@ const CourseMainContent: React.FC<CourseMainContentProps> = ({
               src={course.banner_url}
               alt={course.title}
               fill
+              sizes="(min-width: 1024px) 768px, 100vw"
               className="object-cover"
               priority={false}
             />

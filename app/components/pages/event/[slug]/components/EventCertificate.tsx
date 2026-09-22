@@ -241,6 +241,7 @@ const EventCertificate: React.FC<EventCertificateProps> = ({
                   src="/tr/images/myuni-certificate.png"
                   alt="Etkinlik Sertifikası Önizlemesi"
                   fill
+                  sizes="(min-width: 1024px) 896px, 100vw"
                   className="object-cover transition-transform duration-500 ease-out group-hover:scale-105 group-hover:rotate-1"
                   priority
                 />

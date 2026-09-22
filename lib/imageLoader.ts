@@ -6,7 +6,6 @@
 export default function imageLoader({
   src,
   width,
-  quality,
 }: {
   src: string;
   width: number;
@@ -24,11 +23,13 @@ export default function imageLoader({
     src.includes('supabase.co/storage/v1/object/');
 
   if (isSupabaseStorage) {
-    const params = new URLSearchParams({
-      u: src,
-      w: String(width),
-      q: String(quality || 75),
-    });
+    const responsiveWidths = [320, 640, 960, 1280, 1920, 2560];
+    const selectedWidth = responsiveWidths.find((candidate) => candidate >= width) || 2560;
+    const managedMediaPattern = /\/([a-f0-9]{64})\/original\.webp(?:\?.*)?$/;
+    const variantSrc = managedMediaPattern.test(src)
+      ? src.replace(managedMediaPattern, `/$1/w-${selectedWidth}.webp`)
+      : src;
+    const params = new URLSearchParams({ u: variantSrc });
     return `/api/media?${params.toString()}`;
   }
 

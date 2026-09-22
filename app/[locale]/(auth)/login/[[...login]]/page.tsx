@@ -1134,6 +1134,7 @@ const translations: TranslationsType = useMemo(
               src={`/tr/images/myuni-egitim-platformu-${num}.webp`}
               alt={`MyUNI Platform ${num}`}
               fill
+              sizes="(min-width: 1024px) 50vw, 100vw"
               className="object-cover"
               priority={num === 1}
             />
@@ -1156,6 +1157,7 @@ const translations: TranslationsType = useMemo(
             src={`/tr/images/myuni-egitim-platformu-${currentImage}.webp`}
             alt={`MyUNI Platform ${currentImage}`}
             fill
+            sizes="100vw"
             className="object-cover"
             priority
           />

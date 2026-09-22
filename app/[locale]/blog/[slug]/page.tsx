@@ -230,6 +230,7 @@ export default async function BlogPostPage({
                   src={post.image} 
                   alt={post.title} 
                   fill
+                  sizes="100vw"
                   className="object-cover" 
                   priority
                 />
@@ -316,6 +317,7 @@ export default async function BlogPostPage({
                                 src={relatedPost.image} 
                                 alt={relatedPost.title} 
                                 fill 
+                                sizes="(min-width: 768px) 33vw, 100vw"
                                 className="object-cover transition-transform duration-300 group-hover:scale-110" 
                               />
                             </div>

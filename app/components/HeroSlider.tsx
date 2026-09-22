@@ -401,6 +401,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ locale = 'tr' }) => {
               src={slide.image_url}
               alt={slide.title}
               fill
+              sizes="100vw"
               priority={index === 0}
               loading={index === 0 ? 'eager' : 'lazy'}
               className="object-cover brightness-75 w-full h-full"

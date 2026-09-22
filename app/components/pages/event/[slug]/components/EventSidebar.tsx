@@ -619,6 +619,7 @@ const EventSidebar: React.FC<EventSidebarProps> = ({
                         src={latestEvent.thumbnail_url}
                         alt={latestEvent.title}
                         fill
+                        sizes="48px"
                         className="object-cover"
                       />
                     ) : (

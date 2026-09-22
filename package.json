@@ -9,6 +9,7 @@
     "dev:clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next dev",
     "build": "next build",
     "build:clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next build",
+    "media:audit": "node --env-file-if-exists=.env.local scripts/audit-supabase-media.mjs",
     "start": "next start",
     "lint": "next lint"
   },
@@ -51,6 +52,7 @@
     "react-loading-skeleton": "^3.5.0",
     "react-markdown": "^10.1.0",
     "react-pdf": "^8.0.2",
+    "sharp": "^0.34.5",
     "ua-parser-js": "^2.0.3"
   },
   "devDependencies": {

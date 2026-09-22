@@ -158,6 +158,7 @@ const CourseHeroSection: React.FC<CourseHeroSectionProps> = ({
           src={getBannerUrl(courseData)}
           alt={getCourseTitle(courseData)}
           fill
+          sizes="100vw"
           className="object-cover"
           priority
         />

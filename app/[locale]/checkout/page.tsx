@@ -1351,6 +1351,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
                   src={courseData.thumbnail_url || '/images/default-course.jpg'} 
                   alt={courseData.title}
                   fill
+                  sizes="96px"
                   className="object-cover rounded-lg"
                 />
               </div>

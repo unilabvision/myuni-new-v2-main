@@ -125,6 +125,7 @@ export default function VerifyEmailPage({ params }: VerifyEmailPageProps) {
               src={`/tr/images/myuni-egitim-platformu-${imgNum}.webp`}
               alt={`MyUNI Eğitim Platformu ${imgNum}`}
               fill
+              sizes="(min-width: 1024px) 50vw, 100vw"
               className="object-cover transition-transform transform group-hover:scale-105 duration-700 ease-in-out"
               priority={imgNum === 1}
             />
@@ -149,6 +150,7 @@ export default function VerifyEmailPage({ params }: VerifyEmailPageProps) {
               src={`/tr/images/myuni-egitim-platformu-${currentImage}.webp`}
               alt={`MyUNI Eğitim Platformu ${currentImage}`}
               fill
+              sizes="100vw"
               className="object-cover"
               priority
             />

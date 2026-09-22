@@ -61,6 +61,7 @@ const Hero: React.FC<HeroProps> = ({ locale = 'tr' }) => {
                 src="/tr/images/myuni-egitim-platformu-4.webp"
                 alt="MyUNI Education Platform"
                 fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
                 className="object-cover group-hover:scale-105 transition-transform duration-500"
                 priority
               />

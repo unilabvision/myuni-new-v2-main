@@ -225,6 +225,7 @@ function SearchContent({ locale }: { locale: string }) {
                   src={result.image}
                   alt={result.title}
                   fill
+                  sizes="(min-width: 1024px) 256px, 100vw"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 {/* Kurs tipi badge */}
@@ -338,6 +339,7 @@ function SearchContent({ locale }: { locale: string }) {
                 src={result.image}
                 alt={result.title}
                 fill
+                sizes="(min-width: 1024px) 256px, 100vw"
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
               />
             </div>

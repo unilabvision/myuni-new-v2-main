@@ -340,6 +340,7 @@ export default function CampaignDetailPage({
                     src={campaign.campaign_cover_image}
                     alt={campaign.campaign_name}
                     fill
+                    sizes="100vw"
                     className="object-cover"
                     priority
                   />
@@ -607,5 +608,3 @@ export default function CampaignDetailPage({
     </PageLayout>
   );
 }
-
-

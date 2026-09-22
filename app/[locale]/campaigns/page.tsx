@@ -89,6 +89,7 @@ const CampaignGrid: React.FC<CampaignGridProps> = ({ campaigns, texts, copyCampa
                   src={firstCampaign.image}
                   alt={firstCampaign.title}
                   fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => {
                     e.currentTarget.src = 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&h=600&fit=crop&crop=center';
@@ -161,6 +162,7 @@ const CampaignGrid: React.FC<CampaignGridProps> = ({ campaigns, texts, copyCampa
                       src={campaign.image}
                       alt={campaign.title}
                       fill
+                      sizes="(min-width: 1024px) 50vw, 100vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={(e) => {
                         e.currentTarget.src = 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&h=600&fit=crop&crop=center';
@@ -226,6 +228,7 @@ const CampaignGrid: React.FC<CampaignGridProps> = ({ campaigns, texts, copyCampa
                     src={campaign.image}
                     alt={campaign.title}
                     fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                     onError={(e) => {
                       e.currentTarget.src = 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&h=600&fit=crop&crop=center';
@@ -305,6 +308,7 @@ const CampaignGrid: React.FC<CampaignGridProps> = ({ campaigns, texts, copyCampa
                 src={campaign.image}
                 alt={campaign.title}
                 fill
+                sizes={isLarge ? '(min-width: 1024px) 50vw, 100vw' : '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'}
                 className="object-cover group-hover:scale-105 transition-transform duration-500"
                 onError={(e) => {
                   e.currentTarget.src = 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&h=600&fit=crop&crop=center';
@@ -1235,6 +1239,5 @@ export default function CampaignsPage() {
     </PageLayout>
   );
 }
-
 
 

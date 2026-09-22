@@ -174,6 +174,7 @@ const Footer = ({ locale }: FooterProps) => {
               src="/iyzico_dark.jpg"
               alt="iyzico payment methods"
               fill
+              sizes="160px"
               className="object-contain"
             />
           </div>

@@ -96,7 +96,7 @@ export default function MentorshipDetailPage({
   return (
     <div className="bg-neutral-50 dark:bg-neutral-950 min-h-screen pb-20">
       <div className="relative h-56 md:h-80 bg-neutral-800">
-        <Image src={cover} alt={item.title} fill className="object-cover opacity-80" priority />
+        <Image src={cover} alt={item.title} fill sizes="100vw" className="object-cover opacity-80" priority />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-8 text-white">
           <Link
@@ -128,6 +128,7 @@ export default function MentorshipDetailPage({
                       src={item.mentor_image_url}
                       alt={item.mentor_name || 'Mentor'}
                       fill
+                      sizes="80px"
                       className="object-cover"
                     />
                   </div>

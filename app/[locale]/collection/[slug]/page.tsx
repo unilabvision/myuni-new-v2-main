@@ -376,6 +376,7 @@ export default function CollectionDetailPage({
                             src={product.brand_logo_url}
                             alt={product.brand_name}
                             fill
+                            sizes="48px"
                             className="object-contain p-1"
                           />
                         </div>
