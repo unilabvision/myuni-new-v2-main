@@ -1,7 +1,4 @@
-/**
- * Rewrite absolute Supabase Storage URLs to the Vercel-cached media proxy.
- * Use for raw <img>, OG fallbacks, or places that do not go through next/image.
- */
+/** Keep storage assets on the object-storage CDN instead of proxying bytes through Vercel. */
 export function toProxiedMediaUrl(url: string | null | undefined): string {
   if (!url) return '';
   if (url.startsWith('/') && !url.startsWith('//')) return url;
@@ -12,8 +9,7 @@ export function toProxiedMediaUrl(url: string | null | undefined): string {
 
   if (!isSupabaseStorage) return url;
 
-  const params = new URLSearchParams({ u: url });
-  return `/api/media?${params.toString()}`;
+  return url;
 }
 
 export function isSupabaseStorageUrl(url: string | null | undefined): boolean {

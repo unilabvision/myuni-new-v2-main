@@ -116,7 +116,12 @@ export async function getUserEventLessonProgress(userId: string, sectionId: stri
 
   const isLessonBased = !!lessonCheck;
 
-  let query = supabase.from('myuni_event_user_progress').select('*').eq('user_id', userId);
+  let query = supabase
+    .from('myuni_event_user_progress')
+    .select(
+      'user_id, event_id, section_id, lesson_id, watch_time_seconds, is_completed, last_position_seconds, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at, completed_at'
+    )
+    .eq('user_id', userId);
 
   if (isLessonBased) {
     query = query.eq('lesson_id', sectionId);
@@ -215,13 +220,17 @@ export async function updateUserEventProgress(
         .from('myuni_event_user_progress')
         .update({ ...updateData, updated_at: new Date().toISOString() })
         .eq('id', existingRow.id)
-        .select()
+        .select(
+          'watch_time_seconds, last_position_seconds, is_completed, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at'
+        )
         .single());
     } else {
       ({ data, error } = await supabase
         .from('myuni_event_user_progress')
         .insert(updateData)
-        .select()
+        .select(
+          'watch_time_seconds, last_position_seconds, is_completed, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at'
+        )
         .single());
     }
 
@@ -322,7 +331,7 @@ export async function saveEventQuizResult(
 export async function generateUserEventAnalytics(userId: string, eventId: string) {
   const { data: progressData, error: progressError } = await supabase
     .from('myuni_event_user_progress')
-    .select('*')
+    .select('updated_at, created_at, watch_time_seconds, is_completed, completed_at, notes')
     .eq('user_id', userId)
     .eq('event_id', eventId)
     .order('updated_at', { ascending: false });

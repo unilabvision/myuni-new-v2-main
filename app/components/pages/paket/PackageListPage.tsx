@@ -84,8 +84,7 @@ export default function PackageListPage({
       setLoading(true);
       try {
         const res = await fetch(
-          `/api/public/courses?locale=${encodeURIComponent(locale)}`,
-          { cache: 'no-store' }
+          `/api/public/courses?locale=${encodeURIComponent(locale)}`
         );
         const payload = await res.json();
         if (res.ok && payload.success) {

@@ -37,7 +37,9 @@ export async function getUserCourseProgress(userId: string, courseId: string) {
 
   const { data: progressData, error: progressError } = await supabase
     .from('myuni_user_progress')
-    .select('*')
+    .select(
+      'lesson_id, is_completed, watch_time_seconds, last_position_seconds, completed_at, notes, quiz_score, created_at, updated_at'
+    )
     .eq('user_id', userId)
     .in('lesson_id', lessonIds);
 
@@ -69,7 +71,9 @@ export async function getUserCourseProgress(userId: string, courseId: string) {
 export async function getUserLessonProgress(userId: string, lessonId: string) {
   const { data, error } = await supabase
     .from('myuni_user_progress')
-    .select('*')
+    .select(
+      'user_id, lesson_id, watch_time_seconds, is_completed, last_position_seconds, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at, completed_at'
+    )
     .eq('user_id', userId)
     .eq('lesson_id', lessonId)
     .maybeSingle();
@@ -209,7 +213,9 @@ export async function updateUserProgress(
       onConflict: 'user_id,lesson_id',
       ignoreDuplicates: false,
     })
-    .select()
+    .select(
+      'watch_time_seconds, last_position_seconds, is_completed, completed_at, notes, quiz_score, quiz_attempts, last_quiz_attempt_at, video_watch_count, last_video_watch_at'
+    )
     .single();
 
   if (error) throw error;
@@ -299,7 +305,9 @@ export async function generateUserAnalytics(userId: string, courseId: string) {
 
   const { data: progressData, error: progressError } = await supabase
     .from('myuni_user_progress')
-    .select('*')
+    .select(
+      'updated_at, created_at, watch_time_seconds, is_completed, completed_at, notes, quiz_attempts, video_watch_count, quiz_score'
+    )
     .eq('user_id', userId)
     .in('lesson_id', lessonIds)
     .order('updated_at', { ascending: false });

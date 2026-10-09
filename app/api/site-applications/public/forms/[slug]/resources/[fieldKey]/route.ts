@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import { parseAttachmentStorageRef, parseResourceOptions } from '@/lib/siteApplications/files';
@@ -6,6 +7,22 @@ import { parseAttachmentStorageRef, parseResourceOptions } from '@/lib/siteAppli
 type RouteContext = {
   params: Promise<{ slug: string; fieldKey: string }>;
 };
+
+const RESOURCE_URL_TTL_SECONDS = 60 * 60;
+const RESOURCE_URL_CACHE_SECONDS = 55 * 60;
+
+const getCachedResourceUrl = unstable_cache(
+  async (bucket: string, path: string) => {
+    const supabase = getSiteApplicationsSupabase();
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, RESOURCE_URL_TTL_SECONDS);
+    if (error || !data?.signedUrl) throw error || new Error('Signed URL was not returned');
+    return data.signedUrl;
+  },
+  ['public-form-resource-signed-url-v2'],
+  { revalidate: RESOURCE_URL_CACHE_SECONDS }
+);
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
@@ -75,19 +92,28 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { bucket, path } = parseAttachmentStorageRef(meta.storageRef);
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
-
-    if (error || !data?.signedUrl) {
+    const signedUrl = await getCachedResourceUrl(bucket, path).catch((error) => {
       console.error('Resource signed download error:', error);
+      return null;
+    });
+
+    if (!signedUrl) {
       return NextResponse.json({ error: 'Download URL could not be created' }, { status: 500 });
     }
 
-    return NextResponse.json({
-      url: data.signedUrl,
-      fileName: meta.fileName,
-      mimeType: meta.mimeType ?? null,
-      fileSize: meta.fileSize ?? null,
-    });
+    return NextResponse.json(
+      {
+        url: signedUrl,
+        fileName: meta.fileName,
+        mimeType: meta.mimeType ?? null,
+        fileSize: meta.fileSize ?? null,
+      },
+      {
+        headers: {
+          'Cache-Control': `public, s-maxage=${RESOURCE_URL_CACHE_SECONDS}, stale-while-revalidate=300`,
+        },
+      }
+    );
   } catch (err) {
     console.error('Public resource download error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

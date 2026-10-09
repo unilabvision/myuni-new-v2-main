@@ -89,7 +89,7 @@ function EventList({ events, locale = 'tr', showFeaturedOnly = false }: EventLis
         setError(null);
         
         console.log('Fetching events from API...');
-        const res = await fetch(`/api/events?locale=${locale}`, { cache: 'no-store' });
+        const res = await fetch(`/api/events?locale=${locale}`);
         const json = await res.json();
         if (!res.ok || !json.success) {
           throw new Error(json.error || 'Failed to fetch events');

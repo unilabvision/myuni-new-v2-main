@@ -62,6 +62,15 @@ async function fetchEventEnrollmentCountMap(eventIds: string[]): Promise<Map<str
   return map;
 }
 
+const PUBLIC_EVENT_COLUMNS = `
+  id, slug, title, description, organizer_name, event_type, category, tags,
+  start_date, end_date, timezone, duration_minutes, is_online, location_name,
+  location_address, is_paid, price, max_attendees,
+  registration_deadline, is_registration_open, thumbnail_url, banner_url,
+  status, is_active, is_featured, organizer_email,
+  organizer_linkedin, organizer_image_url, created_at, updated_at
+`;
+
 // ========================================
 // INTERFACES & TYPES
 // ========================================
@@ -429,7 +438,7 @@ export async function getFeaturedEvents(_locale: string = 'tr') {
   try {
     const { data, error } = await supabase
       .from('myuni_events')
-      .select('*')
+      .select(PUBLIC_EVENT_COLUMNS)
       .eq('is_active', true)
       .eq('is_featured', true)
       .order('start_date', { ascending: true });
@@ -466,7 +475,6 @@ export async function getFeaturedEvents(_locale: string = 'tr') {
         is_online: event.is_online || false,
         location_name: event.location_name,
         location_address: event.location_address,
-        meeting_url: event.meeting_url,
         is_paid: event.is_paid || false,
         price: event.price || 0,
         max_attendees: event.max_attendees,
@@ -479,7 +487,6 @@ export async function getFeaturedEvents(_locale: string = 'tr') {
         status: event.status || 'upcoming',
         is_active: event.is_active,
         is_featured: event.is_featured || false,
-        organizer_description: event.organizer_description,
         organizer_email: event.organizer_email,
         organizer_linkedin: event.organizer_linkedin,
         organizer_image_url: event.organizer_image_url,
@@ -510,7 +517,7 @@ export async function getEventsForFilter(_locale: string = 'tr') {
 
     const { data, error } = await supabase
       .from('myuni_events')
-      .select('*')
+      .select(PUBLIC_EVENT_COLUMNS)
       .eq('is_active', true)
       .order('start_date', { ascending: false });
 
@@ -553,7 +560,6 @@ export async function getEventsForFilter(_locale: string = 'tr') {
         is_online: event.is_online || false,
         location_name: event.location_name,
         location_address: event.location_address,
-        meeting_url: event.meeting_url,
         is_paid: event.is_paid || false,
         price: event.price || 0,
         max_attendees: event.max_attendees,
@@ -597,7 +603,7 @@ export async function getAllEvents(_locale: string = 'tr') {
   try {
     const { data, error } = await supabase
       .from('myuni_events')
-      .select('*')
+      .select(PUBLIC_EVENT_COLUMNS)
       .eq('is_active', true)
       .order('start_date', { ascending: false });
 
@@ -632,7 +638,6 @@ export async function getAllEvents(_locale: string = 'tr') {
         is_online: event.is_online || false,
         location_name: event.location_name,
         location_address: event.location_address,
-        meeting_url: event.meeting_url,
         is_paid: event.is_paid || false,
         price: event.price || 0,
         max_attendees: event.max_attendees,
@@ -645,7 +650,6 @@ export async function getAllEvents(_locale: string = 'tr') {
         status: event.status || 'upcoming',
         is_active: event.is_active,
         is_featured: event.is_featured || false,
-        organizer_description: event.organizer_description,
         organizer_email: event.organizer_email,
         organizer_linkedin: event.organizer_linkedin,
         organizer_image_url: event.organizer_image_url,

@@ -1,8 +1,4 @@
-/**
- * Next.js custom image loader.
- * Routes Supabase Storage URLs through /api/media so repeat views are served
- * from Vercel CDN instead of counting against Supabase Cached Egress.
- */
+/** Selects an immutable pre-generated image variant from Supabase Storage. */
 export default function imageLoader({
   src,
   width,
@@ -29,8 +25,7 @@ export default function imageLoader({
     const variantSrc = managedMediaPattern.test(src)
       ? src.replace(managedMediaPattern, `/$1/w-${selectedWidth}.webp`)
       : src;
-    const params = new URLSearchParams({ u: variantSrc });
-    return `/api/media?${params.toString()}`;
+    return variantSrc;
   }
 
   // External (Unsplash, Clerk, etc.) — leave unchanged

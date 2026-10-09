@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/adminAuth';
 import { applyHighValueFixedDefaults } from '@/lib/discountRestrictions';
+import { PUBLIC_CACHE_TAGS } from '@/lib/publicCache';
 
 type UpdatePayload = {
   code?: string;
@@ -157,6 +159,7 @@ export async function PATCH(
     );
   }
 
+  revalidateTag(PUBLIC_CACHE_TAGS.campaigns);
   return NextResponse.json({ success: true, data });
 }
 
@@ -190,5 +193,6 @@ export async function DELETE(
     );
   }
 
+  revalidateTag(PUBLIC_CACHE_TAGS.campaigns);
   return NextResponse.json({ success: true });
 }

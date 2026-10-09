@@ -21,7 +21,7 @@ export default function CampaignAuthPromo({ locale }: { locale: string }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(`/api/campaigns?locale=${locale}`, { cache: 'no-store' });
+        const res = await fetch(`/api/campaigns?locale=${locale}`);
         const json = await res.json();
         if (cancelled || !json?.success) return;
         const items = ((json.data as CampaignItem[]) || []).filter((c) => c.is_active);

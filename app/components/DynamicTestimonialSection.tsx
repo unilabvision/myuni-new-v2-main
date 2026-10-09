@@ -2,12 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { Star, Quote, ArrowLeft, ArrowRight, User } from "lucide-react";
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 interface CommentWithCourse {
     id: string;
@@ -22,6 +16,60 @@ interface CommentWithCourse {
 
 interface DynamicTestimonialSectionProps {
     locale?: string;
+}
+
+type TestimonialNavigationProps = {
+    count: number;
+    current: number;
+    onNext: () => void;
+    onPrevious: () => void;
+    onSelect: (index: number) => void;
+};
+
+function TestimonialNavigation({
+    count,
+    current,
+    onNext,
+    onPrevious,
+    onSelect,
+}: TestimonialNavigationProps) {
+    if (count <= 1) return null;
+
+    return (
+        <div className="flex items-center justify-center w-full gap-4 mt-8">
+            <button
+                type="button"
+                aria-label="Previous testimonial"
+                onClick={onPrevious}
+                className="w-10 h-10 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-full flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors duration-200 shadow-sm"
+            >
+                <ArrowLeft className="w-4 h-4 text-neutral-600 dark:text-neutral-400" />
+            </button>
+            <div className="flex gap-2">
+                {Array.from({ length: count }, (_, index) => (
+                    <button
+                        type="button"
+                        aria-label={`Testimonial ${index + 1}`}
+                        key={index}
+                        onClick={() => onSelect(index)}
+                        className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            index === current
+                                ? 'bg-[#990000] dark:bg-[#ff4444] w-6'
+                                : 'bg-neutral-300 dark:bg-neutral-600'
+                        }`}
+                    />
+                ))}
+            </div>
+            <button
+                type="button"
+                aria-label="Next testimonial"
+                onClick={onNext}
+                className="w-10 h-10 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-full flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors duration-200 shadow-sm"
+            >
+                <ArrowRight className="w-4 h-4 text-neutral-600 dark:text-neutral-400" />
+            </button>
+        </div>
+    );
 }
 
 const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ locale = 'tr' }) => {
@@ -54,50 +102,12 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
         const fetchComments = async () => {
             try {
                 setLoading(true);
-                // Supabase'den 4 veya 5 yıldızlı, onaylanmış son yorumları çekiyoruz.
-                const { data: commentsData, error: commentsError } = await supabase
-                    .from('myuni_comments')
-                    .select(`
-            id,
-            user_display_name,
-            content,
-            rating,
-            created_at,
-            course_id
-          `)
-                    .eq('status', 'approved')
-                    .gte('rating', 4)
-                    .order('created_at', { ascending: false })
-                    .limit(10);
-
-                if (commentsError) throw commentsError;
-
-                if (commentsData && commentsData.length > 0) {
-                    // İlgili kurs isimlerini ek olarak çekiyoruz (Hatalı Joinleri önlemek için)
-                    const courseIds = [...new Set(commentsData.map(c => c.course_id).filter(Boolean))];
-
-                    let coursesData: any[] = [];
-                    if (courseIds.length > 0) {
-                        const { data: courses, error: coursesError } = await supabase
-                            .from('myuni_courses')
-                            .select('id, title')
-                            .in('id', courseIds);
-
-                        if (!coursesError && courses) {
-                            coursesData = courses;
-                        }
-                    }
-
-                    const combinedData = commentsData.map(comment => {
-                        const course = coursesData.find(c => c.id === comment.course_id);
-                        return {
-                            ...comment,
-                            myuni_courses: course ? { title: course.title } : null
-                        };
-                    });
-
-                    setTestimonials(combinedData);
+                const response = await fetch('/api/public/testimonials');
+                const payload = await response.json();
+                if (!response.ok || !payload.success) {
+                    throw new Error(payload.error || 'Testimonials could not be loaded');
                 }
+                setTestimonials(payload.data || []);
             } catch (err) {
                 console.error("Error fetching testimonials:", err);
             } finally {
@@ -223,37 +233,13 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
                                     </div>
                                 </div>
 
-                                {/* Navigasyon Okları */}
-                                {testimonials.length > 1 && (
-                                    <div className="flex items-center justify-center w-full gap-4 mt-8">
-                                        <button
-                                            onClick={prevSlide}
-                                            className="w-10 h-10 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-full flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors duration-200 shadow-sm"
-                                        >
-                                            <ArrowLeft className="w-4 h-4 text-neutral-600 dark:text-neutral-400" />
-                                        </button>
-
-                                        <div className="flex gap-2">
-                                            {testimonials.map((_, index) => (
-                                                <button
-                                                    key={index}
-                                                    onClick={() => setCurrentSlide(index)}
-                                                    className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentSlide
-                                                        ? 'bg-[#990000] dark:bg-[#ff4444] w-6'
-                                                        : 'bg-neutral-300 dark:bg-neutral-600'
-                                                        }`}
-                                                />
-                                            ))}
-                                        </div>
-
-                                        <button
-                                            onClick={nextSlide}
-                                            className="w-10 h-10 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-full flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors duration-200 shadow-sm"
-                                        >
-                                            <ArrowRight className="w-4 h-4 text-neutral-600 dark:text-neutral-400" />
-                                        </button>
-                                    </div>
-                                )}
+                                <TestimonialNavigation
+                                    count={testimonials.length}
+                                    current={currentSlide}
+                                    onNext={nextSlide}
+                                    onPrevious={prevSlide}
+                                    onSelect={setCurrentSlide}
+                                />
                             </div>
                         )}
                     </div>

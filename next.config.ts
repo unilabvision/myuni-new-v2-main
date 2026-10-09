@@ -51,9 +51,8 @@ const nextConfig = {
     return config;
   },
   images: {
-    // Supabase Storage doğrudan tarayıcıya açılınca Cached Egress şişiyor.
-    // Custom loader → /api/media (Vercel CDN cache) → Supabase yalnızca cache miss'te.
-    // Not: Vercel Image Optimization kotası için unoptimized kullanmıyoruz; proxy kendi cache'ler.
+    // The custom loader selects immutable width variants and serves them directly
+    // from the storage CDN, avoiding a second request and byte transfer on Vercel.
     loader: 'custom',
     loaderFile: './lib/imageLoader.ts',
     remotePatterns: [

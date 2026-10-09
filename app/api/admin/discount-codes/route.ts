@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { requireAdmin } from '@/lib/adminAuth';
 import { applyHighValueFixedDefaults } from '@/lib/discountRestrictions';
+import { PUBLIC_CACHE_TAGS } from '@/lib/publicCache';
 
 export type DiscountCodePayload = {
   code: string;
@@ -173,6 +175,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    revalidateTag(PUBLIC_CACHE_TAGS.campaigns);
     return NextResponse.json({ success: true, data });
   } catch (e) {
     console.error('Admin discount-codes POST error:', e);

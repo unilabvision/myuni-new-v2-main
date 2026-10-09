@@ -1,8 +1,10 @@
 // app/api/course-comments/route.ts
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { sendCommentNotifications } from '@/app/_services/commentNotificationService';
+import { PUBLIC_CACHE_TAGS } from '@/lib/publicCache';
 
 // Helper: anonymize full name -> initials like "Y.P."
 function toInitials(firstName?: string | null, lastName?: string | null): string {
@@ -33,32 +35,40 @@ export async function GET(request: Request) {
     // If action is 'rating', return average rating
     if (action === 'rating') {
       const { data, error } = await supabase
-        .from('myuni_comments')
-        .select('rating')
-        .eq('course_id', courseId)
-        .eq('status', 'approved')
-        .not('rating', 'is', null);
+        .rpc('get_course_rating_summary', { p_course_ids: [courseId] });
 
-      if (error) throw error;
+      if (error) {
+        const { data: ratings, error: fallbackError } = await supabase
+          .from('myuni_comments')
+          .select('rating')
+          .eq('course_id', courseId)
+          .eq('status', 'approved')
+          .not('rating', 'is', null);
+        if (fallbackError) throw fallbackError;
 
-      if (!data || data.length === 0) {
+        const values = (ratings || []).map((row) => Number(row.rating)).filter(Boolean);
+        const totalRatings = values.length;
+        const averageRating = totalRatings
+          ? Math.round((values.reduce((sum, rating) => sum + rating, 0) / totalRatings) * 10) / 10
+          : null;
+        return NextResponse.json({ averageRating, totalRatings });
+      }
+
+      const summary = data?.[0];
+      if (!summary) {
         return NextResponse.json({ averageRating: null, totalRatings: 0 });
       }
 
-      const totalRatings = data.length;
-      const sumRatings = data.reduce((sum, comment) => sum + (comment.rating || 0), 0);
-      const averageRating = Math.round((sumRatings / totalRatings) * 10) / 10; // Round to 1 decimal place
-
-      return NextResponse.json({ 
-        averageRating, 
-        totalRatings 
+      return NextResponse.json({
+        averageRating: Math.round(Number(summary.average_rating) * 10) / 10,
+        totalRatings: Number(summary.rating_count),
       });
     }
 
     // Default: return comments
     const { data, error } = await supabase
       .from('myuni_comments')
-      .select('*')
+      .select('id, user_id, user_display_name, content, created_at, rating, is_anonymous')
       .eq('course_id', courseId)
       .eq('status', 'approved')
       .order('created_at', { ascending: false });
@@ -170,6 +180,7 @@ export async function POST(request: Request) {
       // Don't fail the comment creation if notification setup fails
     }
 
+    revalidateTag(PUBLIC_CACHE_TAGS.courseRatings);
     return NextResponse.json({ comment: data }, { status: 201 });
   } catch (err) {
     console.error('POST /course-comments error', err);
@@ -229,6 +240,7 @@ export async function PUT(request: Request) {
       throw error;
     }
 
+    revalidateTag(PUBLIC_CACHE_TAGS.courseRatings);
     return NextResponse.json({ comment: data });
   } catch (err) {
     console.error('PUT /course-comments error', err);
@@ -274,6 +286,7 @@ export async function DELETE(request: Request) {
 
     if (error) throw error;
 
+    revalidateTag(PUBLIC_CACHE_TAGS.courseRatings);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('DELETE /course-comments error', err);

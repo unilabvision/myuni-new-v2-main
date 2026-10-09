@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/adminAuth';
 import {
   createImageVariants,
   optimizeImage,
+  RESPONSIVE_IMAGE_WIDTHS,
   validateImageUpload,
 } from '@/lib/media/imageOptimization';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -39,6 +40,23 @@ async function uploadImage(path: string, data: Buffer): Promise<boolean> {
   throw new StorageUploadError(error.message);
 }
 
+async function hasAllImageVariants(objectDirectory: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.storage.from(MEDIA_BUCKET).list(objectDirectory, {
+    limit: RESPONSIVE_IMAGE_WIDTHS.length + 1,
+  });
+
+  if (error) {
+    console.warn('[admin/media] Existing variants could not be checked:', error.message);
+    return false;
+  }
+
+  const storedNames = new Set((data || []).map((item) => item.name));
+  return (
+    storedNames.has('original.webp') &&
+    RESPONSIVE_IMAGE_WIDTHS.every((width) => storedNames.has(`w-${width}.webp`))
+  );
+}
+
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
   if (!admin) {
@@ -63,18 +81,24 @@ export async function POST(request: NextRequest) {
     const objectDirectory = `${folder}/${checksum}`;
     const objectPath = `${objectDirectory}/original.webp`;
     const storage = supabaseAdmin.storage.from(MEDIA_BUCKET);
-    const variants = await createImageVariants(optimized.data);
-    const uploadResults = await Promise.all([
-      uploadImage(objectPath, optimized.data),
-      ...variants.map((variant) =>
-        uploadImage(`${objectDirectory}/w-${variant.width}.webp`, variant.data)
-      ),
-    ]);
+    const alreadyStored = await hasAllImageVariants(objectDirectory);
+
+    let deduplicated = alreadyStored;
+    if (!alreadyStored) {
+      const variants = await createImageVariants(optimized.data);
+      const uploadResults = await Promise.all([
+        uploadImage(objectPath, optimized.data),
+        ...variants.map((variant) =>
+          uploadImage(`${objectDirectory}/w-${variant.width}.webp`, variant.data)
+        ),
+      ]);
+      deduplicated = uploadResults.every(Boolean);
+    }
 
     const { data } = storage.getPublicUrl(objectPath);
     return NextResponse.json({
       success: true,
-      deduplicated: uploadResults.every(Boolean),
+      deduplicated,
       bucket: MEDIA_BUCKET,
       path: objectPath,
       url: data.publicUrl,

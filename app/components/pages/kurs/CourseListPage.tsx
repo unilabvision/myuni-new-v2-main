@@ -283,10 +283,7 @@ export default function CourseListPage({
         ? '&program_type=mentorship'
         : '';
       const response = await fetch(
-        `/api/public/courses?locale=${encodeURIComponent(locale)}${programTypeQuery}`,
-        {
-          cache: 'no-store',
-        }
+        `/api/public/courses?locale=${encodeURIComponent(locale)}${programTypeQuery}`
       );
       const payload = await response.json();
 

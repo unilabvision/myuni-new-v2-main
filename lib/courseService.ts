@@ -57,6 +57,10 @@ export interface NoteData {
   lesson_id: string;
   title: string;
   content: string;
+  content_type: string;
+  file_url?: string | null;
+  content_url?: string | null;
+  is_ai_generated: boolean;
   order_index: number;
 }
 
@@ -102,6 +106,42 @@ interface LessonWithSection {
   };
 }
 
+const PUBLIC_COURSE_COLUMNS = `
+  id, slug, title, description, price, original_price, duration, level,
+  instructor_name, thumbnail_url, banner_url, course_type,
+  live_start_date, live_end_date, live_timezone, max_participants,
+  current_participants, session_count, session_duration_minutes, registration_deadline,
+  is_registration_open, instructor_description, instructor_email,
+  instructor_linkedin, instructor_image_url, is_active, created_at, updated_at,
+  early_bird_price, early_bird_deadline, program_type
+`;
+
+type LessonDurationSection = {
+  myuni_lessons?: Array<{ duration?: string | number | null }> | null;
+};
+
+function parseLessonDuration(value: string | number | null | undefined): number {
+  const duration = String(value || '0');
+  if (duration.includes('dk')) return parseInt(duration.replace('dk', '').trim()) || 0;
+  if (duration.includes('sa')) {
+    return (parseInt(duration.replace('sa', '').trim()) || 0) * 60;
+  }
+  return parseInt(duration) || 0;
+}
+
+function calculateLessonMinutes(sections: LessonDurationSection[]): number {
+  return sections
+    .flatMap((section) => section.myuni_lessons || [])
+    .reduce((total, lesson) => total + parseLessonDuration(lesson.duration), 0);
+}
+
+function formatCalculatedDuration(totalMinutes: number): string {
+  if (totalMinutes < 60) return `${totalMinutes}dk`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}sa${minutes > 0 ? ` ${minutes}dk` : ''}`;
+}
+
 // ========================================
 // COURSE MANAGEMENT
 // ========================================
@@ -113,7 +153,7 @@ export async function getAllCourses(
   try {
     let query = supabase
       .from('myuni_courses')
-      .select('*')
+      .select(PUBLIC_COURSE_COLUMNS)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
@@ -165,7 +205,7 @@ export async function getAllCourses(
       image: course.thumbnail_url || course.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
       thumbnail_url: course.thumbnail_url,
       banner_url: course.banner_url,
-      featured: Boolean(course.featured ?? course.is_featured),
+      featured: false,
       banner: {
         url: course.banner_url || course.thumbnail_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=1200&h=600&fit=crop`
       },
@@ -179,11 +219,6 @@ export async function getAllCourses(
       live_timezone: course.live_timezone,
       max_participants: course.max_participants,
       current_participants: course.current_participants || 0,
-      meeting_url: course.meeting_url,
-      meeting_password: course.meeting_password,
-      prerequisites: course.prerequisites,
-      target_audience: course.target_audience,
-      learning_outcomes: course.learning_outcomes,
       session_count: course.session_count,
       session_duration_minutes: course.session_duration_minutes,
       registration_deadline: course.registration_deadline,
@@ -375,35 +410,10 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
             .select('id, myuni_lessons(duration)')
             .eq('course_id', course.id);
           
-          if (sections && sections.length > 0) {
-            let totalMinutes = 0;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            sections.forEach((section: any) => {
-              if (section.myuni_lessons) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                section.myuni_lessons.forEach((lesson: any) => {
-                  const dur = String(lesson.duration || '0');
-                  if (dur.includes('dk')) {
-                    totalMinutes += parseInt(dur.replace('dk', '').trim()) || 0;
-                  } else if (dur.includes('sa')) {
-                    totalMinutes += (parseInt(dur.replace('sa', '').trim()) || 0) * 60;
-                  } else {
-                    totalMinutes += parseInt(dur) || 0;
-                  }
-                });
-              }
-            });
-            
-            if (totalMinutes > 0) {
-              if (totalMinutes >= 60) {
-                const hours = Math.floor(totalMinutes / 60);
-                const mins = totalMinutes % 60;
-                calculatedDuration = `${hours}sa${mins > 0 ? ` ${mins}dk` : ''}`;
-              } else {
-                calculatedDuration = `${totalMinutes}dk`;
-              }
-            }
-          }
+          const totalMinutes = calculateLessonMinutes(
+            (sections || []) as LessonDurationSection[]
+          );
+          if (totalMinutes > 0) calculatedDuration = formatCalculatedDuration(totalMinutes);
         }
         
         coursesList.push({ ...course, duration: calculatedDuration || course.duration || '' });
@@ -905,43 +915,30 @@ export async function getCourseSections(courseId: string) {
 // ========================================
 
 export async function getLessonContent(lessonId: string) {
-  try {
-    const [lessonResult, videosResult, notesResult, quicksResult] = await Promise.all([
-      supabase
-        .from('myuni_course_lessons')
-        .select('id, title, duration_minutes, lesson_type')
-        .eq('id', lessonId)
-        .single(),
-      
-      supabase
-        .from('myuni_videos')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('order_index', { ascending: true }),
-      
-      supabase
-        .from('myuni_notes')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('order_index', { ascending: true }),
-      
-      supabase
-        .from('myuni_quicks')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('order_index', { ascending: true })
-    ]);
+  const response = await fetch(`/api/courses/lessons/${encodeURIComponent(lessonId)}/content`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
 
-    return {
-      lesson: lessonResult.data,
-      videos: videosResult.data || [],
-      notes: notesResult.data || [],
-      quicks: quicksResult.data || []
-    };
-  } catch (error) {
-    console.error('Error fetching lesson content:', error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Lesson content could not be loaded (${response.status})`);
   }
+
+  const content = await response.json();
+  const notes = await Promise.all(
+    (content.notes || []).map(async (note: NoteData) => {
+      if (!note.content_url) return note;
+
+      const contentResponse = await fetch(note.content_url, { cache: 'force-cache' });
+      if (!contentResponse.ok) {
+        throw new Error(`Note content could not be loaded (${contentResponse.status})`);
+      }
+
+      return { ...note, content: await contentResponse.text() };
+    })
+  );
+
+  return { ...content, notes };
 }
 
 // ========================================

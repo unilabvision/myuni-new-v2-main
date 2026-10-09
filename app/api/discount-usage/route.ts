@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 import { resolveDiscountRestrictions } from '../../../lib/discountRestrictions';
+import { PUBLIC_CACHE_TAGS } from '@/lib/publicCache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -146,6 +148,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    revalidateTag(PUBLIC_CACHE_TAGS.campaigns);
     return NextResponse.json({
       success: true,
       message: 'İndirim kodu başarıyla uygulandı',

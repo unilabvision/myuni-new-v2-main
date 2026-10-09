@@ -16,6 +16,46 @@ interface Note {
   secret_key?: string; // Gizli anahtar için
 }
 
+const PROGRESS_SAVE_INTERVAL_SECONDS = 60;
+
+function getInitialNote(notes: Note[]): Note {
+  try {
+    const secretKey = new URLSearchParams(window.location.search).get('sk');
+    if (!secretKey) return notes[0];
+    if (secretKey === 'true') {
+      return notes.find((note) => note.content_type === 'secret_key') || notes[0];
+    }
+    return notes.find((note) => note.id === secretKey) || notes[0];
+  } catch {
+    return notes[0];
+  }
+}
+
+function incrementReadingTime(
+  previousTime: number,
+  saveProgress: (time: number, forceComplete: boolean) => void
+) {
+  const nextTime = previousTime + 1;
+  if (nextTime % PROGRESS_SAVE_INTERVAL_SECONDS === 0) {
+    saveProgress(nextTime, false);
+  }
+  return nextTime;
+}
+
+function updateSecretKeyUrl(note: Note) {
+  try {
+    const url = new URL(window.location.href);
+    if (note.content_type === 'secret_key') {
+      url.searchParams.set('sk', 'true');
+    } else {
+      url.searchParams.delete('sk');
+    }
+    window.history.replaceState({}, '', url.toString());
+  } catch (error) {
+    console.error('Error updating URL:', error);
+  }
+}
+
 interface MyUNINotesProps {
   contentId: string; // lessonId or sectionId (for content fetching)
   progressId?: string; // Optional: separate ID for progress tracking (lesson.id for per-lesson tracking)
@@ -240,47 +280,18 @@ export function MyUNINotes({
       console.log('Notes length:', content?.notes?.length);
       console.log('First note:', content?.notes?.[0]);
 
-      if (content && content.notes && content.notes.length > 0) {
-        console.log('✅ Setting notes and currentNote');
-        setNotes(content.notes);
-
-        // Check if there's a secret key parameter in the URL
-        try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const secretKeyParam = urlParams.get('sk');
-
-          if (secretKeyParam && secretKeyParam !== 'true') {
-            // Try to find the note with the ID specified in the sk parameter
-            const secretKeyNote = content.notes.find(note => note.id === secretKeyParam);
-            if (secretKeyNote) {
-              console.log('Found secret key note by ID:', secretKeyNote);
-              setCurrentNote(secretKeyNote);
-            } else {
-              setCurrentNote(content.notes[0]);
-            }
-          } else if (secretKeyParam === 'true') {
-            // If sk=true, find the first note with content_type === 'secret_key'
-            const secretKeyNote = content.notes.find(note => note.content_type === 'secret_key');
-            if (secretKeyNote) {
-              console.log('Found secret key note by content type:', secretKeyNote);
-              setCurrentNote(secretKeyNote);
-            } else {
-              setCurrentNote(content.notes[0]);
-            }
-          } else {
-            setCurrentNote(content.notes[0]);
-          }
-        } catch (error) {
-          console.error('Error checking URL params:', error);
-          setCurrentNote(content.notes[0]);
-        }
-      } else {
+      const contentNotes = content?.notes as Note[] | undefined;
+      if (!contentNotes?.length) {
         console.log('❌ No notes found, setting error');
         console.log('Content exists:', !!content);
         console.log('Notes exists:', !!content?.notes);
         console.log('Notes length:', content?.notes?.length);
         setError(type === 'course' ? t.noNotesFound : t.noMaterialsFound);
+        return;
       }
+
+      setNotes(contentNotes);
+      setCurrentNote(getInitialNote(contentNotes));
 
     } catch (err) {
       console.error(`${type === 'course' ? 'Not' : 'Materyal'} içeriği yükleme hatası:`, err);
@@ -361,14 +372,9 @@ export function MyUNINotes({
 
     if (isActive && currentNote && !userProgress.is_completed && userId) {
       interval = setInterval(() => {
-        setReadingTime(prev => {
-          const newTime = prev + 1;
-          // Auto-save progress and check for completion every 5 seconds
-          if (newTime % 5 === 0) {
-            handleProgressSave(newTime, false);
-          }
-          return newTime;
-        });
+        setReadingTime((previousTime) =>
+          incrementReadingTime(previousTime, handleProgressSave)
+        );
       }, 1000);
     }
 
@@ -412,6 +418,11 @@ export function MyUNINotes({
 
   const handleMarkAsComplete = async () => {
     await handleProgressSave(readingTime, true);
+  };
+
+  const handleNoteSelect = (note: Note) => {
+    setCurrentNote(note);
+    updateSecretKeyUrl(note);
   };
 
   const handleSecretKeyVerification = async () => {
@@ -884,34 +895,7 @@ export function MyUNINotes({
               {notes.map((note) => (
                 <button
                   key={note.id}
-                  onClick={() => {
-                    setCurrentNote(note);
-
-                    // Remove sk parameter from URL when switching between notes
-                    // Only if the selected note is not a secret key note
-                    if (note.content_type !== 'secret_key') {
-                      try {
-                        const url = new URL(window.location.href);
-                        if (url.searchParams.has('sk')) {
-                          url.searchParams.delete('sk');
-                          // Update URL without reloading the page
-                          window.history.replaceState({}, '', url.toString());
-                        }
-                      } catch (error) {
-                        console.error('Error updating URL:', error);
-                      }
-                    } else if (note.content_type === 'secret_key') {
-                      // Add sk=true parameter if navigating to a secret key note
-                      try {
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('sk', 'true');
-                        // Update URL without reloading the page
-                        window.history.replaceState({}, '', url.toString());
-                      } catch (error) {
-                        console.error('Error updating URL:', error);
-                      }
-                    }
-                  }}
+                  onClick={() => handleNoteSelect(note)}
                   className={`w-full flex items-center space-x-3 p-3 rounded text-left transition-colors ${currentNote.id === note.id
                     ? 'bg-white dark:bg-neutral-600 shadow-sm'
                     : 'hover:bg-white/50 dark:hover:bg-neutral-600/50'

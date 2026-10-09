@@ -1,13 +1,12 @@
 //app/components/FeaturedFilter.tsx
 'use client';
 
-import { Book, Clock, ArrowRight, Star, Users } from 'lucide-react';
+import { Book, ArrowRight, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface Course {
   id: string;
@@ -39,9 +38,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClientComponentClient();
   const [ratingMap, setRatingMap] = useState<Record<string, { avg: number; count: number }>>({});
-  const [popularityMap, setPopularityMap] = useState<Record<string, number>>({});
   const [topSellerIds, setTopSellerIds] = useState<Set<string>>(new Set());
 
   // Rich text renderer function
@@ -68,72 +65,35 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
     );
   };
 
-  // Fetch courses from Supabase
   useEffect(() => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const { data, error } = await supabase
-          .from('myuni_courses')
-          .select('*, early_bird_price, early_bird_deadline')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(limit);
-
-        if (error) {
-          console.error('Error fetching courses:', error);
-          setError(error.message);
-          return;
+        const response = await fetch(
+          `/api/public/courses?locale=${encodeURIComponent(locale)}`
+        );
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Courses could not be loaded');
         }
 
-        const fetched = data || [];
+        const fetched = ((payload.courses || []) as Course[]).slice(0, limit);
         setCourses(fetched);
+        setRatingMap(payload.ratingMap || {});
 
-        // Fetch ratings and popularity for these courses in parallel
         const courseIds = fetched.map(c => c.id);
-        if (courseIds.length > 0) {
-          const sinceDate = new Date();
-          sinceDate.setDate(sinceDate.getDate() - 30);
-          const [commentsRes, enrollmentsJson] = await Promise.all([
-            supabase
-              .from('myuni_comments')
-              .select('course_id, rating, status')
-              .in('course_id', courseIds)
-              .eq('status', 'approved'),
-            fetch(
-              `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
-            ).then((r) => r.json()).catch(() => ({ success: false, counts: {} })),
-          ]);
+        if (courseIds.length === 0) return;
 
-          // Build rating map
-          if (!commentsRes.error && Array.isArray(commentsRes.data)) {
-            const map: Record<string, { sum: number; count: number }> = {};
-            for (const row of commentsRes.data as Array<{ course_id: string; rating: number | null }>) {
-              if (row.rating && row.rating > 0) {
-                if (!map[row.course_id]) map[row.course_id] = { sum: 0, count: 0 };
-                map[row.course_id].sum += row.rating;
-                map[row.course_id].count += 1;
-              }
-            }
-            const avgMap: Record<string, { avg: number; count: number }> = {};
-            Object.entries(map).forEach(([k, v]) => {
-              avgMap[k] = { avg: v.sum / v.count, count: v.count };
-            });
-            setRatingMap(avgMap);
-          }
+        const enrollmentsJson = await fetch(
+          `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
+        ).then((result) => result.json()).catch(() => ({ success: false, counts: {} }));
+        if (!enrollmentsJson.success || !enrollmentsJson.counts) return;
 
-          // Build popularity map (enrollment counts)
-          if (enrollmentsJson.success && enrollmentsJson.counts) {
-            const pMap: Record<string, number> = enrollmentsJson.counts as Record<string, number>;
-            setPopularityMap(pMap);
-
-            // Top sellers (last 30 days): pick top 3 by enrollments (same as course list)
-            const sorted = Object.entries(pMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
-            setTopSellerIds(new Set(sorted.map(([id]) => id)));
-          }
-        }
+        const counts = enrollmentsJson.counts as Record<string, number>;
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+        setTopSellerIds(new Set(sorted.map(([id]) => id)));
       } catch (err) {
         console.error('Unexpected error:', err);
         setError('An unexpected error occurred');
@@ -143,7 +103,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
     };
 
     fetchCourses();
-  }, [supabase, limit]);
+  }, [limit, locale]);
 
   // Course Card Component - CourseListPage stilinde
   const CourseCard = ({ course }: { course: Course }) => {

@@ -16,7 +16,7 @@ Dashboard
   -> return the canonical original.webp URL
 ```
 
-The content hash is the object identity. Uploading the same optimized image again reuses the existing objects. Public pages select a pre-generated width through the Next.js image loader; no image transformation runs during page views.
+The content hash is the object identity. Uploading the same optimized image again reuses the existing objects without regenerating or re-uploading its variants. Public pages select a pre-generated width through the Next.js image loader and serve it directly from Supabase Storage CDN; no image transformation or byte proxy runs on Vercel during page views.
 
 Dashboard upload contract:
 
@@ -59,7 +59,7 @@ Rules:
 - Content records reference a media asset, not arbitrary storage URLs.
 - Object names are immutable content hashes.
 - Optimization happens once at ingestion, never on every page request.
-- The CDN serves objects directly; the application is not a permanent byte proxy.
+- The storage CDN serves objects directly; the application is not a permanent byte proxy.
 - Replacing an image updates the reference. It does not overwrite an immutable object.
 - A scheduled retention job marks unreferenced assets, waits through a grace period, then deletes only approved assets.
 
@@ -67,12 +67,12 @@ Rules:
 
 ### A. Supabase Storage + centralized ingestion
 
-Keep the implemented upload API and Supabase Storage. Use pre-generated variants and immutable caching.
+Keep the implemented upload API and Supabase Storage. Use pre-generated variants and immutable caching. Public delivery goes directly to the storage CDN.
 
 - Lowest migration effort.
 - Existing database and permissions stay in place.
 - Supabase Cached Egress remains the main scaling constraint.
-- `/api/media` should be transitional; serving every byte through Vercel shifts egress rather than removing it.
+- `/api/media` remains only for backward compatibility; new image URLs do not use it.
 
 Best for the immediate stabilization phase.
 
@@ -114,5 +114,5 @@ Best when upload volume, file size, or multiple consuming applications justify a
 4. Review the audit report and clean confirmed duplicates first.
 5. Introduce a `media_assets` registry with owner, checksum, status, created date, and last-reference date.
 6. Move delivery to an object-storage CDN custom domain.
-7. Retire `/api/media` after old URLs have migrated.
+7. Retire `/api/media` after old proxied URLs have aged out of caches.
 8. Enable a weekly audit and a 30-day soft-delete retention policy.

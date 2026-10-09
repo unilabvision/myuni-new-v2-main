@@ -30,6 +30,19 @@ interface UserProgress {
   notes?: string;
 }
 
+const PROGRESS_SAVE_INTERVAL_SECONDS = 60;
+
+function incrementReadingTime(
+  previousTime: number,
+  saveProgress: (time: number, forceComplete: boolean) => void
+) {
+  const nextTime = previousTime + 1;
+  if (nextTime % PROGRESS_SAVE_INTERVAL_SECONDS === 0) {
+    saveProgress(nextTime, false);
+  }
+  return nextTime;
+}
+
 export function MyUNINotes({ lessonId, userId, onNoteCreate, onComplete, lessonDurationMinutes }: MyUNINotesProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,14 +158,9 @@ export function MyUNINotes({ lessonId, userId, onNoteCreate, onComplete, lessonD
 
     if (isActive && currentNote && !userProgress.is_completed && userId) {
       interval = setInterval(() => {
-        setReadingTime(prev => {
-          const newTime = prev + 1;
-          // Auto-save every 30 seconds
-          if (newTime % 30 === 0) {
-            handleProgressSave(newTime, false);
-          }
-          return newTime;
-        });
+        setReadingTime((previousTime) =>
+          incrementReadingTime(previousTime, handleProgressSave)
+        );
       }, 1000);
     }
 
@@ -423,7 +431,7 @@ export function MyUNINotes({ lessonId, userId, onNoteCreate, onComplete, lessonD
                 className="inline-flex items-center space-x-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm"
               >
                 <Download className="w-4 h-4" />
-                <span>PDF İndir</span>
+                <span>Dosyayı İndir</span>
               </a>
             </div>
           )}
