@@ -496,6 +496,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI Logo"
                   width={64}
                   height={64}
+                  sizes="(max-width: 640px) 48px, 64px"
                   className="block dark:hidden object-contain"
                   priority
                 />
@@ -504,6 +505,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI Logo"
                   width={64}
                   height={64}
+                  sizes="(max-width: 640px) 48px, 64px"
                   className="hidden dark:block object-contain"
                   priority
                 />
@@ -570,6 +572,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={64}
                   height={64}
+                  sizes="(max-width: 640px) 48px, 64px"
                   className="block dark:hidden object-contain"
                 />
                 <Image
@@ -577,6 +580,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={64}
                   height={64}
+                  sizes="(max-width: 640px) 48px, 64px"
                   className="hidden dark:block object-contain"
                 />
               </div>
@@ -619,6 +623,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={48}
                   height={48}
+                  sizes="(max-width: 640px) 32px, 48px"
                   className="block dark:hidden object-contain brightness-0 invert"
                 />
                 <Image
@@ -626,6 +631,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={48}
                   height={48}
+                  sizes="(max-width: 640px) 32px, 48px"
                   className="hidden dark:block object-contain brightness-0 invert"
                 />
               </div>
@@ -666,6 +672,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={48}
                   height={48}
+                  sizes="(max-width: 640px) 32px, 48px"
                   className="block dark:hidden object-contain brightness-0 invert"
                 />
                 <Image
@@ -673,6 +680,7 @@ export default function PersonalizedEducationRecommendation({
                   alt="MyUNI"
                   width={48}
                   height={48}
+                  sizes="(max-width: 640px) 32px, 48px"
                   className="hidden dark:block object-contain brightness-0 invert"
                 />
               </div>
@@ -723,6 +731,7 @@ export default function PersonalizedEducationRecommendation({
                         alt={rec.title}
                         width={96}
                         height={96}
+                        sizes="(max-width: 640px) 80px, 96px"
                         className="w-full h-full object-cover rounded-lg"
                       />
                     </div>
@@ -819,6 +828,7 @@ export default function PersonalizedEducationRecommendation({
                 alt="MyUNI"
                 width={40}
                 height={40}
+                sizes="(max-width: 640px) 32px, 40px"
                 className="block dark:hidden object-contain"
               />
               <Image
@@ -826,6 +836,7 @@ export default function PersonalizedEducationRecommendation({
                 alt="MyUNI"
                 width={40}
                 height={40}
+                sizes="(max-width: 640px) 32px, 40px"
                 className="hidden dark:block object-contain"
               />
             </div>

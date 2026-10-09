@@ -1154,10 +1154,11 @@ export default function CampaignsPage() {
                             {index === 0 && (
                               <div className="relative w-full bg-neutral-100 dark:bg-neutral-600 rounded border border-neutral-300 dark:border-neutral-500 overflow-hidden">
                                 <Image
-                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/Campaign/kodu%20kopyala.webp"
+                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/migrated/9d019dc759b4fe3e702b6f4938b1d7c843b79e4ba28d96ee136d0fb9d0d1805b/original.webp"
                                   alt={locale === 'tr' ? 'Adım 1: Kodu Kopyala' : 'Step 1: Copy Code'}
                                   width={400}
                                   height={200}
+                                  sizes="(max-width: 768px) 100vw, 400px"
                                   className="w-full h-auto object-cover"
                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                 />
@@ -1166,10 +1167,11 @@ export default function CampaignsPage() {
                             {index === 1 && (
                               <div className="relative w-full bg-neutral-100 dark:bg-neutral-600 rounded border border-neutral-300 dark:border-neutral-500 overflow-hidden">
                                 <Image
-                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/Campaign/Screenshot%202025-09-27%20at%2016.17.23.webp"
+                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/migrated/0757014fc5cdbc75ff0cda23a6435f421f7b16129ee8b04c486bcd572bf54fe2/original.webp"
                                   alt={locale === 'tr' ? 'Adım 2: Arkadaşın Kurs Satın Alıyor' : 'Step 2: Friend Purchases Course'}
                                   width={400}
                                   height={200}
+                                  sizes="(max-width: 768px) 100vw, 400px"
                                   className="w-full h-auto object-cover"
                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                 />
@@ -1178,10 +1180,11 @@ export default function CampaignsPage() {
                             {index === 2 && (
                               <div className="relative w-full bg-neutral-100 dark:bg-neutral-600 rounded border border-neutral-300 dark:border-neutral-500 overflow-hidden">
                                 <Image
-                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/Campaign/Screenshot%202025-09-27%20at%2016.21.37.webp"
+                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/migrated/32a59d4a33f754f1715a183078d763700b05397939b1c5e2408016949a54ff22/original.webp"
                                   alt={locale === 'tr' ? 'Adım 3: Arkadaşın Satın Alma Sayfasında Kodu Giriyor' : 'Step 3: Friend Enters Code on Checkout Page'}
                                   width={400}
                                   height={200}
+                                  sizes="(max-width: 768px) 100vw, 400px"
                                   className="w-full h-auto object-cover"
                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                 />
@@ -1190,10 +1193,11 @@ export default function CampaignsPage() {
                             {index === 3 && (
                               <div className="relative w-full bg-neutral-100 dark:bg-neutral-600 rounded border border-neutral-300 dark:border-neutral-500 overflow-hidden">
                                 <Image
-                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/Campaign/Screenshot%202025-09-27%20at%2016.26.47.webp"
+                                  src="https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/myunilab/migrated/c55735401c2a5c11238566c60b90f5529589fc5ddb5d58c8fcf4f125e889bb9e/original.webp"
                                   alt={locale === 'tr' ? 'Adım 4: İndirim Kodunu Kullan' : 'Step 4: Use Your Discount Code'}
                                   width={400}
                                   height={200}
+                                  sizes="(max-width: 768px) 100vw, 400px"
                                   className="w-full h-auto object-cover"
                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                 />

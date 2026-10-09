@@ -9,13 +9,9 @@
 - Private lesson and form-resource signed URLs live for 60 minutes and are reused for 55 minutes.
 - Progress writes return only the fields consumed by the application.
 
-Apply the additive database migration before deploying the application:
-
-```text
-supabase/migrations/202610090001_optimize_public_catalog.sql
-```
-
-It adds a database-side course rating aggregate, a single-row public campaign query, and supporting indexes. It does not delete or rewrite application data.
+The required database functions and indexes are managed outside this repository.
+The application expects `public.get_course_rating_summary(uuid[])` and
+`public.get_public_campaign()` to be available in the target Supabase project.
 
 ## Dashboard cache invalidation
 

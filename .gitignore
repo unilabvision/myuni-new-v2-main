@@ -34,3 +34,4 @@ next.config.local.json
 
 
 certificates
+scripts/.media-migrations/

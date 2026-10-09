@@ -818,6 +818,7 @@ export default function AIChatSidebar({
                   alt="MyUNI AI"
                   width={32}
                   height={32}
+                  sizes="32px"
                   className="block dark:hidden object-contain"
                 />
                 <Image
@@ -825,6 +826,7 @@ export default function AIChatSidebar({
                   alt="MyUNI AI"
                   width={32}
                   height={32}
+                  sizes="32px"
                   className="hidden dark:block object-contain"
                 />
               </div>
@@ -1015,6 +1017,7 @@ export default function AIChatSidebar({
                                 alt="MyUNI AI"
                                 width={24}
                                 height={24}
+                                sizes="24px"
                                 className="block dark:hidden object-contain"
                               />
                               <Image
@@ -1022,6 +1025,7 @@ export default function AIChatSidebar({
                                 alt="MyUNI AI"
                                 width={24}
                                 height={24}
+                                sizes="24px"
                                 className="hidden dark:block object-contain"
                               />
                             </>
@@ -1106,6 +1110,7 @@ export default function AIChatSidebar({
                           alt="MyUNI AI"
                           width={24}
                           height={24}
+                          sizes="24px"
                           className="block dark:hidden object-contain"
                         />
                         <Image
@@ -1113,6 +1118,7 @@ export default function AIChatSidebar({
                           alt="MyUNI AI"
                           width={24}
                           height={24}
+                          sizes="24px"
                           className="hidden dark:block object-contain"
                         />
                       </div>

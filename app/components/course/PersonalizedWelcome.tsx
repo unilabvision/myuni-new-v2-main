@@ -171,6 +171,7 @@ export default function PersonalizedWelcome({ userName, onComplete }: Personaliz
                   alt="MyUNI Logo"
                   width={64}
                   height={64}
+                  sizes="64px"
                   className="block dark:hidden object-contain"
                   priority
                 />
@@ -179,6 +180,7 @@ export default function PersonalizedWelcome({ userName, onComplete }: Personaliz
                   alt="MyUNI Logo"
                   width={64}
                   height={64}
+                  sizes="64px"
                   className="hidden dark:block object-contain"
                   priority
                 />
@@ -235,6 +237,7 @@ export default function PersonalizedWelcome({ userName, onComplete }: Personaliz
                 alt="MyUNI"
                 width={40}
                 height={40}
+              sizes="40px"
                 className="block dark:hidden object-contain"
               />
               <Image
@@ -242,6 +245,7 @@ export default function PersonalizedWelcome({ userName, onComplete }: Personaliz
                 alt="MyUNI"
                 width={40}
                 height={40}
+              sizes="40px"
                 className="hidden dark:block object-contain"
               />
             </div>

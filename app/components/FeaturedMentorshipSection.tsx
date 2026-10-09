@@ -95,6 +95,7 @@ function MentorshipCard({
                 alt={mentorship.mentor_name}
                 width={28}
                 height={28}
+                sizes="28px"
                 className="rounded-full object-cover border border-neutral-200 dark:border-neutral-600 flex-shrink-0"
               />
             ) : (

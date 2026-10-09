@@ -481,6 +481,7 @@ function DepartmentCard({ department, locale }: DepartmentCardProps) {
             alt={`${department.name} logo`}
             width={64}
             height={64}
+            sizes="64px"
             className="object-contain w-full h-full"
           />
         </div>
@@ -641,6 +642,7 @@ function CommunityCard({ community, locale }: CommunityCardProps) {
             alt={`${community.name} logo`}
             width={64}
             height={64}
+            sizes="64px"
             className="object-contain w-full h-full"
           />
         </div>

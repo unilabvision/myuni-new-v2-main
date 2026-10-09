@@ -121,6 +121,7 @@ const Footer = ({ locale }: FooterProps) => {
                 alt="MyUNI"
                 width={180}
                 height={60}
+                sizes="120px"
                 className="h-10 w-auto"
               />
             </Link>

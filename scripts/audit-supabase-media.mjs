@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.MEDIA_STORAGE_BUCKET || 'myunilab';
 const PAGE_SIZE = 500;
+const SOURCE_DIRECTORIES = ['app', 'components', 'lib'];
+const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const REFERENCE_TABLES = [
   'certificate_templates',
   'discount_codes',
@@ -33,10 +37,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 function collectStoragePaths(value, paths) {
   if (typeof value === 'string') {
     const marker = `/storage/v1/object/public/${BUCKET}/`;
-    const markerIndex = value.indexOf(marker);
-    if (markerIndex >= 0) {
-      const rawPath = value.slice(markerIndex + marker.length).split(/[?#]/, 1)[0];
-      paths.add(decodeURIComponent(rawPath));
+    let markerIndex = value.indexOf(marker);
+    while (markerIndex >= 0) {
+      const rawPath = value
+        .slice(markerIndex + marker.length)
+        .split(/[?#\s"'<>]/, 1)[0];
+      if (rawPath) paths.add(decodeURIComponent(rawPath));
+      markerIndex = value.indexOf(marker, markerIndex + marker.length);
     }
     return;
   }
@@ -47,6 +54,26 @@ function collectStoragePaths(value, paths) {
   if (value && typeof value === 'object') {
     Object.values(value).forEach((item) => collectStoragePaths(item, paths));
   }
+}
+
+async function loadSourceReferences(directory, paths) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+
+  await Promise.all(entries.map(async (entry) => {
+    const pathname = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await loadSourceReferences(pathname, paths);
+      return;
+    }
+    if (!SOURCE_EXTENSIONS.has(path.extname(entry.name))) return;
+    collectStoragePaths(await readFile(pathname, 'utf8'), paths);
+  }));
 }
 
 async function loadReferencedPaths() {
@@ -74,6 +101,10 @@ async function loadReferencedPaths() {
     }
     if (!didFail) scannedTables.push(table);
   }
+
+  await Promise.all(
+    SOURCE_DIRECTORIES.map((directory) => loadSourceReferences(directory, paths))
+  );
 
   return { paths, scannedTables, skippedTables };
 }
@@ -130,8 +161,18 @@ function findDuplicateCandidates(files) {
 const references = await loadReferencedPaths();
 const files = (await listStorageFiles()).filter(isImageFile);
 const totalBytes = files.reduce((sum, file) => sum + Number(file.metadata?.size || 0), 0);
+const referencedManagedDirectories = new Set(
+  [...references.paths]
+    .filter((pathname) => /\/[a-f0-9]{64}\/original\.webp$/i.test(pathname))
+    .map((pathname) => pathname.slice(0, -'/original.webp'.length))
+);
+const isReferencedFile = (file) => {
+  if (references.paths.has(file.path)) return true;
+  const directory = file.path.slice(0, file.path.lastIndexOf('/'));
+  return referencedManagedDirectories.has(directory) && /\/w-\d+\.webp$/i.test(file.path);
+};
 const unreferencedCandidates = files
-  .filter((file) => !references.paths.has(file.path))
+  .filter((file) => !isReferencedFile(file))
   .map((file) => ({
     path: file.path,
     bytes: Number(file.metadata?.size || 0),

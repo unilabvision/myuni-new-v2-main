@@ -136,6 +136,7 @@ export default async function DepartmentsSection({ locale }: DepartmentsSectionP
                     alt={`${department.id} logo`}
                     width={500}
                     height={500}
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 20vw"
                     className="object-contain transition-all duration-500 ease-in-out"
                   />
                 </div>

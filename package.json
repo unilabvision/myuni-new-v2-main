@@ -10,6 +10,8 @@
     "build": "next build",
     "build:clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next build",
     "media:audit": "node --env-file-if-exists=.env.local scripts/audit-supabase-media.mjs",
+    "media:migrate": "node --env-file-if-exists=.env.local scripts/migrate-supabase-media.mjs",
+    "media:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-supabase-media.mjs",
     "start": "next start",
     "lint": "next lint"
   },

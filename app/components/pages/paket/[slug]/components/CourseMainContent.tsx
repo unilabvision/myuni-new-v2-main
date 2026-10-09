@@ -849,6 +849,7 @@ const CourseMainContent: React.FC<CourseMainContentProps> = ({
                   alt={course.instructor_name}
                   width={80}
                   height={80}
+                  sizes="80px"
                   className="w-20 h-20 rounded-sm object-cover instructor-image"
                   onError={handleImageError}
                 />

@@ -121,6 +121,7 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
             alt="UNILAB Vision"
             width={150}
             height={40}
+            sizes="120px"
             className="h-8 w-auto"
             priority
           />

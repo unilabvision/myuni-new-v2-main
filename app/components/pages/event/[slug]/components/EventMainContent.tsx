@@ -1022,6 +1022,7 @@ const EventMainContent: React.FC<EventMainContentProps> = ({
                               alt={section.speaker_name}
                               width={48}
                               height={48}
+                              sizes="48px"
                               className="w-12 h-12 rounded-full object-cover border-2 border-neutral-200 dark:border-neutral-600 shadow-sm"
                             />
                           ) : (
@@ -1173,6 +1174,7 @@ const EventMainContent: React.FC<EventMainContentProps> = ({
                           alt={section.speaker_name!}
                           width={80}
                           height={80}
+                        sizes="80px"
                           className="w-20 h-20 rounded-full mx-auto mb-4 object-cover border-2 border-neutral-200 dark:border-neutral-600 shadow-md"
                         />
                       ) : (
@@ -1263,6 +1265,7 @@ const EventMainContent: React.FC<EventMainContentProps> = ({
                   alt={eventData.organizer_name}
                   width={80}
                   height={80}
+                  sizes="80px"
                   className="w-20 h-20 rounded-sm object-cover"
                 />
               ) : (
