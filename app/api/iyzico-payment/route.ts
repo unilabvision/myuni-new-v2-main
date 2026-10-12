@@ -14,6 +14,12 @@ import {
   assertLegalConsent,
   buildLegalConsentSnapshot,
 } from '@/lib/legalConsent';
+import {
+  resolveCoursePaymentApplications,
+  syncOrderCourseApplications,
+  type CourseApplicationLink,
+  type MissingCourseApplication,
+} from '@/lib/siteApplications/coursePaymentApplications';
 import Iyzipay from 'iyzipay';
 
 interface CartItemInput {
@@ -61,6 +67,28 @@ interface PaymentRequestBody {
   cartItems?: CartItemInput[];
   privacyAccepted?: boolean;
   termsAccepted?: boolean;
+}
+
+function buildCourseApplicationUrl(params: {
+  requirement: MissingCourseApplication;
+  locale: string;
+  isCartMode: boolean;
+  items: CartItemInput[];
+  tierId?: string;
+}): string {
+  const segment = params.locale === 'en' ? 'course' : 'kurs';
+  const action = params.locale === 'en' ? 'application' : 'basvuru';
+  const query = new URLSearchParams({ id: params.requirement.courseId });
+
+  if (params.isCartMode) {
+    query.set('cartIds', params.items.map((item) => item.id).join(','));
+    query.set('mode', 'cart');
+  } else if (params.tierId) {
+    query.set('tierId', params.tierId);
+    query.set('type', 'tier');
+  }
+
+  return `/${params.locale}/${segment}/${params.requirement.courseSlug}/${action}?${query.toString()}`;
 }
 
 // Extends a date-only (YYYY-MM-DD) deadline to the end of that day so
@@ -286,6 +314,8 @@ async function saveOrderToDatabase(orderData: any) {
           userNotes: orderData.userNotes,
           itemType: orderData.itemType || 'course',
           siteApplicationId: orderData.siteApplicationId || null,
+          courseApplicationIds: orderData.courseApplicationIds || [],
+          courseApplicationLinks: orderData.courseApplicationLinks || [],
           eventSlug: orderData.eventSlug || null,
           tierId: orderData.tierId || null,
           cartMode: orderData.cartMode || false,
@@ -422,7 +452,7 @@ export async function POST(request: Request) {
     }
     const buyerIdentityNumber = isValidIdentityNumber ? suppliedIdentityNumber : '11111111111';
 
-    let validatedItems: any[] = [];
+    const validatedItems: any[] = [];
     let originalTotalAmount = 0;
     // NEVER trust body.totalDiscount — it is recomputed server-side below from
     // discount_codes against the server-validated item prices.
@@ -874,6 +904,44 @@ export async function POST(request: Request) {
       orderName = validatedItems[0].title;
     }
 
+    const paymentLocale = body.locale === 'en' ? 'en' : 'tr';
+    let courseApplicationLinks: CourseApplicationLink[];
+    try {
+      const resolution = await resolveCoursePaymentApplications({
+        items: validatedItems,
+        email: buyerEmail,
+      });
+
+      if (resolution.missing) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'APPLICATION_REQUIRED',
+            message:
+              paymentLocale === 'en'
+                ? 'Complete the course application before payment.'
+                : 'Ödeme öncesinde kurs başvurusunu tamamlayın.',
+            applicationUrl: buildCourseApplicationUrl({
+              requirement: resolution.missing,
+              locale: paymentLocale,
+              isCartMode,
+              items: validatedItems,
+              tierId: body.tierId,
+            }),
+          },
+          { status: 409 }
+        );
+      }
+
+      courseApplicationLinks = resolution.links;
+    } catch (error) {
+      console.error('Course application payment validation failed:', error);
+      return NextResponse.json(
+        { success: false, message: 'Başvuru bilgileri doğrulanamadı. Lütfen tekrar deneyin.' },
+        { status: 503 }
+      );
+    }
+
     const orderId = `MYU-IYZ-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const baseUrl = resolvePublicBaseUrl(request);
     const isTierPurchase = !isCartMode && body.itemType === 'tier';
@@ -911,6 +979,8 @@ export async function POST(request: Request) {
       userAgent,
       itemType: isCartMode ? 'cart' : (body.itemType || 'course'),
       siteApplicationId: isEventCertificateOrder ? body.courseId : undefined,
+      courseApplicationIds: courseApplicationLinks.map((link) => link.applicationId),
+      courseApplicationLinks,
       eventSlug: isEventCertificateOrder ? (body.eventSlug || validatedItems[0]?.slug) : undefined,
       cartMode: isCartMode,
       cartItems: orderSnapshot.items,
@@ -939,7 +1009,7 @@ export async function POST(request: Request) {
       const dedupeWindowStart = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data: duplicateOrder, error: dedupeError } = await supabase
         .from('orders')
-        .select('orderid')
+        .select('orderid, custom_data')
         .eq('useremail', buyerEmail)
         .eq('courseid', orderData.courseId)
         .eq('amount', finalAmount)
@@ -955,6 +1025,26 @@ export async function POST(request: Request) {
       }
 
       if (duplicateOrder) {
+        const duplicateCustomData = {
+          ...(duplicateOrder.custom_data || {}),
+          courseApplicationIds: orderData.courseApplicationIds,
+          courseApplicationLinks: orderData.courseApplicationLinks,
+        };
+        const duplicateSyncErrors = await syncOrderCourseApplications(
+          { custom_data: duplicateCustomData },
+          duplicateOrder.orderid,
+          'free_discount'
+        );
+        if (duplicateSyncErrors.length > 0) {
+          return NextResponse.json(
+            { success: false, message: 'Başvuru ödeme durumu güncellenemedi.' },
+            { status: 500 }
+          );
+        }
+        await supabase
+          .from('orders')
+          .update({ custom_data: duplicateCustomData, updated_at: new Date().toISOString() })
+          .eq('orderid', duplicateOrder.orderid);
         await supabase
           .from('orders')
           .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -978,7 +1068,24 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString() 
         }).eq('orderid', orderId);
 
-        let enrolledItemsDetails: string[] = [];
+        const applicationSyncErrors = await syncOrderCourseApplications(
+          saveResult.order,
+          orderId,
+          'free_discount'
+        );
+        if (applicationSyncErrors.length > 0) {
+          console.error('Free order application sync failed:', orderId, applicationSyncErrors);
+          await supabase
+            .from('orders')
+            .update({ status: 'payment_error', updated_at: new Date().toISOString() })
+            .eq('orderid', orderId);
+          return NextResponse.json(
+            { success: false, message: 'Başvuru ödeme durumu güncellenemedi.' },
+            { status: 500 }
+          );
+        }
+
+        const enrolledItemsDetails: string[] = [];
 
         // Her bir ürünü tek tek teslim et (enroll / purchase)
         for (const item of validatedItems) {

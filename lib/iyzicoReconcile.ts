@@ -16,6 +16,7 @@ import {
   markSiteApplicationPaid,
   notifyUniboardPaymentConfirm,
 } from './siteApplications/applicationPayments';
+import { syncOrderCourseApplications } from './siteApplications/coursePaymentApplications';
 
 function isEventCertificateOrder(order: any): boolean {
   return order?.custom_data?.itemType === 'event_certificate';
@@ -223,6 +224,25 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
       };
     }
 
+    const applicationSyncErrors = await syncOrderCourseApplications(
+      order,
+      orderId,
+      order.paymentmethod || 'iyzico'
+    );
+    await supabase
+      .from('orders')
+      .update({
+        status: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
+        custom_data: {
+          ...order.custom_data,
+          ...(applicationSyncErrors.length > 0
+            ? { applicationSyncErrors }
+            : { applicationSyncErrors: [], applicationsSyncedAt: new Date().toISOString() }),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('orderid', orderId);
+
     const needs = await orderNeedsDelivery(order);
     if (needs) {
       const delivery = await deliverOrderAccess(order);
@@ -235,21 +255,25 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
         })
         .eq('orderid', orderId);
       return {
-        success: delivery.success,
+        success: delivery.success && applicationSyncErrors.length === 0,
         orderId,
-        orderStatus: 'completed',
+        orderStatus: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
         delivered: delivery.deliveredTitles,
         message: delivery.success
           ? 'Order already completed; missing access repaired'
           : 'Order completed but delivery still incomplete',
-        errors: delivery.errors,
+        errors: [...applicationSyncErrors, ...delivery.errors],
       };
     }
     return {
-      success: true,
+      success: applicationSyncErrors.length === 0,
       orderId,
-      orderStatus: 'completed',
-      message: 'Order already completed',
+      orderStatus: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
+      message:
+        applicationSyncErrors.length === 0
+          ? 'Order already completed'
+          : 'Order completed but application payment sync failed',
+      errors: applicationSyncErrors,
     };
   }
 
@@ -473,6 +497,12 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     );
   }
 
+  const applicationSyncErrors = await syncOrderCourseApplications(
+    order,
+    orderId,
+    order.paymentmethod || 'iyzico'
+  );
+
   const priceByItemId = new Map(
     orderSnapshot.items.map((item) => [item.id, item.paidPrice] as const)
   );
@@ -491,6 +521,9 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
         custom_data: {
           ...baseCustom,
           orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+          ...(applicationSyncErrors.length > 0
+            ? { applicationSyncErrors }
+            : { applicationsSyncedAt: new Date().toISOString() }),
           deliveryErrors: delivery.errors,
         },
       })
@@ -503,7 +536,7 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
       iyzicoPaymentStatus: mapped.iyzicoPaymentStatus,
       fraudStatus: mapped.fraudStatus,
       message: 'Iyzico SUCCESS but delivery failed',
-      errors: delivery.errors,
+      errors: [...applicationSyncErrors, ...delivery.errors],
     };
   }
 
@@ -531,7 +564,7 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     await supabase
       .from('orders')
       .update({
-        status: 'completed',
+        status: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
         enrolled: true,
         enrollmentid: delivery.firstEnrollmentId || null,
         amount: paidPriceNum,
@@ -539,6 +572,9 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
         custom_data: {
           ...baseCustom,
           orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+          ...(applicationSyncErrors.length > 0
+            ? { applicationSyncErrors }
+            : { applicationsSyncedAt: new Date().toISOString() }),
           ...(emailSent ? { emailSentAt: new Date().toISOString() } : {}),
           reconciledVia: 'iyzico-reconcile',
         },
@@ -546,14 +582,18 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
       .eq('orderid', orderId);
 
     return {
-      success: true,
+      success: applicationSyncErrors.length === 0,
       orderId,
-      orderStatus: 'completed',
+      orderStatus: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
       iyzicoPaymentStatus: mapped.iyzicoPaymentStatus,
       fraudStatus: mapped.fraudStatus,
       delivered: delivery.deliveredTitles,
       emailSent,
-      message: 'Iyzico SUCCESS — order completed, access delivered',
+      message:
+        applicationSyncErrors.length === 0
+          ? 'Iyzico SUCCESS — order completed, access delivered'
+          : 'Iyzico SUCCESS — access delivered, application sync failed',
+      errors: applicationSyncErrors,
     };
   }
 
@@ -569,6 +609,9 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
       custom_data: {
         ...baseCustom,
         orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: retrieve.paidPrice },
+        ...(applicationSyncErrors.length > 0
+          ? { applicationSyncErrors }
+          : { applicationsSyncedAt: new Date().toISOString() }),
         deliveryErrors: delivery.errors,
       },
     })
@@ -581,7 +624,7 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
     iyzicoPaymentStatus: mapped.iyzicoPaymentStatus,
     delivered: delivery.deliveredTitles,
     message: 'Iyzico SUCCESS — partial delivery',
-    errors: delivery.errors,
+    errors: [...applicationSyncErrors, ...delivery.errors],
   };
 }
 

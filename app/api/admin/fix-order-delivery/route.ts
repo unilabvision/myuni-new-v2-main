@@ -6,6 +6,63 @@ import {
   markSiteApplicationPaid,
   notifyUniboardPaymentConfirm,
 } from '@/lib/siteApplications/applicationPayments';
+import {
+  getOrderCourseApplicationIds,
+  resolveCoursePaymentApplications,
+  syncOrderCourseApplications,
+  type CoursePaymentItem,
+} from '@/lib/siteApplications/coursePaymentApplications';
+
+interface RepairableOrder extends Record<string, unknown> {
+  orderid: string;
+  courseid?: unknown;
+  coursename?: unknown;
+  useremail?: unknown;
+  custom_data?: {
+    orderSnapshot?: { items?: CoursePaymentItem[] };
+    cartItems?: CoursePaymentItem[];
+    itemType?: string;
+    courseSlug?: string;
+    [key: string]: unknown;
+  } | null;
+}
+
+function getOrderItems(order: RepairableOrder): CoursePaymentItem[] {
+  const snapshotItems = order.custom_data?.orderSnapshot?.items;
+  if (Array.isArray(snapshotItems) && snapshotItems.length > 0) return snapshotItems;
+  const cartItems = order.custom_data?.cartItems;
+  if (Array.isArray(cartItems) && cartItems.length > 0) return cartItems;
+  return [{
+    id: String(order.courseid || ''),
+    type: String(order.custom_data?.itemType || 'course'),
+    slug: String(order.custom_data?.courseSlug || ''),
+    title: String(order.coursename || ''),
+  }];
+}
+
+async function attachLegacyCourseApplications(order: RepairableOrder) {
+  if (getOrderCourseApplicationIds(order).length > 0) return { order, missing: null };
+
+  const resolution = await resolveCoursePaymentApplications({
+    items: getOrderItems(order),
+    email: String(order.useremail || ''),
+  });
+  if (resolution.missing || resolution.links.length === 0) {
+    return { order, missing: resolution.missing };
+  }
+
+  const customData = {
+    ...(order.custom_data || {}),
+    courseApplicationIds: resolution.links.map((link) => link.applicationId),
+    courseApplicationLinks: resolution.links,
+  };
+  await supabase
+    .from('orders')
+    .update({ custom_data: customData, updated_at: new Date().toISOString() })
+    .eq('orderid', order.orderid);
+
+  return { order: { ...order, custom_data: customData }, missing: null };
+}
 
 /**
  * Admin recovery: re-deliver enrollments/purchases for a paid order
@@ -101,8 +158,37 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const legacyLink = await attachLegacyCourseApplications(order);
+    if (legacyLink.missing) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'APPLICATION_REQUIRED',
+          orderId,
+          courseId: legacyLink.missing.courseId,
+          courseTitle: legacyLink.missing.courseTitle,
+        },
+        { status: 422 }
+      );
+    }
+
+    const applicationSyncErrors = await syncOrderCourseApplications(
+      legacyLink.order,
+      orderId,
+      order.paymentmethod || 'iyzico'
+    );
     const needs = await orderNeedsDelivery(order);
     if (!needs) {
+      if (applicationSyncErrors.length > 0) {
+        await supabase
+          .from('orders')
+          .update({ status: 'payment_error', updated_at: new Date().toISOString() })
+          .eq('orderid', orderId);
+        return NextResponse.json(
+          { success: false, orderId, errors: applicationSyncErrors },
+          { status: 422 }
+        );
+      }
       return NextResponse.json({
         success: true,
         alreadyDelivered: true,
@@ -119,7 +205,7 @@ export async function POST(request: NextRequest) {
       order.status === 'processing' ||
       order.status === 'payment_error' ||
       order.status === 'failed'
-        ? delivery.success
+        ? delivery.success && applicationSyncErrors.length === 0
           ? 'completed'
           : 'payment_error'
         : order.status;
@@ -136,8 +222,8 @@ export async function POST(request: NextRequest) {
           adminDeliveryRepair: {
             at: new Date().toISOString(),
             by: admin.userId,
-            success: delivery.success,
-            errors: delivery.errors,
+            success: delivery.success && applicationSyncErrors.length === 0,
+            errors: [...applicationSyncErrors, ...delivery.errors],
             delivered: delivery.deliveredTitles,
           },
         },
@@ -145,11 +231,11 @@ export async function POST(request: NextRequest) {
       .eq('orderid', orderId);
 
     return NextResponse.json({
-      success: delivery.success,
+      success: delivery.success && applicationSyncErrors.length === 0,
       orderId,
       status: nextStatus,
       delivered: delivery.deliveredTitles,
-      errors: delivery.errors,
+      errors: [...applicationSyncErrors, ...delivery.errors],
       firstEnrollmentId: delivery.firstEnrollmentId,
     });
   } catch (e) {

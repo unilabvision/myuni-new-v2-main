@@ -4,6 +4,7 @@ import {
   markSiteApplicationPaid,
   notifyUniboardPaymentConfirm,
 } from '@/lib/siteApplications/applicationPayments';
+import { syncOrderCourseApplications } from '@/lib/siteApplications/coursePaymentApplications';
 import {
   buildOrderSnapshot,
   resolveEmailCourseType,
@@ -498,6 +499,19 @@ export async function POST(request: Request) {
                 }
 
                 // ---- Course / package / product / cart delivery (idempotent) ----
+                const applicationSyncErrors = await syncOrderCourseApplications(
+                  order,
+                  orderId,
+                  'iyzico'
+                );
+                if (applicationSyncErrors.length > 0) {
+                  console.error(
+                    'Paid order application sync failed:',
+                    orderId,
+                    applicationSyncErrors
+                  );
+                }
+
                 if (!order.custom_data?.userId || !String(order.custom_data.userId).startsWith('user_')) {
                     console.error(
                       `CRITICAL: Order ${orderId} missing Clerk userId — refusing silent email-based enrollment. userId=`,
@@ -542,6 +556,9 @@ export async function POST(request: Request) {
                           orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
                           iyzico_paymentId: result.paymentId,
                           iyzico_authCode: result.authCode,
+                          ...(applicationSyncErrors.length > 0
+                            ? { applicationSyncErrors }
+                            : { applicationsSyncedAt: new Date().toISOString() }),
                           deliveryErrors: delivery.errors,
                         },
                       })
@@ -562,7 +579,7 @@ export async function POST(request: Request) {
                 // Siparişi başarıyla güncelle (yalnızca tam teslimatta completed)
                 if (delivery.success) {
                   await supabase.from('orders').update({ 
-                      status: 'completed', 
+                      status: applicationSyncErrors.length > 0 ? 'payment_error' : 'completed',
                       enrolled: true, 
                       enrollmentid: firstEnrollmentId || null,
                       updated_at: new Date().toISOString(),
@@ -571,7 +588,10 @@ export async function POST(request: Request) {
                           ...order.custom_data,
                           orderSnapshot: { ...orderSnapshot, iyzicoPaidPrice: result.paidPrice },
                           iyzico_paymentId: result.paymentId,
-                          iyzico_authCode: result.authCode
+                          iyzico_authCode: result.authCode,
+                          ...(applicationSyncErrors.length > 0
+                            ? { applicationSyncErrors }
+                            : { applicationsSyncedAt: new Date().toISOString() })
                       }
                   }).eq('orderid', orderId);
                 }

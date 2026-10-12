@@ -1188,6 +1188,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       const data = await response.json();
       
       if (!data.success) {
+        if (data.code === 'APPLICATION_REQUIRED' && data.applicationUrl) {
+          router.push(String(data.applicationUrl));
+          return;
+        }
         throw new Error(data.message || 'Ödeme başlatılamadı');
       }
       

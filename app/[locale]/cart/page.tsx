@@ -39,6 +39,8 @@ const texts = {
     paymentInfo: 'Ödemeniz iyzico güvenli altyapısı üzerinden gerçekleştirilecektir.',
     signInRequired: 'Ödemeye geçmek için giriş yapmalısınız.',
     signIn: 'Giriş Yap',
+    checkingApplications: 'Başvurular kontrol ediliyor...',
+    applicationCheckFailed: 'Başvuru kontrolü yapılamadı. Lütfen tekrar deneyin.',
   },
   en: {
     pageTitle: 'My Cart',
@@ -60,6 +62,8 @@ const texts = {
     paymentInfo: 'Your payment is processed through the secure iyzico infrastructure.',
     signInRequired: 'You must sign in to proceed to checkout.',
     signIn: 'Sign In',
+    checkingApplications: 'Checking applications...',
+    applicationCheckFailed: 'Applications could not be checked. Please try again.',
   },
 };
 
@@ -70,17 +74,47 @@ export default function CartPage({ params }: CartPageProps) {
   const { isSignedIn, isLoaded } = useUser();
   const { items, removeItem, clearCart, totalPrice } = useCart();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
 
   const coursePath = locale === 'tr' ? 'kurs' : 'course';
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!isSignedIn) {
       router.push(`/${locale}/login?redirect_url=/${locale}/cart`);
       return;
     }
-    // Pass cart items via query param (base64 encoded IDs) to checkout
+
     const ids = items.map(i => i.id).join(',');
-    router.push(`/${locale}/checkout?cartIds=${encodeURIComponent(ids)}&mode=cart`);
+    const courseItems = items.filter(item => item.type === 'course' || item.type === 'tier');
+    const uniqueCourses = Array.from(
+      new Map(courseItems.map(item => [item.courseId || item.id, item])).values()
+    );
+
+    setIsCheckingOut(true);
+    setCheckoutError('');
+
+    try {
+      if (uniqueCourses.length > 0) {
+        const response = await fetch('/api/site-applications/payment-requirements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items, locale }),
+        });
+        if (!response.ok) throw new Error('Application form check failed');
+
+        const result = await response.json();
+        if (result.applicationRequired && result.applicationUrl) {
+          router.push(String(result.applicationUrl));
+          return;
+        }
+      }
+
+      router.push(`/${locale}/checkout?cartIds=${encodeURIComponent(ids)}&mode=cart`);
+    } catch {
+      setCheckoutError(t.applicationCheckFailed);
+      setIsCheckingOut(false);
+    }
   };
 
   const handleClear = () => {
@@ -304,13 +338,21 @@ export default function CartPage({ params }: CartPageProps) {
                   </Link>
                 </div>
               ) : (
-                <button
-                  onClick={handleCheckout}
-                  className="flex items-center justify-center gap-2 w-full py-3.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl text-sm font-semibold hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
-                >
-                  {t.proceedToCheckout}
-                  <ArrowRight size={16} />
-                </button>
+                <div className="space-y-3">
+                  {checkoutError && (
+                    <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                      {checkoutError}
+                    </p>
+                  )}
+                  <button
+                    onClick={handleCheckout}
+                    disabled={isCheckingOut}
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl text-sm font-semibold hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isCheckingOut ? t.checkingApplications : t.proceedToCheckout}
+                    {!isCheckingOut && <ArrowRight size={16} />}
+                  </button>
+                </div>
               )}
 
               {/* Trust badge */}
