@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Service role client - RLS'yi bypass eder
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
+import { getVerifiedProductAccessEmails } from '../../../../lib/productAccess';
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -20,12 +15,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ hasPurchased: false });
   }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('myuni_products_purchases')
     .select('id')
     .eq('user_id', userId)
     .eq('product_id', productId)
     .maybeSingle();
+
+  if (!error && !data) {
+    const verifiedEmails = await getVerifiedProductAccessEmails();
+    if (verifiedEmails.length) {
+      const emailResult = await supabaseAdmin
+        .from('myuni_products_purchases')
+        .select('id')
+        .in('user_id', verifiedEmails)
+        .eq('product_id', productId)
+        .limit(1)
+        .maybeSingle();
+      data = emailResult.data;
+      error = emailResult.error;
+    }
+  }
 
   if (error) {
     console.error('Purchase check error:', error);

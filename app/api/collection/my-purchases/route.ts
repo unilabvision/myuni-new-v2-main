@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
+import { getVerifiedProductAccessEmails } from '../../../../lib/productAccess';
 
 export async function GET() {
   const { userId } = await auth();
@@ -14,10 +10,22 @@ export async function GET() {
     return NextResponse.json({ purchasedIds: [] });
   }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('myuni_products_purchases')
     .select('product_id')
     .eq('user_id', userId);
+
+  if (!error && !data?.length) {
+    const verifiedEmails = await getVerifiedProductAccessEmails();
+    if (verifiedEmails.length) {
+      const emailResult = await supabaseAdmin
+        .from('myuni_products_purchases')
+        .select('product_id')
+        .in('user_id', verifiedEmails);
+      data = emailResult.data;
+      error = emailResult.error;
+    }
+  }
 
   if (error) {
     console.error('My purchases fetch error:', error);

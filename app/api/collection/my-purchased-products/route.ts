@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
+import { getVerifiedProductAccessEmails } from '../../../../lib/productAccess';
 
 export async function GET() {
   try {
@@ -10,11 +11,24 @@ export async function GET() {
       return NextResponse.json({ success: false, purchases: [] }, { status: 401 });
     }
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from('myuni_products_purchases')
       .select('*, product:myuni_products(id, title, slug, thumbnail_url, product_type, price)')
       .eq('user_id', userId)
       .order('purchased_at', { ascending: false });
+
+    if (!error && !data?.length) {
+      const verifiedEmails = await getVerifiedProductAccessEmails();
+      if (verifiedEmails.length) {
+        const emailResult = await supabaseAdmin
+          .from('myuni_products_purchases')
+          .select('*, product:myuni_products(id, title, slug, thumbnail_url, product_type, price)')
+          .in('user_id', verifiedEmails)
+          .order('purchased_at', { ascending: false });
+        data = emailResult.data;
+        error = emailResult.error;
+      }
+    }
 
     if (error) {
       console.error('Detailed purchases fetch error:', error);

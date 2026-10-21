@@ -12,6 +12,7 @@
     "media:audit": "node --env-file-if-exists=.env.local scripts/audit-supabase-media.mjs",
     "media:migrate": "node --env-file-if-exists=.env.local scripts/migrate-supabase-media.mjs",
     "media:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-supabase-media.mjs",
+    "gift:product": "node --env-file-if-exists=.env.local scripts/grant-product-gifts.mjs",
     "start": "next start",
     "lint": "next lint"
   },

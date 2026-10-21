@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
+import { getVerifiedProductAccessEmails } from '../../../../lib/productAccess';
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -34,12 +30,32 @@ export async function GET(req: NextRequest) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { data: purchase } = await supabaseAdmin
+    let { data: purchase, error: purchaseError } = await supabaseAdmin
       .from('myuni_products_purchases')
       .select('id')
       .eq('user_id', userId)
       .eq('product_id', productId)
       .maybeSingle();
+
+    if (!purchaseError && !purchase) {
+      const verifiedEmails = await getVerifiedProductAccessEmails();
+      if (verifiedEmails.length) {
+        const emailResult = await supabaseAdmin
+          .from('myuni_products_purchases')
+          .select('id')
+          .in('user_id', verifiedEmails)
+          .eq('product_id', productId)
+          .limit(1)
+          .maybeSingle();
+        purchase = emailResult.data;
+        purchaseError = emailResult.error;
+      }
+    }
+
+    if (purchaseError) {
+      console.error('PDF purchase check error:', purchaseError);
+      return new NextResponse('Unable to verify access', { status: 500 });
+    }
 
     if (purchase) {
       isAuthorized = true;
