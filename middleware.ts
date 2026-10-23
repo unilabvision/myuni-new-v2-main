@@ -14,6 +14,8 @@ const isPublicRoute = createRouteMatcher([
   '/tr/kariyer(.*)',
   '/tr/collection(.*)',
   '/en/collection(.*)',
+  '/tr/uyelik(.*)',
+  '/en/membership(.*)',
   '/tr/cart(.*)',
   '/en/cart(.*)',
   '/tr/login(.*)', // Auth routes
@@ -98,6 +100,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/support-message',
   '/api/newsletter',
   '/api/content',
+  '/api/membership/plans',
   '/api/search',
   // Static files
   '/sitemap.xml',
@@ -167,6 +170,8 @@ const isValidRoute = createRouteMatcher([
   '/en/about(.*)',
   '/tr/collection(.*)',
   '/en/collection(.*)',
+  '/tr/uyelik(.*)',
+  '/en/membership(.*)',
   '/tr/cart(.*)',
   '/en/cart(.*)',
   '/tr/kurs(.*)',
