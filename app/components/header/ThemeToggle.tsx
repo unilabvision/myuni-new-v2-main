@@ -15,7 +15,7 @@ export default function ThemeToggle({ isDarkMode, setIsDarkMode }: ThemeTogglePr
 
   return (
     <button
-      className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200"
+      className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-600 transition-colors duration-200 hover:bg-neutral-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-primary"
       onClick={toggleTheme}
       aria-label={isDarkMode ? "Aydınlık mod" : "Karanlık mod"}
     >

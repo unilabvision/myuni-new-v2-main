@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Link from 'next/link';
 import { ChevronRight, Home } from 'lucide-react';
 import ApplicationFormHero from './ApplicationFormHero';
 
@@ -45,14 +46,13 @@ export default function PageLayout({
     backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url(${bgImage})`,
   } : {};
 
-  // Default gradient if no image is provided
   const headerClasses = bgImage 
     ? "relative bg-cover bg-center bg-no-repeat"
-    : "bg-gradient-to-br from-rose-500/5 to-red-500/10 dark:from-rose-900/20 dark:to-red-900/30";
+    : "border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950";
 
 
   return (
-    <div className="min-h-screen bg-white dark:bg-neutral-900">
+    <div className="min-h-screen bg-white text-neutral-950 dark:bg-neutral-950 dark:text-white">
       {variant === 'application' ? (
         <ApplicationFormHero
           title={title}
@@ -61,28 +61,28 @@ export default function PageLayout({
           breadcrumbs={breadcrumbs}
         />
       ) : (
-      <div className={`${headerClasses} py-12 lg:py-16`} style={heroStyle}>
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
+      <div className={`${headerClasses} py-10 sm:py-14 lg:py-20`} style={heroStyle}>
+        <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
           
           {/* Breadcrumbs */}
           {breadcrumbs && (
-            <nav className="mb-6">
-              <div className="flex items-center text-sm text-black dark:text-rose-300/80 space-x-1">
-                <a href={`/${locale}`} className="hover:text-rose-700 dark:hover:text-rose-200 flex items-center">
+            <nav className="mb-7 overflow-x-auto" aria-label={locale === 'tr' ? 'Sayfa yolu' : 'Breadcrumb'}>
+              <div className={`flex min-w-max items-center gap-1 text-sm ${bgImage ? 'text-white/80' : 'text-neutral-500 dark:text-neutral-400'}`}>
+                <Link href={`/${locale}`} className="flex min-h-10 items-center transition-colors hover:text-[#990000]">
                   <Home className="w-4 h-4 mr-1" />
                   {homeText}
-                </a>
+                </Link>
                 {breadcrumbs.map((item, index) => {
                   const isLast = index === breadcrumbs.length - 1;
                   return (
-                    <div key={index} className="flex items-center">
-                      <ChevronRight className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                    <div key={item.href} className="flex items-center">
+                      <ChevronRight className={`h-4 w-4 ${bgImage ? 'text-white/50' : 'text-neutral-300 dark:text-neutral-600'}`} />
                       {isLast ? (
-                        <span className="ml-1 text-rose-500 dark:text-rose-100 font-medium">{item.name}</span>
+                        <span className={`ml-1 font-medium ${bgImage ? 'text-white' : 'text-neutral-900 dark:text-white'}`}>{item.name}</span>
                       ) : (
-                        <a href={item.href} className="ml-1 hover:text-rose-600 dark:hover:text-rose-200">
+                        <Link href={item.href} className="ml-1 transition-colors hover:text-[#990000]">
                           {item.name}
-                        </a>
+                        </Link>
                       )}
                     </div>
                   );
@@ -92,13 +92,14 @@ export default function PageLayout({
           )}
 
           {/* Title */}
-          <div className="max-w-3xl">
-            <h1 className={`text-3xl lg:text-4xl font-medium mb-4 leading-relaxed ${bgImage ? 'text-white' : 'text-gray-800 dark:text-gray-100'}`}>
+          <div className="max-w-4xl">
+            <div className={`mb-5 h-px w-10 ${bgImage ? 'bg-white' : 'bg-[#990000]'}`} aria-hidden="true" />
+            <h1 className={`text-4xl font-semibold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:text-6xl ${bgImage ? 'text-white' : 'text-neutral-950 dark:text-white'}`}>
               {title}
             </h1>
             
             {headerDescription && (
-              <div className={`prose prose-neutral dark:prose-invert max-w-none ${bgImage ? 'prose-invert text-rose-100/90' : ''}`}>
+              <div className={`prose prose-neutral mt-6 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8 dark:prose-invert ${bgImage ? 'prose-invert text-white/85' : 'text-neutral-600 dark:text-neutral-300'}`}>
                 <ReactMarkdown>
                   {headerDescription}
                 </ReactMarkdown>
@@ -114,7 +115,7 @@ export default function PageLayout({
         className={
           variant === 'application'
             ? 'bg-gradient-to-b from-white to-rose-50/30 dark:from-neutral-900 dark:to-neutral-900 -mt-1'
-            : 'bg-white dark:bg-neutral-900'
+            : 'bg-white dark:bg-neutral-950'
         }
       >
         {children}
@@ -122,23 +123,25 @@ export default function PageLayout({
 
       {/* Simple Contact Section (conditionally rendered) */}
       {variant === 'default' && (
-        <section className="py-12 bg-rose-50/50 dark:bg-gray-800/50 mt-12">
-          <div className="max-w-7xl mx-auto px-6">
-            <h3 className="text-xl font-medium text-gray-800 dark:text-gray-100 mb-3">
+        <section className="mt-12 border-y border-neutral-200 bg-neutral-50 py-12 dark:border-neutral-800 dark:bg-neutral-900 sm:py-14">
+          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-5 sm:px-6 md:flex-row md:items-center lg:px-8">
+            <div>
+            <h3 className="mb-2 text-xl font-semibold tracking-[-0.02em] text-neutral-950 dark:text-white">
               {locale === 'tr' ? 'Bizimle İletişime Geçin' : 'Get in Touch'}
             </h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6 font-regular">
+            <p className="max-w-2xl text-sm leading-6 text-neutral-600 dark:text-neutral-300 sm:text-base">
               {locale === 'tr' 
                 ? 'Sorularınız için bizimle iletişime geçebilirsiniz.'
                 : 'Contact us for any questions you may have.'
               }
             </p>
-            <a 
+            </div>
+            <Link
               href={`/${locale}/${locale === 'tr' ? 'iletisim' : 'contact'}`}
-              className="inline-block px-6 py-2 bg-rose-600 dark:bg-rose-700 text-white rounded-md hover:bg-rose-700 dark:hover:bg-rose-600 transition-colors font-light"
+              className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-md bg-[#990000] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#780000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4"
             >
               {locale === 'tr' ? 'İletişim' : 'Contact'}
-            </a>
+            </Link>
           </div>
         </section>
       )}

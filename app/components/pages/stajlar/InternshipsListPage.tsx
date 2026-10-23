@@ -8,7 +8,6 @@ import {
   ArrowRight,
   Briefcase,
   Building2,
-  Calendar,
   Filter,
   Handshake,
   MapPin,
@@ -394,40 +393,39 @@ export default function InternshipsListPage({
   }
 
   return (
-    <div className="relative">
+    <div className="relative bg-white dark:bg-neutral-950">
       {/* Hero */}
-      <section className="relative py-16 lg:py-18 overflow-hidden">
-        <div className="max-w-7xl px-6 container mx-auto relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <section className="relative overflow-hidden border-b border-neutral-200 dark:border-neutral-800">
+        <div className="relative z-10 mx-auto max-w-7xl px-5 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-20">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
             <div className="text-left order-2 lg:order-1">
-              <div className="bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm px-4 py-2 mb-6 border border-neutral-300 dark:border-neutral-700 rounded-full shadow-sm inline-block">
-                {t.badge}
+              <div className="mb-7 flex items-center gap-3 text-sm font-medium text-[#990000] dark:text-[#e08b94]">
+                <span className="h-px w-8 bg-current" aria-hidden="true" />
+                <span>{t.badge}</span>
               </div>
 
-              <h1 className="text-3xl lg:text-4xl font-medium text-neutral-900 dark:text-neutral-100 leading-tight mb-6">
+              <h1 className="mb-6 text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-neutral-950 sm:text-5xl lg:text-[3.55rem] dark:text-white">
                 {t.title}
               </h1>
 
-              <div className="w-16 h-px bg-[#990000] mb-6" />
-
-              <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 max-w-2xl">
+              <p className="mb-8 max-w-xl text-base leading-7 text-neutral-600 sm:text-lg sm:leading-8 dark:text-neutral-300">
                 {t.subtitle}
               </p>
 
-              <div className="flex space-x-8 mb-8 text-neutral-700 dark:text-neutral-300 text-sm md:text-base">
-                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+              <div className="mb-8 flex flex-wrap gap-x-8 gap-y-4 border-t border-neutral-200 pt-5 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
+                <div className="flex flex-col items-start">
                   <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {items.length}
                   </span>
                   <span>{t.statOpen}</span>
                 </div>
-                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                <div className="flex flex-col items-start">
                   <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {volunteerCount}
                   </span>
                   <span>{t.statVolunteer}</span>
                 </div>
-                <div className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                <div className="flex flex-col items-start">
                   <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {recommendedCount}
                   </span>
@@ -438,7 +436,7 @@ export default function InternshipsListPage({
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={scrollToAll}
-                  className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white rounded-md py-3 px-8 text-md font-medium flex items-center justify-center transition-colors"
+                  className="flex min-h-12 items-center justify-center rounded-md bg-[#990000] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#780000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4"
                 >
                   {t.viewAll}
                   <ArrowRight className="ml-2 w-4 h-4" />
@@ -447,7 +445,7 @@ export default function InternshipsListPage({
                 {featuredItems[0] && (
                   <Link
                     href={featuredItems[0].href}
-                    className="bg-transparent border border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600 text-neutral-800 dark:text-neutral-300 rounded-md py-3 px-8 text-md font-medium transition-colors text-center"
+                    className="inline-flex min-h-12 items-center justify-center rounded-md border border-neutral-300 px-6 py-3 text-center text-sm font-semibold text-neutral-900 transition-colors hover:border-neutral-950 dark:border-neutral-700 dark:text-white dark:hover:border-neutral-400"
                   >
                     {t.exploreMore}
                   </Link>
@@ -458,7 +456,7 @@ export default function InternshipsListPage({
             {/* Featured carousel */}
             <div className="order-1 lg:order-2">
               {featuredItems.length > 0 ? (
-                <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg">
+                <div className="relative h-[450px] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 sm:h-[500px] lg:h-[570px] dark:border-neutral-800 dark:bg-neutral-900">
                   <div className="p-6 lg:p-8 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-4 lg:mb-6">
                       <h3 className="text-lg lg:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
@@ -499,7 +497,7 @@ export default function InternshipsListPage({
                             >
                               <Link
                                 href={item.href}
-                                className="bg-white dark:bg-neutral-700 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-600 h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 block cursor-pointer group"
+                                className="group block flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white transition-colors hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:border-neutral-500"
                               >
                                 <div
                                   className={`relative h-32 lg:h-48 overflow-hidden flex-shrink-0 ${
@@ -629,7 +627,7 @@ export default function InternshipsListPage({
                   </div>
                 </div>
               ) : (
-                <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-800 dark:to-neutral-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
+                <div className="relative flex h-[450px] w-full items-center justify-center overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 sm:h-[500px] lg:h-[570px] dark:border-neutral-800 dark:bg-neutral-900">
                   <p className="text-neutral-500 dark:text-neutral-400 px-6 text-center">
                     {t.featuredEmpty}
                   </p>
@@ -643,9 +641,9 @@ export default function InternshipsListPage({
       {/* All opportunities */}
       <section
         ref={allItemsRef}
-        className="py-16 bg-white dark:bg-neutral-900"
+        className="bg-neutral-50 py-14 sm:py-16 dark:bg-neutral-900/60"
       >
-        <div className="max-w-7xl px-6 mx-auto">
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
           <div className="mb-12">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100">

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { BookOpen, FileText, Download, Filter, Search, Tag, Eye, ArrowRight, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { BookOpen, FileText, Download, Filter, Search, Tag, ArrowRight, ShoppingBag } from 'lucide-react';
 
 // Tip Tanımlamaları
 interface DigitalProduct {
@@ -27,7 +27,7 @@ interface DigitalProduct {
 const texts = {
   tr: {
     hero: {
-      badge: "🎯 Eğitim Dışı Ürünlerimiz",
+      badge: "MyUNI dijital koleksiyonu",
       title: "Özenle hazırlanmış dijital ürünlerimizle gelişiminizi hızlandırın.",
       subtitle: "Ders notları, özel dergiler ve e-kitaplar... Pratik deneyimlerle desteklenen koleksiyonumuza göz atıp dilediğinizi anında incelemeye başlayın.",
       stats: [
@@ -56,7 +56,7 @@ const texts = {
   },
   en: {
     hero: {
-      badge: "🎯 Non-Educational Products",
+      badge: "MyUNI digital collection",
       title: "Accelerate your growth with our carefully crafted digital assets.",
       subtitle: "Lecture notes, exclusive magazines, and e-books... Check out our practical collections and start reading instantly.",
       stats: [
@@ -184,35 +184,31 @@ export default function CollectionPage() {
 
   return (
     <div className="relative">
-      <div className="min-h-screen bg-gray-50 dark:bg-[#111] pb-24">
+      <div className="min-h-screen bg-white pb-20 dark:bg-neutral-950">
         
         {/* HERO BÖLÜMÜ - ETKİNLİK SAYFASI TARZI YAPI */}
-        <section className="relative py-16 lg:py-18 overflow-hidden bg-transparent border-b border-gray-200 dark:border-neutral-800">
-          {/* Arkaplan için yumuşak bir glow */}
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[100px] -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
-          
-          <div className="max-w-7xl px-6 lg:px-8 mx-auto relative z-10">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <section className="relative overflow-hidden border-b border-neutral-200 dark:border-neutral-800">
+          <div className="relative z-10 mx-auto max-w-7xl px-5 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-20">
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
               
               {/* Sol Taraf - Metinler */}
               <div className="text-left order-2 lg:order-1">
-                <div className="bg-gray-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm font-medium px-4 py-2 mb-6 border border-gray-200 dark:border-neutral-700 rounded-full shadow-sm inline-block">
-                  {t.hero.badge}
+                <div className="mb-7 flex items-center gap-3 text-sm font-medium text-[#990000] dark:text-[#e08b94]">
+                  <span className="h-px w-8 bg-current" aria-hidden="true" />
+                  <span>{t.hero.badge}</span>
                 </div>
 
-                <h1 className="text-4xl lg:text-5xl font-bold text-neutral-900 dark:text-white leading-tight mb-6">
+                <h1 className="mb-6 text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-neutral-950 sm:text-5xl lg:text-[3.55rem] dark:text-white">
                   {t.hero.title}
                 </h1>
 
-                <div className="w-16 h-1 bg-primary mb-6 rounded-full"></div>
-
-                <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 max-w-xl">
+                <p className="mb-8 max-w-xl text-base leading-7 text-neutral-600 sm:text-lg sm:leading-8 dark:text-neutral-300">
                   {t.hero.subtitle}
                 </p>
 
-                <div className="flex space-x-8 mb-8 text-neutral-700 dark:text-neutral-300 text-sm md:text-base">
-                  {t.hero.stats.map((stat, idx) => (
-                    <div key={idx} className="flex flex-col items-start transition-all duration-300 hover:font-bold">
+                <div className="mb-8 flex flex-wrap gap-x-8 gap-y-4 border-t border-neutral-200 pt-5 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
+                  {t.hero.stats.map((stat) => (
+                    <div key={stat.label} className="flex flex-col items-start">
                       <span className="text-2xl md:text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                         {stat.value}
                       </span>
@@ -224,7 +220,7 @@ export default function CollectionPage() {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button 
                     onClick={scrollToCollection}
-                    className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white dark:text-white rounded-md py-3 px-8 text-md font-medium flex items-center justify-center transition-all shadow-md group border-0"
+                    className="group flex min-h-12 items-center justify-center rounded-md bg-[#990000] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#780000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4"
                   >
                     {t.hero.exploreTarget}
                     <ArrowDownIcon className="ml-2 w-4 h-4 group-hover:translate-y-1 transition-transform" />
@@ -235,7 +231,7 @@ export default function CollectionPage() {
               {/* Sağ Taraf - Öne Çıkanlar (Carousel) */}
               <div className="order-1 lg:order-2 h-full">
                 {featuredProducts.length > 0 ? (
-                  <div className="relative h-[450px] lg:h-[550px] w-full bg-gradient-to-br from-gray-100 to-gray-50 dark:from-neutral-800 dark:to-neutral-900/50 rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-neutral-700">
+                  <div className="relative h-[450px] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 sm:h-[500px] lg:h-[570px] dark:border-neutral-800 dark:bg-neutral-900">
                     <div className="p-6 lg:p-8 h-full flex flex-col">
                       <div className="flex items-center justify-between mb-4 lg:mb-6">
                         <h3 className="text-xl font-bold text-neutral-900 dark:text-white">
@@ -257,7 +253,7 @@ export default function CollectionPage() {
                         )}
                       </div>
                       
-                      <div className="flex-1 relative overflow-hidden rounded-xl bg-white dark:bg-neutral-800 border border-gray-100 dark:border-neutral-700 shadow-sm">
+                      <div className="relative flex-1 overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950">
                         <div 
                           className="flex transition-transform duration-700 ease-out h-full"
                           style={{ transform: `translateX(-${currentSlide * 100}%)` }}
@@ -337,12 +333,12 @@ export default function CollectionPage() {
         </section>
 
         {/* KOLEKSİYON LİSTESİ */}
-        <div id="collection-grid" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
+        <div id="collection-grid" className="mx-auto max-w-7xl px-5 pt-14 sm:px-6 sm:pt-16 lg:px-8">
           <div className="flex flex-col lg:flex-row gap-8">
             
             {/* Sol Filtreleme Alanı */}
             <div className="w-full lg:w-1/4">
-              <div className="bg-white dark:bg-neutral-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-neutral-700 top-24 sticky">
+              <div className="top-24 rounded-xl border border-neutral-200 bg-neutral-50 p-5 lg:sticky dark:border-neutral-800 dark:bg-neutral-900">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                   <Filter size={18} className="mr-2 text-primary" /> Filtreler
                 </h3>
@@ -400,7 +396,7 @@ export default function CollectionPage() {
                     <Link 
                       key={product.id} 
                       href={`/${locale}/collection/${product.slug}`}
-                      className="group bg-white dark:bg-neutral-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl border border-gray-100 dark:border-neutral-700 transition-all duration-300 flex flex-col h-full block cursor-pointer"
+                      className="group block flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white transition-colors duration-300 hover:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-600"
                     >
                       {/* Görsel */}
                       <div className="relative aspect-[3/4] w-full overflow-hidden bg-gray-100 dark:bg-neutral-900">

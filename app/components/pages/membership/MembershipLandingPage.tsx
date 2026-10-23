@@ -49,16 +49,17 @@ export default function MembershipLandingPage({
   const isTr = locale === 'tr';
 
   return (
-    <main className="min-h-screen bg-[#fafafa] text-neutral-950">
-      <section className="bg-[#650000] px-5 py-16 text-white sm:py-20">
+    <main className="min-h-screen bg-white text-neutral-950 dark:bg-neutral-950 dark:text-white">
+      <section className="border-b border-neutral-200 bg-white px-5 py-12 sm:py-16 lg:py-20 dark:border-neutral-800 dark:bg-neutral-950">
         <div className="mx-auto max-w-6xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]">
-            <Clock3 className="h-3.5 w-3.5" /> MyUNI Access
+          <div className="flex items-center gap-3 text-sm font-medium text-[#990000] dark:text-[#e08b94]">
+            <span className="h-px w-8 bg-current" aria-hidden="true" />
+            <Clock3 className="h-4 w-4" /> MyUNI Access
           </div>
-          <h1 className="mt-5 max-w-3xl font-syne text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="mt-7 max-w-4xl font-syne text-4xl font-semibold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:text-6xl">
             {isTr ? 'Öğrenme yolculuğun için süreli erişim' : 'Fixed-term access for your learning journey'}
           </h1>
-          <p className="mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg">
+          <p className="mt-6 max-w-2xl text-base leading-7 text-neutral-600 sm:text-lg sm:leading-8 dark:text-neutral-300">
             {isTr
               ? 'Eğitim, dijital dergi, etkinlik ve sertifika haklarını ihtiyacına uygun süreyle tek pakette kullan.'
               : 'Use courses, digital magazines, events and certificate rights in one plan for the duration that fits you.'}
@@ -66,17 +67,17 @@ export default function MembershipLandingPage({
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
+      <section className="mx-auto max-w-6xl px-5 py-12 sm:px-6 sm:py-16">
         <div className="mb-8 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#990000]">
+            <p className="text-sm font-semibold text-[#990000] dark:text-[#e08b94]">
               {isTr ? 'Yayınlanan paketler' : 'Published plans'}
             </p>
             <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
               {isTr ? 'Sana uygun süreyi seç' : 'Choose the right duration'}
             </h2>
           </div>
-          <p className="max-w-md text-sm leading-6 text-neutral-600">
+          <p className="max-w-md text-sm leading-6 text-neutral-600 dark:text-neutral-400">
             {isTr
               ? 'Paket içeriği ve fiyatı yayınlandığı sürüm boyunca korunur.'
               : 'Plan content and price are preserved for each published version.'}
@@ -84,12 +85,12 @@ export default function MembershipLandingPage({
         </div>
 
         {plans.length > 0 ? (
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
             {plans.map((plan, index) => (
               <article
                 key={plan.id}
-                className={`flex min-h-[430px] flex-col rounded-2xl border bg-white p-6 shadow-sm ${
-                  index === 1 ? 'border-[#990000] ring-1 ring-[#990000]' : 'border-neutral-200'
+                className={`flex min-h-[430px] w-[86vw] max-w-sm shrink-0 snap-center flex-col rounded-xl border bg-white p-6 dark:bg-neutral-900 lg:w-auto lg:max-w-none ${
+                  index === 1 ? 'border-[#990000] ring-1 ring-[#990000]' : 'border-neutral-200 dark:border-neutral-800'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -109,16 +110,16 @@ export default function MembershipLandingPage({
                 </div>
 
                 <p className="mt-5 text-3xl font-bold tracking-tight">{formatPrice(plan, locale)}</p>
-                <p className="mt-3 min-h-12 text-sm leading-6 text-neutral-600">
+                <p className="mt-3 min-h-12 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
                   {(isTr ? plan.description_tr : plan.description_en) ||
                     (isTr ? plan.description_en : plan.description_tr) ||
                     (isTr ? 'Belirlenen süre boyunca seçili MyUNI hizmetlerine erişim.' : 'Access to selected MyUNI services for the plan duration.')}
                 </p>
 
-                <ul className="mt-6 flex-1 space-y-3 border-t border-neutral-100 pt-5">
+                <ul className="mt-6 flex-1 space-y-3 border-t border-neutral-100 pt-5 dark:border-neutral-800">
                   {plan.benefits.map((benefit) => (
                     <li key={benefit.id} className="flex items-start gap-3 text-sm leading-5">
-                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-green-50 text-green-700">
+                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-neutral-100 text-[#990000] dark:bg-neutral-800 dark:text-[#e08b94]">
                         <BenefitIcon benefit={benefit} />
                       </span>
                       <span>{benefitLabel(benefit, locale)}</span>
@@ -126,14 +127,14 @@ export default function MembershipLandingPage({
                   ))}
                 </ul>
 
-                <div className="mt-6 rounded-lg bg-neutral-100 px-4 py-3 text-center text-sm font-semibold text-neutral-500" aria-disabled="true">
+                <div className="mt-6 rounded-md bg-neutral-100 px-4 py-3 text-center text-sm font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400" aria-disabled="true">
                   {isTr ? 'Satın alma yakında açılacak' : 'Purchasing will open soon'}
                 </div>
               </article>
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center">
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center dark:border-neutral-700 dark:bg-neutral-900">
             <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-neutral-100 text-neutral-500">
               {unavailable ? <Clock3 className="h-5 w-5" /> : <Check className="h-5 w-5" />}
             </div>
@@ -142,7 +143,7 @@ export default function MembershipLandingPage({
                 ? isTr ? 'Paketler şu anda görüntülenemiyor' : 'Plans are currently unavailable'
                 : isTr ? 'Üyelik paketleri hazırlanıyor' : 'Membership plans are being prepared'}
             </h3>
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-neutral-600">
+            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-neutral-600 dark:text-neutral-400">
               {isTr
                 ? 'Yayınlanan ilk paketler fiyat ve hizmet kapsamıyla birlikte burada görünecek.'
                 : 'The first published plans will appear here with their prices and included services.'}

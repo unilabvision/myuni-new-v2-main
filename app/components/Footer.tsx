@@ -3,19 +3,13 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Linkedin, Instagram, Mail } from 'lucide-react';
-import { usePathname } from 'next/navigation';
-import XIcon from './XIcon'; // Import the new XIcon component
+import XIcon from './XIcon';
 
 interface FooterProps {
   locale: string;
 }
 
 const Footer = ({ locale }: FooterProps) => {
-  const pathname = usePathname();
-
-  // Determine if the current path is under /tr/watch/ or /en/watch/
-  const isWatchPage = pathname.startsWith(`/${locale}/watch/`);
-
   // Language-based content
   const content = {
     tr: {
@@ -108,35 +102,34 @@ const Footer = ({ locale }: FooterProps) => {
   ];
 
   return (
-    <footer className="bg-black text-neutral-300 py-16 px-6">
-      <div className={`container mx-auto 
-        ${isWatchPage ? 'max-w-none' : 'max-w-7xl px-0 sm:px-0 md:px-6 lg:px-6 xl:px-6 2xl:px-6'}`}> {/* Conditionally apply wider max-width */}
+    <footer className="bg-black px-4 py-12 text-neutral-300 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
+      <div className="mx-auto max-w-7xl">
         {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-12">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-5 lg:gap-x-12">
           {/* Brand Section */}
-          <div className="md:col-span-2">
-            <Link href={`/${locale}`} className="block mb-4">
+          <div className="sm:col-span-2 lg:col-span-2 lg:pr-6">
+            <Link href={`/${locale}`} className="inline-flex min-h-11 items-center">
               <Image
                 src="/myuni-logo-dark.png"
                 alt="MyUNI"
                 width={180}
                 height={60}
-                sizes="120px"
-                className="h-10 w-auto"
+                sizes="(max-width: 640px) 140px, 160px"
+                className="h-9 w-auto sm:h-10"
               />
             </Link>
-            <p className="mt-4 text-md leading-relaxed text-neutral-400">
+            <p className="mt-4 max-w-xl text-sm leading-7 text-neutral-400 sm:text-base">
               {t.description}
             </p>
-            <div className="mt-6 flex space-x-5">
-              {socialLinks.map((social, index) => (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {socialLinks.map((social) => (
                 <Link
-                  key={index}
+                  key={social.label}
                   href={social.href}
                   aria-label={social.label}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-neutral-500 hover:text-[#a90013] dark:hover:text-[#ffdee2] transition-colors duration-300"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 text-neutral-400 transition-colors duration-300 hover:border-[#a90013] hover:text-[#e08b94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e08b94]"
                 >
                   <social.icon className="h-5 w-5" />
                 </Link>
@@ -145,15 +138,17 @@ const Footer = ({ locale }: FooterProps) => {
           </div>
 
           {/* Navigation Links */}
-          {t.mainLinks.map((section, index) => (
-            <div key={index}>
-              <h3 className="text-md font-medium text-neutral-100 mb-5">{section.title}</h3>
-              <ul className="space-y-3">
-                {section.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>
+          {t.mainLinks.map((section) => (
+            <div key={section.title}>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-neutral-100 sm:mb-4">
+                {section.title}
+              </h3>
+              <ul className="space-y-1">
+                {section.items.map((item) => (
+                  <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="text-sm text-neutral-400 hover:text-[#a90013] dark:hover:text-[#ffdee2] transition-colors duration-200"
+                      className="inline-flex min-h-10 items-center text-sm leading-5 text-neutral-400 transition-colors duration-200 hover:text-[#e08b94] focus-visible:outline-none focus-visible:text-[#e08b94]"
                       {...(item.href.startsWith('http') && {
                         target: '_blank',
                         rel: 'noopener noreferrer'
@@ -169,23 +164,23 @@ const Footer = ({ locale }: FooterProps) => {
         </div>
 
         {/* Payment Methods */}
-        <div className="mt-16 flex justify-center lg:justify-end">
-          <div className="relative h-12 w-64 sm:h-16 sm:w-96 bg-transparent rounded-md overflow-hidden">
+        <div className="mt-10 flex justify-start border-t border-neutral-800 pt-8 sm:mt-12 lg:justify-end">
+          <div className="relative h-12 w-full max-w-80 overflow-hidden rounded-md bg-transparent sm:h-14 sm:max-w-96">
             <Image
               src="/iyzico_dark.jpg"
               alt="iyzico payment methods"
               fill
-              sizes="160px"
+              sizes="(max-width: 640px) 320px, 384px"
               className="object-contain"
             />
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-8 pt-6 border-t border-neutral-800">
-          <div className="flex flex-col lg:flex-row justify-between items-center">
-            <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-8">
-              <p className="text-neutral-500 text-sm text-center md:text-left">
+        <div className="mt-8 border-t border-neutral-800 pt-6">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-8">
+              <p className="text-left text-sm leading-6 text-neutral-500">
                 {t.copyright}
               </p>
             </div>

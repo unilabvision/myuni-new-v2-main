@@ -24,21 +24,25 @@ export default function MobileNav({ toggleMobileMenu, locale, siteForms }: Mobil
   };
 
   return (
-    <div className="lg:hidden bg-[#fff] min-h-screen dark:bg-neutral-900 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 absolute top-full left-0 right-0 z-40 animate-slideDown shadow-lg">
-      <nav className="max-w-6xl mx-auto px-6 py-6 flex flex-col space-y-5">
+    <div
+      id="mobile-navigation"
+      className="absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-72px)] overflow-y-auto overscroll-contain border-t border-neutral-200 bg-white/[0.98] shadow-xl backdrop-blur-md animate-slideDown dark:border-neutral-800 dark:bg-neutral-900/[0.98] 2xl:hidden"
+    >
+      <nav className="mx-auto flex max-w-3xl flex-col gap-2 px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-6">
         {/* Mobile Search Bar */}
-        <div className="mb-4">
+        <div className="mb-3">
           <MobileSearchBar locale={locale} />
         </div>
 
         {/* Menu Items */}
         {items.map((item) => (
-          <div key={item.href} className="relative">
+          <div key={item.href} className="relative border-b border-neutral-100 py-1 last:border-0 dark:border-neutral-800">
             {item.children ? (
               <div>
                 <button
                   onClick={() => handleDropdownToggle(item.label)}
-                  className="flex items-center justify-between w-full text-base font-medium text-gray-700 dark:text-gray-200 hover:text-primary dark:hover:text-primary transition-colors duration-200"
+                  className="flex min-h-12 w-full items-center justify-between rounded-lg px-3 text-left text-base font-medium text-gray-700 transition-colors duration-200 hover:bg-neutral-50 hover:text-primary dark:text-gray-200 dark:hover:bg-neutral-800 dark:hover:text-primary"
+                  aria-expanded={openDropdown === item.label}
                 >
                   <span>{item.label}</span>
                   <ChevronDown
@@ -49,12 +53,12 @@ export default function MobileNav({ toggleMobileMenu, locale, siteForms }: Mobil
 
                 {/* Dropdown Menu */}
                 {openDropdown === item.label && (
-                  <div className="mt-3 ml-4 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
+                  <div className="mb-2 ml-3 border-l border-gray-200 pl-3 dark:border-gray-700">
                     {item.children.map((child) => (
                       <Link
                         key={child.href}
                         href={child.href}
-                        className="block text-sm text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors duration-200"
+                        className="flex min-h-11 items-center rounded-r-lg px-3 text-sm text-gray-600 transition-colors duration-200 hover:bg-neutral-50 hover:text-primary dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-primary"
                         onClick={toggleMobileMenu}
                       >
                         {child.label}
@@ -66,7 +70,7 @@ export default function MobileNav({ toggleMobileMenu, locale, siteForms }: Mobil
             ) : (
               <Link
                 href={item.href}
-                className="text-base font-medium text-gray-700 dark:text-gray-200 hover:text-primary dark:hover:text-primary transition-colors duration-200"
+                className="flex min-h-12 items-center rounded-lg px-3 text-base font-medium text-gray-700 transition-colors duration-200 hover:bg-neutral-50 hover:text-primary dark:text-gray-200 dark:hover:bg-neutral-800 dark:hover:text-primary"
                 onClick={toggleMobileMenu}
               >
                 {item.label}

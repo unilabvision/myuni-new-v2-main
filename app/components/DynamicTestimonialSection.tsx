@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
+import Image from 'next/image';
 import { Star, Quote, ArrowLeft, ArrowRight, User } from "lucide-react";
 
 interface CommentWithCourse {
@@ -79,7 +80,7 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
 
     const texts = {
         tr: {
-            badge: "💬 Kursiyer Değerlendirmeleri",
+            badge: "Kursiyer deneyimleri",
             title: "Kursiyerlerimiz neler söylüyor?",
             description: "MyUNI ile hedeflerine ulaşan kursiyerlerimizin kurslarımız hakkındaki değerlendirmelerini okuyun.",
             loading: "Yorumlar yükleniyor...",
@@ -87,7 +88,7 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
             courseLabel: "Tamamlanan Kurs"
         },
         en: {
-            badge: "💬 Student Reviews",
+            badge: "Student experiences",
             title: "What Our Students Say",
             description: "Read the reviews about our courses from students who reached their goals with MyUNI.",
             loading: "Loading reviews...",
@@ -137,20 +138,22 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
     };
 
     return (
-        <section className="py-16 lg:py-20 bg-gradient-to-b from-neutral-50/50 to-white dark:from-neutral-900/50 dark:to-neutral-900 overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6 lg:px-6 relative z-10">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <section className="overflow-hidden border-b border-neutral-200 bg-neutral-50 py-14 sm:py-16 lg:py-20 dark:border-neutral-800 dark:bg-neutral-900/45">
+            <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
 
                     {/* Sol Kısım: Görsel Alanı */}
-                    <div className="order-2 lg:order-1 relative h-[500px] lg:h-[650px] w-full rounded-2xl overflow-hidden shadow-2xl group">
+                    <div className="group relative order-2 h-[320px] w-full overflow-hidden rounded-xl sm:h-[460px] lg:order-1 lg:h-[600px]">
                         <div className="absolute inset-0 bg-neutral-900/10 dark:bg-black/20 z-10 group-hover:bg-transparent transition-colors duration-500"></div>
-                        <img
+                        <Image
                             src="/tr/images/myuni-egitim-platformu-4.webp"
                             alt="MyUNI Education Platform Students"
-                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                            fill
+                            sizes="(max-width: 1024px) 100vw, 50vw"
+                            className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                         />
                         {/* Alt Bilgi Rozeti */}
-                        <div className="absolute bottom-6 left-6 right-6 z-20 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md p-6 rounded-xl border border-white/20 shadow-xl transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                        <div className="absolute bottom-4 left-4 right-4 z-20 translate-y-0 rounded-lg border border-white/20 bg-white/92 p-4 opacity-100 shadow-lg backdrop-blur-md transition-all duration-300 sm:bottom-6 sm:left-6 sm:right-6 sm:translate-y-4 sm:p-5 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 dark:bg-neutral-950/90">
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 bg-[#990000] rounded-full flex items-center justify-center flex-shrink-0">
                                     <Star className="w-6 h-6 text-white fill-white" />
@@ -164,18 +167,18 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
                     </div>
 
                     {/* Sağ Kısım: Yorumlar (Kart Tasarımları) */}
-                    <div className="order-1 lg:order-2 flex flex-col justify-center lg:pl-6">
+                    <div className="order-1 flex flex-col justify-center lg:order-2 lg:pl-6">
 
                         {/* Başlık Alanı */}
-                        <div className="mb-10 lg:mb-12">
-                            <div className="bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm px-4 py-2 mb-6 border border-neutral-300 dark:border-neutral-700 rounded-full shadow-sm inline-block">
+                        <div className="mb-8 lg:mb-10">
+                            <div className="mb-6 flex items-center gap-3 text-sm font-medium text-[#990000] dark:text-[#e08b94]">
+                                <span className="h-px w-8 bg-current" aria-hidden="true" />
                                 {t.badge}
                             </div>
-                            <h2 className="text-3xl lg:text-4xl font-medium text-neutral-900 dark:text-neutral-100 leading-tight mb-6 max-w-xl">
+                            <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-[-0.03em] text-neutral-950 sm:text-4xl dark:text-white">
                                 {t.title}
                             </h2>
-                            <div className="w-20 h-1.5 bg-[#990000] mb-6 rounded-full" />
-                            <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed max-w-lg">
+                            <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600 sm:text-lg dark:text-neutral-400">
                                 {t.description}
                             </p>
                         </div>
@@ -192,7 +195,7 @@ const DynamicTestimonialSection: React.FC<DynamicTestimonialSectionProps> = ({ l
                         ) : (
                             <div className="relative">
                                 {/* Dinamik Yorum Kartı - Sade Tasarım */}
-                                <div className="bg-white dark:bg-neutral-800 p-6 md:p-8 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-lg h-[400px] flex flex-col justify-between transition-all duration-500 transform opacity-100">
+                                <div className="flex min-h-[320px] flex-col justify-between rounded-xl border border-neutral-200 bg-white p-6 sm:min-h-[360px] sm:p-8 dark:border-neutral-800 dark:bg-neutral-900">
                                     <div className="flex-grow">
                                         <Quote className="w-8 h-8 text-[#990000] dark:text-[#ff4444] mb-4 opacity-60 flex-shrink-0" />
                                         <p className="text-lg md:text-xl text-neutral-600 dark:text-neutral-300 leading-relaxed mb-6 italic">

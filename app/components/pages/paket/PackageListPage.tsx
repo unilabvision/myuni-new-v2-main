@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { ArrowRight, Package } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, ChevronDown, Layers3, RotateCcw } from 'lucide-react';
+
+import {
+  CatalogEmptyState,
+  CatalogHero,
+  CatalogLoading,
+  CatalogSearch,
+  CatalogSectionHeader,
+  catalogCardClass,
+  catalogFilterClass,
+} from '@/app/components/pages/catalog/LearningCatalogUI';
 
 interface PackageFaq {
   question: string;
@@ -29,46 +39,74 @@ interface PackageItem {
 
 const texts = {
   tr: {
-    badge: 'Eğitim Paketleri',
-    title: 'Birden fazla eğitimi bir arada sunan paketlerle ilerleyin.',
+    badge: 'MyUNI Eğitim Paketleri',
+    title: 'Bir hedefe giden eğitimleri tek bir öğrenme yolunda tamamlayın.',
     subtitle:
-      'Seçili kursları birleştiren eğitim paketlerini inceleyin ve hedeflerinize daha hızlı ulaşın.',
-    geoIntroTitle: 'MyUNI eğitim paketleri nedir?',
+      'Birbiriyle ilişkili kursları bir araya getiren paketleri inceleyin; size uygun seviyeden başlayıp düzenli ilerleyin.',
+    geoIntroTitle: 'Tek tek kurs seçmek yerine planlı ilerleyin',
     geoIntro:
-      'MyUNI (myunilab.net) eğitim paketleri, birden fazla kursu tek bir öğrenme yolunda birleştirir. Tek kurs yerine paketlerle kariyer ve beceri hedeflerinize daha hızlı ilerleyebilirsiniz.',
-    faqTitle: 'Sık sorulan sorular',
-    viewAll: 'Tüm Paketleri Gör',
-    exploreMore: 'Detayları İncele',
-    allTitle: 'Eğitim Paketleri',
-    loading: 'Paketler yükleniyor...',
-    emptyTitle: 'Henüz eğitim paketi eklenmedi',
-    emptySubtitle: 'Yakında yeni eğitim paketleri burada listelenecek.',
-    packageBadge: 'Eğitim Paketi',
+      'Her paket, aynı beceri veya kariyer hedefini destekleyen eğitimleri bir araya getirir. Paket içeriğini, seviyesini ve ücretini karşılaştırarak size uygun yolu seçebilirsiniz.',
+    faqTitle: 'Merak edilenler',
+    viewAll: 'Paketleri incele',
+    exploreMore: 'Paketi incele',
+    allTitle: 'Eğitim paketleri',
+    sectionDescription:
+      'İçeriği, seviyeyi ve fiyatı karşılaştırarak öğrenme yolunuzu seçin.',
+    searchPlaceholder: 'Eğitim paketi ara',
+    emptyTitle: 'Yeni eğitim paketleri hazırlanıyor',
+    emptySubtitle: 'Yayınlanan paketler burada yer alacak.',
+    noResults: 'Aramanızla eşleşen paket bulunamadı',
+    tryDifferent: 'Arama ifadenizi veya seviye filtresini değiştirin.',
+    reset: 'Filtreleri temizle',
+    packageBadge: 'Eğitim paketi',
     free: 'Ücretsiz',
-    currency: '₺',
-    allLevels: 'Tüm Seviyeler',
+    allLevels: 'Tüm seviyeler',
+    levelLabel: 'Seviye',
+    countLabel: 'paket',
+    resultLabel: 'sonuç',
   },
   en: {
-    badge: 'Training Packages',
-    title: 'Advance faster with packages that bundle multiple courses.',
+    badge: 'MyUNI Training Packages',
+    title: 'Complete the courses for one goal through a single learning path.',
     subtitle:
-      'Browse training packages that combine selected courses and help you reach your goals sooner.',
-    geoIntroTitle: 'What are MyUNI training packages?',
+      'Explore packages that bring related courses together, start at the right level, and make steady progress.',
+    geoIntroTitle: 'Follow a clear path instead of choosing courses one by one',
     geoIntro:
-      'MyUNI (myunilab.net) training packages combine multiple courses into one learning path so you can reach career and skill goals faster than taking a single course alone.',
-    faqTitle: 'Frequently asked questions',
-    viewAll: 'View All Packages',
-    exploreMore: 'Explore Details',
-    allTitle: 'Training Packages',
-    loading: 'Loading packages...',
-    emptyTitle: 'No training packages yet',
-    emptySubtitle: 'New training packages will be listed here soon.',
-    packageBadge: 'Training Package',
+      'Each package combines courses that support the same skill or career goal. Compare the content, level, and price to choose the path that works for you.',
+    faqTitle: 'Common questions',
+    viewAll: 'Browse packages',
+    exploreMore: 'View package',
+    allTitle: 'Training packages',
+    sectionDescription:
+      'Compare content, level, and price to choose your learning path.',
+    searchPlaceholder: 'Search training packages',
+    emptyTitle: 'New training packages are in progress',
+    emptySubtitle: 'Published packages will appear here.',
+    noResults: 'No packages match your search',
+    tryDifferent: 'Try changing your search or level filter.',
+    reset: 'Clear filters',
+    packageBadge: 'Training package',
     free: 'Free',
-    currency: '₺',
-    allLevels: 'All Levels',
+    allLevels: 'All levels',
+    levelLabel: 'Level',
+    countLabel: 'packages',
+    resultLabel: 'results',
   },
 };
+
+type PackageTexts = (typeof texts)[keyof typeof texts];
+
+function stripHtml(value = '') {
+  return value.replace(/<[^>]*>/g, '').trim();
+}
+
+function formatPrice(value: number, locale: string) {
+  return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+}
 
 export default function PackageListPage({
   locale = 'tr',
@@ -76,194 +114,251 @@ export default function PackageListPage({
 }: PackageListPageProps) {
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [activeLevel, setActiveLevel] = useState('all');
+  const catalogRef = useRef<HTMLElement>(null);
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const detailSegment = locale === 'en' ? 'package' : 'paket';
 
   useEffect(() => {
-    const load = async () => {
+    const loadPackages = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
+        const response = await fetch(
           `/api/public/courses?locale=${encodeURIComponent(locale)}`
         );
-        const payload = await res.json();
-        if (res.ok && payload.success) {
-          setPackages(Array.isArray(payload.packages) ? payload.packages : []);
-        } else {
-          setPackages([]);
-        }
-      } catch (err) {
-        console.error(err);
+        const payload = await response.json();
+        setPackages(
+          response.ok && payload.success && Array.isArray(payload.packages)
+            ? payload.packages
+            : []
+        );
+      } catch (error) {
+        console.error(error);
         setPackages([]);
       } finally {
         setLoading(false);
       }
     };
-    load();
+
+    loadPackages();
   }, [locale]);
 
-  if (loading) {
-    return (
-      <section className="relative py-16 lg:py-18 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-1/3" />
-            <div className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-72 bg-neutral-200 dark:bg-neutral-700 rounded-md"
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const levels = useMemo(
+    () =>
+      Array.from(
+        new Set(packages.map((item) => item.level).filter(Boolean) as string[])
+      ),
+    [packages]
+  );
+
+  const filteredPackages = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase(locale);
+    return packages.filter((item) => {
+      const matchesLevel = activeLevel === 'all' || item.level === activeLevel;
+      const searchableText = `${item.title} ${stripHtml(item.description)}`.toLocaleLowerCase(
+        locale
+      );
+      return matchesLevel && searchableText.includes(normalizedQuery);
+    });
+  }, [activeLevel, locale, packages, query]);
+
+  const resetFilters = () => {
+    setQuery('');
+    setActiveLevel('all');
+  };
+
+  if (loading) return <CatalogLoading />;
 
   return (
-    <div className="relative">
-      <section className="relative py-16 lg:py-18 overflow-hidden">
-        <div className="max-w-7xl px-6 container mx-auto relative z-10">
-          <div className="max-w-3xl">
-            <div className="bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm px-4 py-2 mb-6 border border-neutral-300 dark:border-neutral-700 rounded-full shadow-sm inline-block">
-              {t.badge}
-            </div>
-            <h1 className="text-3xl lg:text-4xl font-medium text-neutral-900 dark:text-neutral-100 leading-tight mb-6">
-              {t.title}
-            </h1>
-            <div className="w-16 h-px bg-[#990000] mb-6" />
-            <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8">
-              {t.subtitle}
-            </p>
-            <div className="rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/60 p-6">
-              <h2 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-3">
-                {t.geoIntroTitle}
-              </h2>
-              <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                {t.geoIntro}
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+    <main className="min-h-screen bg-white dark:bg-neutral-950">
+      <CatalogHero
+        badge={t.badge}
+        title={t.title}
+        description={t.subtitle}
+        actionLabel={t.viewAll}
+        onAction={() =>
+          catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        asideTitle={t.geoIntroTitle}
+        asideDescription={t.geoIntro}
+        count={packages.length}
+        countLabel={t.countLabel}
+      />
 
-      <section className="py-16 bg-white dark:bg-neutral-900">
-        <div className="max-w-7xl px-6 mx-auto">
-          <div className="mb-12">
-            <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-4">
-              {t.allTitle} ({packages.length})
-            </h2>
-            <div className="w-16 h-px bg-[#990000]" />
-          </div>
+      <section
+        ref={catalogRef}
+        className="scroll-mt-20 py-14 sm:py-16 lg:py-20"
+      >
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <CatalogSectionHeader
+            title={t.allTitle}
+            description={t.sectionDescription}
+            count={filteredPackages.length}
+            resultLabel={t.resultLabel}
+          />
 
-          {packages.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {packages.map((pkg) => (
-                <Link
-                  href={`/${locale}/${detailSegment}/${pkg.slug}`}
-                  key={pkg.id}
-                  className="bg-white dark:bg-neutral-900 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group"
-                >
-                  <div className="relative w-full h-48 overflow-hidden">
-                    <Image
-                      src={
-                        pkg.thumbnail_url ||
-                        pkg.banner_url ||
-                        '/default-course.jpg'
-                      }
-                      alt={pkg.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      quality={75}
-                    />
-                    <div className="absolute top-3 left-3 bg-[#990000] text-white px-2 py-1 rounded text-xs font-medium tracking-wide">
-                      {t.packageBadge}
-                    </div>
-                  </div>
-
-                  <div className="p-6">
-                    <div className="mb-3 flex items-center gap-2 flex-wrap">
-                      <span className="inline-block bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-3 py-1 rounded-lg text-sm">
-                        {pkg.level || t.allLevels}
-                      </span>
-                    </div>
-
-                    <h3 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-[#990000] transition-colors">
-                      {pkg.title}
-                    </h3>
-
-                    <div className="mb-4 leading-relaxed text-neutral-500 dark:text-neutral-400 text-sm line-clamp-2">
-                      {pkg.description
-                        ? pkg.description.replace(/<[^>]*>/g, '').slice(0, 120) +
-                          (pkg.description.length > 120 ? '...' : '')
-                        : ''}
-                    </div>
-
-                    <div className="flex items-center justify-between mt-auto pt-4">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                          {pkg.price === 0
-                            ? t.free
-                            : `${t.currency}${pkg.price}`}
-                        </span>
-                        {pkg.original_price ? (
-                          <span className="text-lg text-neutral-400 line-through">
-                            {t.currency}
-                            {pkg.original_price}
-                          </span>
-                        ) : null}
-                      </div>
-                      <span className="text-[#990000] text-sm font-medium flex items-center">
-                        {t.exploreMore}
-                        <ArrowRight className="w-3 h-3 ml-1" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-neutral-200 dark:bg-neutral-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                <Package className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />
+          <div className="mt-7 flex flex-col gap-5 lg:flex-row lg:items-end">
+            <CatalogSearch
+              value={query}
+              onChange={setQuery}
+              placeholder={t.searchPlaceholder}
+            />
+            {levels.length > 0 ? (
+              <div className="lg:max-w-[55%]">
+                <p className="mb-3 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                  {t.levelLabel}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {['all', ...levels].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setActiveLevel(level)}
+                      aria-pressed={activeLevel === level}
+                      className={`${catalogFilterClass} ${
+                        activeLevel === level
+                          ? 'border-neutral-950 bg-neutral-950 text-white dark:border-white dark:bg-white dark:text-neutral-950'
+                          : 'border-neutral-300 bg-white text-neutral-700 hover:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+                      }`}
+                    >
+                      {level === 'all' ? t.allLevels : level}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-                {t.emptyTitle}
-              </h3>
-              <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-                {t.emptySubtitle}
-              </p>
-            </div>
-          )}
+            ) : null}
+          </div>
+
+          <div className="mt-10">
+            {packages.length === 0 ? (
+              <CatalogEmptyState
+                icon={<Layers3 className="h-5 w-5" aria-hidden="true" />}
+                title={t.emptyTitle}
+                description={t.emptySubtitle}
+              />
+            ) : filteredPackages.length === 0 ? (
+              <CatalogEmptyState
+                icon={<RotateCcw className="h-5 w-5" aria-hidden="true" />}
+                title={t.noResults}
+                description={t.tryDifferent}
+                action={
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-sm font-semibold text-[#990000] underline decoration-[#990000]/30 underline-offset-4 hover:decoration-[#990000] dark:text-[#e08b94]"
+                  >
+                    {t.reset}
+                  </button>
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {filteredPackages.map((item) => (
+                  <PackageCard
+                    key={item.id}
+                    item={item}
+                    href={`/${locale}/${detailSegment}/${item.slug}`}
+                    locale={locale}
+                    texts={t}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
       {faqs.length > 0 ? (
-        <section className="py-16 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800">
-          <div className="max-w-3xl px-6 mx-auto">
-            <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-4">
+        <section className="border-t border-neutral-200 bg-neutral-50 py-16 sm:py-20 dark:border-neutral-800 dark:bg-neutral-900/40">
+          <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[0.7fr_1.3fr] lg:px-8">
+            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-neutral-950 dark:text-white">
               {t.faqTitle}
             </h2>
-            <div className="w-16 h-px bg-[#990000] mb-8" />
-            <div className="space-y-6">
+            <div className="divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
               {faqs.map((faq) => (
-                <div key={faq.question}>
-                  <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-                    {faq.question}
-                  </h3>
-                  <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                <details key={faq.question} className="group py-5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 text-base font-semibold text-neutral-950 marker:hidden dark:text-white">
+                    <span>{faq.question}</span>
+                    <ChevronDown
+                      className="h-5 w-5 shrink-0 text-neutral-400 transition-transform duration-200 group-open:rotate-180"
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <p className="max-w-2xl pt-3 text-sm leading-7 text-neutral-600 dark:text-neutral-400">
                     {faq.answer}
                   </p>
-                </div>
+                </details>
               ))}
             </div>
           </div>
         </section>
       ) : null}
-    </div>
+    </main>
+  );
+}
+
+function PackageCard({
+  item,
+  href,
+  locale,
+  texts: t,
+}: {
+  item: PackageItem;
+  href: string;
+  locale: string;
+  texts: PackageTexts;
+}) {
+  const description = stripHtml(item.description);
+
+  return (
+    <Link href={href} className={catalogCardClass}>
+      <div className="relative aspect-[16/10] overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+        <Image
+          src={item.thumbnail_url || item.banner_url || '/default-course.jpg'}
+          alt={item.title}
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          quality={80}
+        />
+        <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-sm backdrop-blur dark:bg-neutral-950/90 dark:text-white">
+          {t.packageBadge}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col p-6">
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+          {item.level || t.allLevels}
+        </p>
+        <h3 className="mt-3 text-xl font-semibold leading-7 tracking-[-0.02em] text-neutral-950 group-hover:text-[#990000] dark:text-white dark:group-hover:text-[#e08b94]">
+          {item.title}
+        </h3>
+        {description ? (
+          <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+            {description}
+          </p>
+        ) : null}
+
+        <div className="mt-auto flex items-end justify-between gap-4 border-t border-neutral-100 pt-5 dark:border-neutral-800">
+          <div>
+            <p className="text-lg font-semibold text-neutral-950 dark:text-white">
+              {Number(item.price) === 0
+                ? t.free
+                : formatPrice(item.price, locale)}
+            </p>
+            {item.original_price ? (
+              <p className="mt-0.5 text-xs text-neutral-400 line-through">
+                {formatPrice(item.original_price, locale)}
+              </p>
+            ) : null}
+          </div>
+          <span className="flex items-center gap-2 text-sm font-semibold text-[#990000] dark:text-[#e08b94]">
+            {t.exploreMore}
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }

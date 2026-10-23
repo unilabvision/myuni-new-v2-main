@@ -100,9 +100,9 @@ const BlogPage: React.FC<BlogPageProps> = ({ content, locale }) => {
   }, [postsWithFormattedDates, activeCategory, searchQuery]);
   
   return (
-    <div className="bg-white dark:bg-neutral-900 min-h-screen">
+    <div className="min-h-screen bg-white dark:bg-neutral-950">
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-6">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         {/* Search */}
         <div className="py-12 border-b border-neutral-200 dark:border-neutral-800">
           <div className="max-w-8xl mx-auto">
@@ -112,9 +112,9 @@ const BlogPage: React.FC<BlogPageProps> = ({ content, locale }) => {
 
         {/* Featured Posts Section */}
         {featuredPostsWithFormattedDates.length > 0 && !searchQuery && (
-          <section className="py-16 border-b border-neutral-200 dark:border-neutral-800">
+          <section className="border-b border-neutral-200 py-14 sm:py-16 dark:border-neutral-800">
             <div className="mb-12">
-              <h2 className="text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-3">
+              <h2 className="mb-3 text-3xl font-semibold tracking-[-0.03em] text-neutral-950 sm:text-4xl dark:text-white">
                 {locale === 'tr' ? 'Öne Çıkan Yazılar' : 'Featured Posts'}
               </h2>
               <div className="w-16 h-px bg-[#990000] mb-6"></div>
@@ -125,9 +125,11 @@ const BlogPage: React.FC<BlogPageProps> = ({ content, locale }) => {
               </p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">
               {featuredPostsWithFormattedDates.slice(0, 2).map((post) => (
-                <FeaturedBlogCard key={post.id} post={post} locale={locale} />
+                <div key={post.id} className="w-[88vw] max-w-xl shrink-0 snap-center lg:w-auto lg:max-w-none">
+                  <FeaturedBlogCard post={post} locale={locale} />
+                </div>
               ))}
             </div>
           </section>
@@ -146,7 +148,7 @@ const BlogPage: React.FC<BlogPageProps> = ({ content, locale }) => {
           </div>
           
           <div className="mb-12">
-            <h2 className="text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-3">
+            <h2 className="mb-3 text-3xl font-semibold tracking-[-0.03em] text-neutral-950 sm:text-4xl dark:text-white">
               {activeCategory 
                 ? `${activeCategory}`
                 : (locale === 'tr' ? 'Tüm Yazılar' : 'All Posts')

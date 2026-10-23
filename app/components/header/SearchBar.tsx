@@ -73,7 +73,7 @@ export default function SearchBar({ locale }: SearchBarProps) {
   return (
     <div className="relative" ref={searchRef}>
       <button
-        className="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors duration-200"
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
         onClick={() => setIsOpen(!isOpen)}
         aria-label={t.searchLabel}
       >

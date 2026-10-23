@@ -151,16 +151,16 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
     return (
       <Link 
         href={`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}/${course.slug}`}
-        className="bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg dark:hover:shadow-neutral-900/20 transition-all duration-300 group"
+        className="group flex h-full min-w-[84vw] snap-start flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white transition-colors hover:border-[#990000]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4 sm:min-w-[360px] md:min-w-0 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-[#c6535f]"
       >
         {/* Course Image */}
-        <div className="relative w-full h-48 overflow-hidden">
+        <div className="relative aspect-[16/10] w-full overflow-hidden">
           {course.thumbnail_url ? (
             <Image
               src={course.thumbnail_url}
               alt={course.title}
               fill
-              className="object-cover group-hover:scale-105 transition-transform duration-300"
+              className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
               quality={75}
             />
@@ -172,7 +172,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
         </div>
 
         {/* Course Info */}
-        <div className="p-6">
+        <div className="flex flex-1 flex-col p-6">
           <div className="mb-3 flex items-center gap-2 flex-wrap">
             <span className="inline-block bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 px-3 py-1 rounded-md text-sm">
               {course.level ? currentLevelLabels[course.level as keyof typeof currentLevelLabels] || course.level : 'Başlangıç'}
@@ -181,7 +181,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
             {/* Katılımcı rozeti istenmediği için gösterilmiyor */}
           </div>
 
-          <h3 className="text-xl font-medium text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-[#990000] transition-colors">
+          <h3 className="mb-2 text-xl font-semibold leading-7 tracking-[-0.02em] text-neutral-950 transition-colors group-hover:text-[#990000] dark:text-white dark:group-hover:text-[#e08b94]">
             {course.title}
           </h3>
           
@@ -195,7 +195,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
 
 
           {/* Price Section */}
-          <div className="flex items-center justify-between">
+          <div className="mt-auto flex items-center justify-between border-t border-neutral-100 pt-5 dark:border-neutral-800">
             <div className="flex items-baseline gap-2">
               {isEarlyBirdActive() ? (
                 <div className="flex flex-col">
@@ -399,13 +399,17 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
   };
 
   return (
-    <section className="py-16 ">
+    <section className="py-14 sm:py-16 lg:py-20">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-12">
-          <h2 className="text-2xl lg:text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-4">
+        <div className="mb-8 sm:mb-10">
+          <h2 className="text-2xl font-semibold tracking-[-0.02em] text-neutral-950 sm:text-3xl dark:text-white">
             {locale === 'tr' ? 'Son Kurslar' : 'Latest Courses'} 
           </h2>
-          <div className="w-16 h-px bg-[#990000]"></div>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+            {locale === 'tr'
+              ? 'Yeni eklenen eğitimleri inceleyin ve size uygun noktadan başlayın.'
+              : 'Explore newly added courses and start from the point that suits you.'}
+          </p>
         </div>
 
         {/* Course Grid */}
@@ -419,16 +423,16 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
           <ErrorState />
         ) : courses.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-3 sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-3 lg:gap-6">
               {courses.map((course) => (
                 <CourseCard key={course.id} course={course} />
               ))}
             </div>
             
             {/* View All Courses Button */}
-            <div className="mt-12">
+            <div className="mt-8 sm:mt-10">
               <Link href={`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`} className="inline-block">
-                <button className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white border-2 border-transparent hover:bg-transparent hover:text-neutral-900 dark:hover:text-neutral-100 hover:border-neutral-900 dark:hover:border-neutral-100 px-8 py-3 text-sm font-medium transition-all duration-300 focus:outline-none rounded-md shadow-sm flex items-center gap-2">
+                <button className="flex min-h-11 items-center gap-2 rounded-md bg-[#990000] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#780000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4">
                   {locale === 'tr' ? 'Tüm Kursları Göster' : 'View All Courses'}
                   <ArrowRight className="w-4 h-4" />
                 </button>

@@ -93,6 +93,27 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
     checkBlogPostAlternate();
   }, [pathname]);
 
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileMenuOpen(false);
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isMobileMenuOpen]);
+
   const toggleMobileMenu = () => setIsMobileMenuOpen((prev) => !prev);
 
   // Helper function to update theme and logo
@@ -104,40 +125,40 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 backdrop-blur-md z-50 transition-all duration-300
-        ${isScrolled ? 'bg-[#fff] dark:bg-neutral-900/95 shadow-sm py-3' : 'bg-[#fff] dark:bg-neutral-900/80 py-5'} 
+      className={`fixed inset-x-0 top-0 z-50 min-h-[72px] border-b backdrop-blur-md transition-[background-color,box-shadow] duration-300
+        ${isScrolled ? 'bg-white/95 dark:bg-neutral-900/95 shadow-sm' : 'bg-white/90 dark:bg-neutral-900/85'}
         border-b border-neutral-200 dark:border-neutral-800`}
       style={{ '--primary': primary } as React.CSSProperties}
     >
       {/* Campaign banner moved to LocaleLayout for independence from header */}
       <div
-        className={`mx-auto px-6 sm:px-6 md:px-6 lg:px-6 flex justify-between items-center
-          ${isWatchPage ? 'max-w-8xl' : 'max-w-8xl'}`} // Conditionally apply wider max-width
+        className={`mx-auto flex min-h-[71px] items-center justify-between gap-3 px-3 sm:px-6 lg:px-8
+          ${isWatchPage ? 'max-w-none' : 'max-w-[1600px]'}`}
       >
         {/* Logo */}
-        <Link href={`/${locale}`} prefetch className="transition-all duration-300 flex items-center">
+        <Link href={`/${locale}`} prefetch className="flex shrink-0 items-center transition-all duration-300">
           <Image
             src={logoSrc}
             alt="UNILAB Vision"
             width={150}
             height={40}
-            sizes="120px"
-            className="h-8 w-auto"
+            sizes="(max-width: 640px) 96px, 120px"
+            className="h-6 w-auto sm:h-8"
             priority
           />
         </Link>
 
         {/* Desktop Navigation and Actions */}
-        <div className="flex items-center space-x-5">
+        <div className="flex min-w-0 items-center">
           <DesktopNav locale={locale} siteForms={siteForms} />
-          <div className="hidden lg:flex items-center space-x-5">
+          <div className="hidden 2xl:ml-6 2xl:flex 2xl:items-center 2xl:gap-3">
             <SearchBar locale={locale} />
             <LanguageSwitcher blogPostAlternateSlug={blogPostAlternateSlug} />
             <ThemeToggle
               isDarkMode={logoSrc === '/myuni-logo-dark.png'}
               setIsDarkMode={updateTheme}
             />
-            <CartIconButton locale={locale} />
+            <CartIconButton />
             
             {/* Auth Section — only after mount + Clerk loaded to avoid hydration mismatch */}
             {authReady ? (
@@ -187,18 +208,20 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
           </div>
           
           {/* Mobile Menu */}
-          <div className="lg:hidden flex items-center space-x-4">
-            <LanguageSwitcher mobile blogPostAlternateSlug={blogPostAlternateSlug} />
+          <div className="flex items-center gap-0 sm:gap-1 2xl:hidden">
+            <div className="flex h-10 w-10 items-center justify-center">
+              <LanguageSwitcher mobile blogPostAlternateSlug={blogPostAlternateSlug} />
+            </div>
             <ThemeToggle
               isDarkMode={logoSrc === '/myuni-logo-dark.png'}
               setIsDarkMode={updateTheme}
             />
-            <CartIconButton locale={locale} />
+            <CartIconButton />
             
             {/* Mobile Auth */}
             {authReady ? (
               isSignedIn && (
-                <div className="flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center">
                   <UserButton
                     appearance={{
                       elements: {
@@ -210,15 +233,17 @@ export default function Header({ primary = '#a90013', locale }: HeaderProps) {
                 </div>
               )
             ) : (
-              <div className="flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center">
                 <div className="w-7 h-7 bg-neutral-200 dark:bg-neutral-700 rounded-full animate-pulse" />
               </div>
             )}
             
             <button
-              className="text-neutral-600 dark:text-neutral-300 hover:text-neutral-800 dark:hover:text-neutral-100 transition-colors duration-200 flex items-center justify-center"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-600 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white"
               onClick={toggleMobileMenu}
               aria-label={locale === 'tr' ? 'Menüyü aç/kapat' : 'Toggle menu'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-navigation"
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>

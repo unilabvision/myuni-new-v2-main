@@ -48,7 +48,7 @@ export default function DesktopNav({ locale, siteForms }: DesktopNavProps) {
 
   return (
     <div ref={dropdownRef}>
-      <nav className="hidden lg:flex items-center space-x-10">
+      <nav className="hidden items-center gap-5 2xl:flex">
         {items.map((item) =>
           item.children ? (
             <div

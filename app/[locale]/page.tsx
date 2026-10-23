@@ -6,23 +6,19 @@ import DynamicTestimonialSection from '../components/DynamicTestimonialSection';
 import BlogSection from '../components/BlogSection';
 import EventListFilter from '../components/EventListFilter';
 
-// Yeni section'ları import edin
 import WhyChooseSection from '../components/WhyChooseSection';
 import { supabase } from '@/lib/supabase';
 import { getPublicMentorships, type PublicMentorship } from '@/lib/mentorshipService';
 import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 
 
-// Type definition for better type safety
 interface HomePageProps {
   params: Promise<{ locale: string }>;
 }
 
-// Supported locales for validation
 const SUPPORTED_LOCALES = ['tr', 'en'] as const;
 type SupportedLocale = typeof SUPPORTED_LOCALES[number];
 
-// Locale validation function
 function isValidLocale(locale: string): locale is SupportedLocale {
   return SUPPORTED_LOCALES.includes(locale as SupportedLocale);
 }
@@ -31,11 +27,9 @@ export default async function HomePage({ params }: HomePageProps) {
   const resolvedParams = await params;
   const rawLocale = resolvedParams.locale;
 
-  // Validate locale and fallback to 'tr' if invalid
   const locale: SupportedLocale = isValidLocale(rawLocale) ? rawLocale : 'tr';
 
-  // Server'dan (canlı) veriyi SSR ile burda hızlı çekelim ve Hero'ya bağlyalım.
-  let activeCourseCount = 5; // Default fallback
+  let activeCourseCount = 5;
   try {
     const { count, error } = await supabase
       .from('myuni_courses')
@@ -49,7 +43,6 @@ export default async function HomePage({ params }: HomePageProps) {
     console.error("Error fetching active courses for SSR:", err);
   }
 
-  // Mentörlükleri SSR ile çek — hata durumunda sayfa patlamaz
   let featuredMentorships: PublicMentorship[] = [];
   try {
     featuredMentorships = await getPublicMentorships(locale, { limit: 3 });
@@ -58,41 +51,35 @@ export default async function HomePage({ params }: HomePageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white dark:bg-neutral-900">
-      {/* Hero Section with full width container */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-6">
-        <HeroSection locale={locale} activeCourseCount={activeCourseCount} />
+    <main className="min-h-screen bg-white dark:bg-neutral-950">
+      <HeroSection locale={locale} activeCourseCount={activeCourseCount} />
+
+      <div className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/45">
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+          <FeaturedFilter locale={locale} />
+        </div>
       </div>
 
+      <FeaturedMentorshipSection
+        mentorships={featuredMentorships}
+        locale={locale}
+      />
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-6 space-y-0">
-        <FeaturedFilter locale={locale} />
-      </div>
-
-      {/* Mentorship Programs Section */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-6">
-        <FeaturedMentorshipSection mentorships={featuredMentorships} locale={locale} />
-      </div>
-
-      {/* Dynamic Testimonials Section */}
       <DynamicTestimonialSection locale={locale} />
 
+      <WhyChooseSection locale={locale} />
 
-      {/* Why Choose MyUNI Section */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-6">
-        <WhyChooseSection locale={locale} />
+      <div className="border-t border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+          <BlogSection locale={locale} />
+        </div>
       </div>
 
-
-
-
-      {/* Blog and Events */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-6 space-y-0">
-        <BlogSection locale={locale} />
-        <EventListFilter locale={locale} />
+      <div className="border-t border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/45">
+        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+          <EventListFilter locale={locale} />
+        </div>
       </div>
-
-
     </main>
   );
 }
@@ -101,16 +88,13 @@ export function generateStaticParams() {
   return SUPPORTED_LOCALES.map(locale => ({ locale }));
 }
 
-// Add metadata generation for better SEO
 export async function generateMetadata({ params }: HomePageProps) {
   const resolvedParams = await params;
   const locale = resolvedParams.locale;
   const validLocale: SupportedLocale = isValidLocale(locale) ? locale : 'tr';
 
-  // Build base URL — never localhost in production
   const baseUrl = resolvePublicBaseUrl();
 
-  // Canonical URLs
   const canonicalUrl = `${baseUrl}/${validLocale}`;
   const trUrl = `${baseUrl}/tr`;
   const enUrl = `${baseUrl}/en`;

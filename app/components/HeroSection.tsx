@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import Button from './ui/Button';
-import styles from './HeroSection.module.css';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+
 import PersonalizedEducationRecommendation from './PersonalizedEducationRecommendation';
 
 interface HeroSectionProps {
@@ -25,239 +24,276 @@ interface CourseRecommendation {
   matchReasons: string[];
 }
 
-// Move content to a synchronous function since it's now client-side
+const HERO_IMAGES = [1, 2, 3, 4, 5];
+
 function getHeroContent(locale: string) {
-  return {
-    badge: locale === 'tr' ? "🚀 Geleceğinizi şekillendirin!" : "🚀 Shape your future!",
-    headlines: locale === 'tr'
-      ? [
-        "Kariyerine yön ver, gerçek potansiyelini keşfet!",
-        "Geleceğine yatırım yap, hayallerini gerçekleştir!",
-        "Yeni beceriler kazan, güçlü kariyerinde ilerle!"
-      ]
-      : [
-        "Shape your career, discover your true potential!",
-        "Invest in your future, make your dreams come true!",
-        "Gain new skills, advance in your strong career!"
+  if (locale === 'en') {
+    return {
+      badge: 'Learning paths built for real goals',
+      headlines: [
+        'Build the skills your next step actually needs.',
+        'Learn with a clear path, not scattered content.',
+        'Turn curiosity into progress you can see.',
       ],
-    description: locale === 'tr'
-      ? "Kendi öğrenme tarzınıza uygun bir şekilde ilerleyin ve gelişiminizi adım adım keşfedin. Yapay zeka desteği ile size en uygun öğrenme yolunu sunuyor, deneyimli eğitmenler tarafından hazırlanan kurslarımızla destekliyoruz!"
-      : "Progress in a way that suits your learning style and discover your development step by step. We offer you the most suitable learning path with artificial intelligence support, supported by courses prepared by experienced instructors.",
-    cta: locale === 'tr' ? "MyUNI'yi Keşfet" : "Discover MyUNI",
-    ctaLink: locale === 'tr' ? '/tr/kurs' : '/en/course',
-    servicesLink: locale === 'tr' ? '/tr/kurs' : '/en/course',
-    secondaryCta: locale === 'tr' ? 'Eğitimlerimiz' : 'Courses',
-    hoverText: locale === 'tr'
-      ? 'Bilim ve Teknolojiyle Geleceği Şekillendiriyoruz'
-      : 'Shaping the Future with Science and Technology',
-    imageOverlays: locale === 'tr'
-      ? ["Eğitimde Kalite ve Yenilik", "Hedefinize Adım Adım Ulaşın"]
-      : ["Quality and Innovation in Education", "Reach Your Goal Step by Step"]
+      description:
+        'Explore courses, mentorships, and guided learning paths created with experienced instructors. Choose a goal and move forward at your own pace.',
+      primaryAction: 'Find my learning path',
+      secondaryAction: 'Browse courses',
+      coursePath: '/en/course',
+      imageCaption: 'Learning designed around your pace and direction',
+      countLabel: 'active courses and learning paths',
+      previousImage: 'Previous image',
+      nextImage: 'Next image',
+      imageLabel: 'MyUNI learning experience',
+    };
+  }
+
+  return {
+    badge: 'Gerçek hedeflere göre tasarlanan öğrenme yolları',
+    headlines: [
+      'Bir sonraki adımınız için gerçekten gereken becerileri geliştirin.',
+      'Dağınık içerikler yerine net bir öğrenme yolunda ilerleyin.',
+      'Merakınızı görünür bir gelişime dönüştürün.',
+    ],
+    description:
+      'Deneyimli eğitmenlerle hazırlanan kursları, mentörlükleri ve planlı öğrenme yollarını keşfedin. Hedefinizi seçin, kendi temponuzda ilerleyin.',
+    primaryAction: 'Öğrenme yolumu bul',
+    secondaryAction: 'Eğitimleri incele',
+    coursePath: '/tr/kurs',
+    imageCaption: 'Temponuza ve hedefinize göre şekillenen öğrenme deneyimi',
+    countLabel: 'aktif eğitim ve öğrenme yolu',
+    previousImage: 'Önceki görsel',
+    nextImage: 'Sonraki görsel',
+    imageLabel: 'MyUNI öğrenme deneyimi',
   };
 }
 
-export default function HeroSection({ locale, activeCourseCount }: HeroSectionProps) {
-  const [content] = useState(() => getHeroContent(locale));
-  const [isLoaded, setIsLoaded] = useState(false);
+export default function HeroSection({
+  locale,
+  activeCourseCount = 0,
+}: HeroSectionProps) {
   const [showRecommendation, setShowRecommendation] = useState(false);
+  const content = getHeroContent(locale);
 
-  useEffect(() => {
-    setIsLoaded(true);
-  }, []);
-
-  const handleDiscoverClick = () => {
-    setShowRecommendation(true);
-  };
-
-  const handleRecommendationClose = () => {
-    setShowRecommendation(false);
-  };
-
-  const handleRecommendationComplete = (recommendations: CourseRecommendation[]) => {
+  const handleRecommendationComplete = (
+    recommendations: CourseRecommendation[]
+  ) => {
     console.log('Recommendations received:', recommendations);
-    // Burada öneri sonuçlarını işleyebilirsiniz
-    // Örneğin: kullanıcıyı kurs listesi sayfasına yönlendirme
   };
-
-  const TypewriterText = () => {
-    const [displayText, setDisplayText] = useState("");
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [loopNum, setLoopNum] = useState(0);
-    const [typingSpeed, setTypingSpeed] = useState(150);
-
-    useEffect(() => {
-      if (!isLoaded) return;
-
-      const handleTyping = () => {
-        const currentPhrase = content.headlines[loopNum % content.headlines.length];
-        const shouldDelete = isDeleting;
-
-        setDisplayText(
-          shouldDelete
-            ? currentPhrase.substring(0, displayText.length - 1)
-            : currentPhrase.substring(0, displayText.length + 1)
-        );
-
-        setTypingSpeed(isDeleting ? 30 : 50);
-
-        if (!isDeleting && displayText === currentPhrase) {
-          setTimeout(() => setIsDeleting(true), 1500);
-        } else if (isDeleting && displayText === "") {
-          setIsDeleting(false);
-          setLoopNum(loopNum + 1);
-        }
-      };
-
-      const timer = setTimeout(handleTyping, typingSpeed);
-      return () => clearTimeout(timer);
-    }, [displayText, isDeleting, loopNum, typingSpeed]);
-
-    return (
-      <h1 className="text-3xl lg:text-4xl xl:text-4xl font-medium text-neutral-900 dark:text-neutral-100 leading-tight mb-6 h-24 lg:h-32">
-        {displayText}
-        <span className="text-neutral-900 dark:text-neutral-100 inline-block animate-pulse ml-1">|</span>
-      </h1>
-    );
-  };
-
-  const ImageRotation = () => {
-    const [currentImage, setCurrentImage] = useState(1);
-
-    useEffect(() => {
-      if (!isLoaded) return;
-
-      const imageInterval = setInterval(() => {
-        setCurrentImage((prevImage) => (prevImage >= 5 ? 1 : prevImage + 1));
-      }, 7000);
-
-      return () => clearInterval(imageInterval);
-    }, []);
-
-    return (
-      <div className="relative h-[280px] sm:h-[320px] md:h-[380px] lg:h-[500px] w-full bg-neutral-100 dark:bg-neutral-800 rounded-sm overflow-hidden group">
-        {[1, 2, 3, 4, 5].map((imgNum) => (
-          <div
-            key={imgNum}
-            className={`transition-opacity duration-1000 absolute inset-0 ${currentImage === imgNum ? "opacity-100" : "opacity-0"
-              }`}
-          >
-            <Image
-              src={`/tr/images/myuni-egitim-platformu-${imgNum}.webp`}
-              alt={`UNILAB Vision ${imgNum}`}
-              fill
-              className="object-cover transition-transform transform hover:scale-105 duration-300 ease-in-out"
-              priority={imgNum === 1}
-              sizes="(max-width: 640px) 95vw, (max-width: 768px) 90vw, (max-width: 1024px) 45vw, 50vw"
-              unoptimized
-            />
-          </div>
-        ))}
-
-        {/* Image Overlays - Hidden on mobile for better performance */}
-        <div className="hidden sm:block absolute top-4 right-4 bg-white text-neutral-800 p-3 rounded-lg shadow-lg transition-transform transform hover:scale-110 duration-300 ease-in-out z-10 text-sm">
-          {content.imageOverlays[0]}
-        </div>
-
-        <div className="hidden sm:block absolute bottom-4 left-4 bg-white text-neutral-800 p-3 rounded-lg shadow-lg transition-transform transform hover:scale-110 duration-300 ease-in-out z-10 text-sm">
-          {content.imageOverlays[1]}
-        </div>
-
-        {/* Primary Overlay */}
-        <div className={`absolute inset-0 bg-gradient-to-t from-[#990000]/70 to-transparent opacity-0 transition-opacity duration-700 ease-in-out ${styles.overlay}`} />
-
-        {/* Secondary Overlay for Depth */}
-        <div className={`absolute inset-0 bg-[#990000]/10 opacity-0 transition-opacity duration-900 ease-in-out ${styles.secondaryOverlay}`} />
-
-        {/* Hover Text - Hidden on mobile for better performance */}
-        <div className={`hidden sm:block absolute bottom-8 left-8 max-w-lg ${styles.textContainer}`}>
-          <p className={`text-white text-xl font-medium tracking-wide ${styles.textAppear}`}>
-            {content.hoverText}
-          </p>
-          <div className={`w-0 h-0.5 bg-white mt-2 transition-all duration-500 ease-in-out ${styles.underline}`} />
-        </div>
-      </div>
-    );
-  };
-
-  if (!isLoaded) {
-    return (
-      <section className="relative py-20 lg:py-32 overflow-hidden">
-        <div className="container mx-auto relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div className="text-left order-2 lg:order-1">
-              <div className="animate-pulse">
-                <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4 mb-6"></div>
-                <div className="h-32 bg-neutral-200 dark:bg-neutral-700 rounded mb-6"></div>
-                <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2"></div>
-                <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-5/6"></div>
-              </div>
-            </div>
-            <div className="order-1 lg:order-2">
-              <div className="h-[280px] sm:h-[320px] md:h-[380px] lg:h-[500px] bg-neutral-200 dark:bg-neutral-700 rounded-sm animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <>
-      <section className="relative py-8 lg:py-18 overflow-hidden">
-        <div className="container mx-auto relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-            {/* Left side - Content */}
-            <div className="text-left order-2 lg:order-1">
-              {/* Badge */}
-              <div className="bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm px-4 py-2 mb-6 border border-neutral-300 dark:border-neutral-700 rounded-full shadow-sm inline-block">
-                {content.badge}
-              </div>
-
-              {/* Typewriter Headline */}
-              <TypewriterText />
-
-              <div className="w-16 h-px bg-[#990000] dark:bg-[#990000] mb-6"></div>
-
-              <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 max-w-2xl">
-                {content.description}
-              </p>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  variant="primary"
-                  onClick={handleDiscoverClick}
-                  className="bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-white border-0 rounded-md py-3 px-8 text-md font-medium flex items-center justify-center"
-                >
-                  {content.cta}
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-
-                <Link
-                  href={content.servicesLink}
-                  className="inline-flex items-center justify-center rounded-md border border-neutral-300 bg-transparent px-8 py-3 text-base font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
-                >
-                  {content.secondaryCta}
-                </Link>
-              </div>
+      <section className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-10 sm:px-6 sm:py-14 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16 lg:px-8 lg:py-20">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 text-sm font-medium text-[#990000] dark:text-[#e08b94]">
+              <span className="h-px w-8 bg-current" aria-hidden="true" />
+              <span>{content.badge}</span>
             </div>
 
-            {/* Right side - Image with Rotation */}
-            <div className="order-1 lg:order-2">
-              <ImageRotation />
+            <TypewriterHeadline phrases={content.headlines} />
+
+            <p className="mt-6 max-w-xl text-base leading-7 text-neutral-600 sm:text-lg sm:leading-8 dark:text-neutral-300">
+              {content.description}
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowRecommendation(true)}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#990000] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#780000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4 dark:bg-[#b41f2f] dark:hover:bg-[#c92b3c]"
+              >
+                {content.primaryAction}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <Link
+                href={content.coursePath}
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-neutral-300 px-5 py-3 text-sm font-semibold text-neutral-900 transition-colors hover:border-neutral-950 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#990000] focus-visible:ring-offset-4 dark:border-neutral-700 dark:text-white dark:hover:border-neutral-400 dark:hover:bg-neutral-900"
+              >
+                {content.secondaryAction}
+              </Link>
             </div>
+
+            {activeCourseCount > 0 ? (
+              <div className="mt-10 flex items-baseline gap-3 border-t border-neutral-200 pt-5 dark:border-neutral-800">
+                <span className="text-3xl font-semibold tracking-[-0.04em] text-neutral-950 dark:text-white">
+                  {activeCourseCount}
+                </span>
+                <span className="max-w-48 text-sm leading-5 text-neutral-500 dark:text-neutral-400">
+                  {content.countLabel}
+                </span>
+              </div>
+            ) : null}
           </div>
+
+          <RotatingHeroImage content={content} />
         </div>
       </section>
 
-      {/* Personalized Education Recommendation Modal */}
-      {showRecommendation && (
+      {showRecommendation ? (
         <PersonalizedEducationRecommendation
           locale={locale}
-          onClose={handleRecommendationClose}
+          onClose={() => setShowRecommendation(false)}
           onRecommendation={handleRecommendationComplete}
         />
-      )}
+      ) : null}
     </>
+  );
+}
+
+function TypewriterHeadline({ phrases }: { phrases: string[] }) {
+  const [currentPhrase, setCurrentPhrase] = useState(0);
+  const [visibleCharacters, setVisibleCharacters] = useState(phrases[0].length);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const phrase = phrases[currentPhrase];
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let delay = isDeleting ? 30 : 50;
+    let updateText = () => {
+      setVisibleCharacters((length) => length + (isDeleting ? -1 : 1));
+    };
+
+    if (!isDeleting && visibleCharacters === phrase.length) {
+      delay = 1600;
+      updateText = () => setIsDeleting(true);
+    } else if (isDeleting && visibleCharacters === 0) {
+      delay = 250;
+      updateText = () => {
+        setCurrentPhrase((current) => (current + 1) % phrases.length);
+        setIsDeleting(false);
+      };
+    }
+
+    const timer = window.setTimeout(updateText, delay);
+    return () => window.clearTimeout(timer);
+  }, [isDeleting, phrase.length, phrases.length, visibleCharacters]);
+
+  return (
+    <div className="mt-7 min-h-[10.5rem] sm:min-h-[12rem] lg:min-h-[13.5rem]">
+      <h1
+        className="text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-neutral-950 sm:text-5xl lg:text-[3.55rem] dark:text-white"
+        aria-label={phrase}
+      >
+        <span aria-hidden="true">{phrase.slice(0, visibleCharacters)}</span>
+        <span
+          className="ml-1 inline-block font-normal motion-safe:animate-pulse"
+          aria-hidden="true"
+        >
+          |
+        </span>
+      </h1>
+    </div>
+  );
+}
+
+function RotatingHeroImage({
+  content,
+}: {
+  content: ReturnType<typeof getHeroContent>;
+}) {
+  const [currentImage, setCurrentImage] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isPaused) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => {
+      setCurrentImage((current) => (current + 1) % HERO_IMAGES.length);
+    }, 6500);
+    return () => window.clearInterval(timer);
+  }, [isPaused]);
+
+  const showPrevious = () => {
+    setCurrentImage((current) =>
+      current === 0 ? HERO_IMAGES.length - 1 : current - 1
+    );
+  };
+
+  const showNext = () => {
+    setCurrentImage((current) => (current + 1) % HERO_IMAGES.length);
+  };
+
+  const handleTouchEnd = (clientX: number) => {
+    if (touchStartRef.current === null) return;
+    const distance = touchStartRef.current - clientX;
+    if (distance > 50) showNext();
+    if (distance < -50) showPrevious();
+    touchStartRef.current = null;
+  };
+
+  return (
+    <div
+      className="relative aspect-[4/3] min-h-[320px] overflow-hidden rounded-2xl bg-neutral-100 sm:min-h-[420px] lg:aspect-auto lg:h-[570px] dark:bg-neutral-900"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onFocus={() => setIsPaused(true)}
+      onBlur={() => setIsPaused(false)}
+      onTouchStart={(event) => {
+        touchStartRef.current = event.touches[0].clientX;
+      }}
+      onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0].clientX)}
+      role="region"
+      aria-label={content.imageLabel}
+    >
+      {HERO_IMAGES.map((imageNumber, index) => (
+        <Image
+          key={imageNumber}
+          src={`/tr/images/myuni-egitim-platformu-${imageNumber}.webp`}
+          alt={`${content.imageLabel} ${index + 1}`}
+          fill
+          priority={index === 0}
+          unoptimized
+          className={`object-cover transition-opacity duration-700 ${
+            currentImage === index ? 'opacity-100' : 'opacity-0'
+          }`}
+          sizes="(max-width: 1024px) 100vw, 55vw"
+        />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent" />
+
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-7">
+        <div>
+          <p className="max-w-sm text-sm font-medium leading-6 text-white sm:text-base">
+            {content.imageCaption}
+          </p>
+          <div className="mt-4 flex gap-1.5">
+            {HERO_IMAGES.map((imageNumber, index) => (
+              <button
+                key={imageNumber}
+                type="button"
+                onClick={() => setCurrentImage(index)}
+                className={`h-1.5 rounded-full transition-[width,background-color] ${
+                  currentImage === index ? 'w-8 bg-white' : 'w-2 bg-white/45'
+                }`}
+                aria-label={`${content.imageLabel} ${index + 1}`}
+                aria-current={currentImage === index ? 'true' : undefined}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={showPrevious}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/20 text-white backdrop-blur transition-colors hover:bg-white hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            aria-label={content.previousImage}
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={showNext}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-black/20 text-white backdrop-blur transition-colors hover:bg-white hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            aria-label={content.nextImage}
+          >
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
