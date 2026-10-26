@@ -2,6 +2,8 @@
 
 import 'server-only';
 import { supabaseAdmin as supabase } from './supabaseAdmin';
+import { getSiteApplicationsSupabase } from './supabaseSiteApplications';
+import { siteApplicationsDb } from './siteApplications/config';
 
 export interface CertificateData {
   userId: string;
@@ -65,6 +67,36 @@ export interface EligibilityCheck {
   existingCertificate?: CourseCertificate | EventCertificate;
   hasException?: boolean;
   completionPercentage?: number;
+  paymentStatus?: 'none' | 'pending' | 'paid';
+}
+
+async function getEventCertificatePaymentStatus(
+  eventId: string,
+  userEmail?: string
+): Promise<'none' | 'pending' | 'paid'> {
+  const email = userEmail?.trim().toLowerCase();
+  if (!email) return 'none';
+
+  const applicationsDb = getSiteApplicationsSupabase();
+  const { data, error } = await applicationsDb
+    .from(siteApplicationsDb.applications)
+    .select('submission_data')
+    .eq('event_id', eventId)
+    .ilike('email', email)
+    .limit(20);
+  if (error) throw error;
+
+  let hasPendingPayment = false;
+  for (const application of data || []) {
+    const submission =
+      application.submission_data && typeof application.submission_data === 'object'
+        ? (application.submission_data as Record<string, unknown>)
+        : {};
+    if (submission.registration_tier !== 'certificate') continue;
+    if (submission.payment_status === 'paid') return 'paid';
+    if (submission.payment_status === 'pending') hasPendingPayment = true;
+  }
+  return hasPendingPayment ? 'pending' : 'none';
 }
 
 interface LessonData {
@@ -139,7 +171,7 @@ async function checkCertificateException(userId: string, itemId: string, itemTyp
 /**
  * Event progress verilerini al
  */
-async function getEventProgress(userId: string, eventId: string): Promise<{
+export async function getEventCertificateProgress(userId: string, eventId: string): Promise<{
   completedSections: number;
   totalSections: number;
   completionPercentage: number
@@ -237,7 +269,11 @@ export async function checkCertificateEligibility(userId: string, courseId: stri
 /**
  * Kullanıcının sertifika uygunluğunu kontrol eder (etkinlik için)
  */
-export async function checkEventCertificateEligibility(userId: string, eventId: string): Promise<EligibilityCheck> {
+export async function checkEventCertificateEligibility(
+  userId: string,
+  eventId: string,
+  userEmail?: string
+): Promise<EligibilityCheck> {
   try {
     console.log('🎯 Event sertifika uygunluğu kontrol ediliyor:', { userId, eventId });
 
@@ -314,15 +350,21 @@ export async function checkEventCertificateEligibility(userId: string, eventId: 
     }
 
     // Event progress'i al
-    const progress = await getEventProgress(userId, eventId);
+    const [progress, paymentStatus] = await Promise.all([
+      getEventCertificateProgress(userId, eventId),
+      getEventCertificatePaymentStatus(eventId, userEmail),
+    ]);
 
-    // Event'ler için %70+ tamamlama oranı yeterli
-    const isEligible = progress.completionPercentage >= 70;
+    const hasRequiredProgress = progress.completionPercentage >= 70;
+    const isEligible = hasRequiredProgress && paymentStatus === 'paid';
     const missingRequirements: string[] = [];
 
-    if (!isEligible) {
+    if (!hasRequiredProgress) {
       const remainingPercentage = 70 - progress.completionPercentage;
       missingRequirements.push(`Etkinlik tamamlama oranı %70'e ulaşmalı (mevcut: %${progress.completionPercentage}, kalan: %${remainingPercentage})`);
+    }
+    if (paymentStatus !== 'paid') {
+      missingRequirements.push('Sertifika paketi ödemesi tamamlanmalı');
     }
 
     console.log('📊 Event sertifika uygunluk sonucu:', {
@@ -342,7 +384,8 @@ export async function checkEventCertificateEligibility(userId: string, eventId: 
       averageQuizScore: 0,
       missingRequirements,
       hasException: false,
-      completionPercentage: progress.completionPercentage
+      completionPercentage: progress.completionPercentage,
+      paymentStatus,
     };
 
   } catch (error) {
@@ -571,22 +614,15 @@ async function checkItemCertificateEligibility(userId: string, itemId: string, i
 /**
  * Sertifika oluşturma (genel - kurs/etkinlik)
  */
-export async function generateCertificate(data: CertificateData, forceGenerate: boolean = false) {
+export async function generateCertificate(data: CertificateData, verifiedUserEmail?: string) {
   try {
-    // İstisna kontrolü
-    const hasException = await checkCertificateException(data.userId, data.itemId, data.itemType);
+    const eligibility = data.itemType === 'event'
+      ? await checkEventCertificateEligibility(data.userId, data.itemId, verifiedUserEmail)
+      : await checkItemCertificateEligibility(data.userId, data.itemId, data.itemType);
+    const hasException = Boolean(eligibility.hasException);
 
-    if (hasException) {
-      console.log('🎯 İstisna nedeniyle sertifika oluşturuluyor');
-    } else if (!forceGenerate) {
-      // Normal kontroller
-      const eligibility = data.itemType === 'event'
-        ? await checkEventCertificateEligibility(data.userId, data.itemId)
-        : await checkItemCertificateEligibility(data.userId, data.itemId, data.itemType);
-
-      if (!eligibility.isEligible) {
-        throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
-      }
+    if (!eligibility.isEligible) {
+      throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
     }
 
     // Kullanıcı adını al
@@ -905,16 +941,11 @@ export async function getUserEventCertificate(userId: string, eventId: string) {
 /**
  * Progress-aware certificate generation (kurs/etkinlik için)
  */
-export async function generateCertificateWithProgress(data: CertificateData) {
-  const eligibility = data.itemType === 'event'
-    ? await checkEventCertificateEligibility(data.userId, data.itemId)
-    : await checkItemCertificateEligibility(data.userId, data.itemId, data.itemType);
-
-  if (!eligibility.isEligible) {
-    throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
-  }
-
-  return generateCertificate(data, true);
+export async function generateCertificateWithProgress(
+  data: CertificateData,
+  verifiedUserEmail?: string
+) {
+  return generateCertificate(data, verifiedUserEmail);
 }
 
 /**

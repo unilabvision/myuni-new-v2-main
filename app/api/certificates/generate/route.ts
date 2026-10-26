@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { generateCertificate } from '@/lib/certificateService';
 
 /**
  * POST /api/certificates/generate
  * Body: itemId, itemType, itemName, instructorName, duration, organization,
- *       organizationDescription, instructorBio, userFullName?, forceGenerate?
+ *       organizationDescription, instructorBio, userFullName?
  */
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'itemId is required' }, { status: 400 });
     }
 
+    const user = itemType === 'event' ? await currentUser() : null;
     const data = await generateCertificate(
       {
         userId,
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
         instructorBio: String(body.instructorBio || ''),
         userFullName: body.userFullName ? String(body.userFullName) : undefined,
       },
-      body.forceGenerate === true
+      user?.primaryEmailAddress?.emailAddress
     );
 
     return NextResponse.json({ success: true, data });

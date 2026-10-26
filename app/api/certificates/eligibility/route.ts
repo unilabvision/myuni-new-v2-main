@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import {
   checkCertificateEligibility,
   checkEventCertificateEligibility,
@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (eventId) {
-      const data = await checkEventCertificateEligibility(userId, eventId);
+      const user = await currentUser();
+      const email = user?.primaryEmailAddress?.emailAddress;
+      const data = await checkEventCertificateEligibility(userId, eventId, email);
       return NextResponse.json({ success: true, data });
     }
 

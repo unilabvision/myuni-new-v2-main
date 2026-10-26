@@ -111,6 +111,9 @@ const defaultTexts = {
   retry: 'Tekrar Dene'
 };
 
+const PROGRESS_SAVE_INTERVAL_SECONDS = 30;
+const MIN_PROGRESS_CHANGE_SECONDS = 2;
+
 export function MyUNIVideo({
   contentId,
   userId,
@@ -141,6 +144,9 @@ export function MyUNIVideo({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const playerRef = useRef<VimeoPlayer | null>(null);
   const initializationRef = useRef(false); // Prevent multiple initializations
+  const progressSaveInFlightRef = useRef(false);
+  const lastSavedPositionRef = useRef(0);
+  const completionSentRef = useRef(false);
 
   // Metinleri birleştir
   const t = { ...defaultTexts, ...texts };
@@ -279,6 +285,8 @@ export function MyUNIVideo({
           : await getUserEventLessonProgress(userId, contentId);
 
       if (data) {
+        lastSavedPositionRef.current = data.last_position_seconds || 0;
+        completionSentRef.current = Boolean(data.is_completed);
         setUserProgress({
           watch_time_seconds: data.watch_time_seconds || 0,
           last_position_seconds: data.last_position_seconds || 0,
@@ -300,11 +308,25 @@ export function MyUNIVideo({
       return;
     }
 
+    const normalizedPosition = Math.floor(position);
+    if (!isCompleted && completionSentRef.current) return;
+    if ((progressSaveInFlightRef.current && !isCompleted) || (isCompleted && completionSentRef.current)) {
+      return;
+    }
+    if (
+      !isCompleted &&
+      Math.abs(normalizedPosition - lastSavedPositionRef.current) < MIN_PROGRESS_CHANGE_SECONDS
+    ) {
+      return;
+    }
+
     try {
+      progressSaveInFlightRef.current = true;
+      if (isCompleted) completionSentRef.current = true;
       const currentWatchCount = userProgress?.video_watch_count || 0;
       const progressPayload = {
-        last_position_seconds: Math.floor(position),
-        watch_time_seconds: Math.floor(position),
+        last_position_seconds: normalizedPosition,
+        watch_time_seconds: normalizedPosition,
         is_completed: isCompleted,
         video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
         last_video_watch_at: new Date().toISOString(),
@@ -315,11 +337,12 @@ export function MyUNIVideo({
       } else {
         await updateUserEventProgress(userId, contentId, progressPayload);
       }
+      lastSavedPositionRef.current = normalizedPosition;
 
       setUserProgress((prev) => ({
         ...prev,
-        last_position_seconds: Math.floor(position),
-        watch_time_seconds: Math.floor(position),
+        last_position_seconds: normalizedPosition,
+        watch_time_seconds: normalizedPosition,
         is_completed: isCompleted,
         completed_at: isCompleted ? new Date().toISOString() : prev.completed_at,
         video_watch_count: currentWatchCount + (isCompleted ? 1 : 0),
@@ -327,7 +350,10 @@ export function MyUNIVideo({
       }));
 
     } catch (error) {
+      if (isCompleted) completionSentRef.current = false;
       console.error('❌ Exception while saving progress:', error);
+    } finally {
+      progressSaveInFlightRef.current = false;
     }
   }, [userId, contentId, userProgress?.video_watch_count, getTableNames, type]);
 
@@ -351,7 +377,7 @@ export function MyUNIVideo({
 
       // Store current values to avoid stale closures
       let currentPos = 0;
-      let lastSaved = 0;
+      let lastSaved = userProgress.last_position_seconds || 0;
       let playerDuration = 0;
 
       // Fallback: If player doesn't trigger 'loaded', mark it ready after a short timeout anyway
@@ -413,9 +439,10 @@ export function MyUNIVideo({
           onProgress(progress);
         }
 
-        // Save progress every 10 seconds
-        if (Math.abs(currentSeconds - lastSaved) >= 10 && currentSeconds > 0) {
-          console.log('⏰ Auto-saving progress every 10 seconds at:', currentSeconds);
+        if (
+          Math.abs(currentSeconds - lastSaved) >= PROGRESS_SAVE_INTERVAL_SECONDS &&
+          currentSeconds > 0
+        ) {
           if (userId && contentId) {
             saveProgressToDb(currentSeconds);
             lastSaved = currentSeconds;
@@ -425,7 +452,11 @@ export function MyUNIVideo({
         // Completion check - 3 seconds before video ends
         if (playerDuration > 0) {
           const remainingTime = playerDuration - currentSeconds;
-          if (remainingTime <= completionThreshold && !userProgress.is_completed) {
+          if (
+            remainingTime <= completionThreshold &&
+            !userProgress.is_completed &&
+            !completionSentRef.current
+          ) {
             console.log(`🎯 Video near completion (${remainingTime.toFixed(1)}s remaining), marking as completed`);
             if (userId && contentId) {
               saveProgressToDb(currentSeconds, true);
@@ -450,7 +481,8 @@ export function MyUNIVideo({
         console.log('🏁 Video ended - showing custom end screen');
         setShowEndScreen(true); // Show custom end screen
 
-        if (userId && contentId) {
+        const shouldComplete = !completionSentRef.current;
+        if (userId && contentId && shouldComplete) {
           saveProgressToDb(playerDuration || currentPos, true);
           // Update local state to reflect completion
           setUserProgress(prev => ({
@@ -459,7 +491,7 @@ export function MyUNIVideo({
             completed_at: new Date().toISOString()
           }));
         }
-        if (onComplete) {
+        if (onComplete && shouldComplete) {
           onComplete().then(() => {
             console.log('✅ onComplete callback executed successfully');
           }).catch((error) => {
@@ -519,6 +551,9 @@ export function MyUNIVideo({
     setIframeReady(false);
     setShowEndScreen(false);
     initializationRef.current = false;
+    progressSaveInFlightRef.current = false;
+    lastSavedPositionRef.current = 0;
+    completionSentRef.current = false;
 
     if (playerRef.current) {
       try {

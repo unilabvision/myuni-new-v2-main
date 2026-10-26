@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, use } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useSearchParams } from 'next/navigation';
-import { Play, FileText, Zap, StickyNote, PlusCircle, Bot, BarChart3, Award, ExternalLink, Calendar, MapPin } from 'lucide-react';
+import { Play, FileText, Zap, StickyNote, PlusCircle, Bot, BarChart3, Calendar, MapPin } from 'lucide-react';
 
 // Import services
 import {
@@ -12,12 +12,6 @@ import {
   getUserEventProgress,
   UserEventProgress
 } from '../../../../../lib/eventService';
-
-// Import certificate service
-import {
-  checkEventCertificateEligibility,
-  getUserEventCertificate
-} from '../../../../../lib/certificateApi';
 
 // Import all components
 import EventSidebar from '../../../../components/event/EventSidebar';
@@ -80,15 +74,6 @@ const toUrlSlug = (text: string): string => {
     .replace(/-+/g, '-')      // Replace multiple hyphens with single hyphen
     .trim();
 };
-
-interface Certificate {
-  id: string;
-  certificate_number: string;
-  user_id: string;
-  event_id: string;
-  issued_at: string;
-  status: 'active' | 'revoked';
-}
 
 interface Section {
   id: string;
@@ -282,11 +267,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   const [progressUpdateTrigger, setProgressUpdateTrigger] = useState(0);
   const [liveProgress, setLiveProgress] = useState<{ progress: number; completedLessons: number; totalLessons: number } | null>(null);
 
-  // Certificate states
-  const [certificateEligible, setCertificateEligible] = useState(false);
-  const [existingCertificate, setExistingCertificate] = useState<Certificate | null>(null);
-  const [certificateLoading, setCertificateLoading] = useState(false);
-
   const resolvedParams = use(params);
   const { locale, slug } = resolvedParams;
   const eventSlug = slug;
@@ -413,28 +393,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       status: eventStatus
     };
   }, []);
-
-  // Check certificate status
-  const checkCertificateStatus = useCallback(async () => {
-    if (!user || !event) return;
-
-    try {
-      setCertificateLoading(true);
-
-      const eligibility = await checkEventCertificateEligibility(user.id, event.id);
-      setCertificateEligible(eligibility.isEligible);
-
-      if (eligibility.isEligible || eligibility.existingCertificate) {
-        const certificate = await getUserEventCertificate(user.id, event.id);
-        setExistingCertificate(certificate);
-      }
-
-    } catch (error) {
-      console.error('Certificate status check error:', error);
-    } finally {
-      setCertificateLoading(false);
-    }
-  }, [user, event]);
 
   const fetchEventData = useCallback(async () => {
     if (!user || loading) return;
@@ -650,12 +608,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
   }, [searchParams, event]);
 
   useEffect(() => {
-    if (event && user) {
-      checkCertificateStatus();
-    }
-  }, [event, user, checkCertificateStatus]);
-
-  useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 1024) {
         setLeftSidebarOpen(false);
@@ -709,7 +661,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
       );
 
       setTimeout(() => {
-        checkCertificateStatus();
         setProgressUpdateTrigger(prev => prev + 1);
       }, 1000);
 
@@ -892,154 +843,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     }
   };
 
-  const renderCertificateCard = () => {
-    if (certificateLoading) {
-      return (
-        <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-xl p-6 border border-neutral-200 dark:border-neutral-700 shadow-sm animate-pulse">
-          <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded mb-4"></div>
-          <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded mb-2"></div>
-          <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4"></div>
-        </div>
-      );
-    }
-
-    if (existingCertificate) {
-      return (
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 rounded-xl p-6 border border-amber-200 dark:border-amber-800 shadow-sm">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
-                <Award className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100">
-                  🎉 Tebrikler! Sertifikanız Hazır
-                </h3>
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  Etkinliği başarıyla tamamladınız ve sertifikanızı aldınız
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-amber-950/50 rounded-lg p-4 border border-amber-200/50 dark:border-amber-800/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    Sertifika Numarası
-                  </p>
-                  <p className="text-xs font-mono text-amber-700 dark:text-amber-300 mt-1">
-                    {existingCertificate.certificate_number}
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const url = `https://certificates.myunilab.net/${existingCertificate.certificate_number}`;
-                    if (url.startsWith('https://certificates.myunilab.net/')) {
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                  className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Sertifikayı Görüntüle</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="text-xs text-amber-700 dark:text-amber-300">
-              Sertifikanızı LinkedIn ve diğer platformlarda paylaşabilirsiniz
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (certificateEligible || (event && event.progress === 100)) {
-      return (
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 border border-green-200 dark:border-green-800 shadow-sm">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                <Award className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
-                  🎯 Sertifika Almaya Hazırsınız!
-                </h3>
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Tüm gereksinimleri tamamladınız. Sertifikanızı almak için bir ders seçin.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-green-950/50 rounded-lg p-4 border border-green-200/50 dark:border-green-800/50">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                    ✅ Tüm dersler tamamlandı
-                  </p>
-                  <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                    ✅ Etkinlik başarıyla tamamlandı
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">100%</div>
-                  <div className="text-xs text-green-700 dark:text-green-300">Tamamlandı</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-green-700 dark:text-green-300">
-              Sol bölümden sertifikanızı alabilirsiniz.
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (event && event.progress > 70) {
-      return (
-        <div className="bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800 shadow-sm">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                <Award className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                  🚀 Sertifikaya Çok Yakınsınız!
-                </h3>
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  Etkinliği tamamladığınızda dijital sertifikanızı alabileceksiniz
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-blue-950/50 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/50">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-900 dark:text-blue-100">Genel İlerleme</span>
-                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">{event.progress}%</span>
-                </div>
-                <div className="w-full bg-blue-100 dark:bg-blue-800/30 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${event.progress}%` }}
-                  />
-                </div>
-                <div className="text-xs text-blue-700 dark:text-blue-300">
-                  {event.totalLessons - event.completedLessons} ders daha kaldı
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
   const renderMainContent = () => {
     if (!isEnrolled) {
       // Function to handle redirection to event page
@@ -1219,8 +1022,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
                     </div>
                   </>
                 )}
-
-                {renderCertificateCard()}
 
                 {event?.meeting_url && (
                   <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">

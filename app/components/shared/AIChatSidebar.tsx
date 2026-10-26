@@ -25,7 +25,7 @@ import Image from 'next/image';
 interface Lesson {
   id: string;
   title: string;
-  type: "video" | "notes" | "quick" | "mixed";
+  type: "video" | "notes" | "quick" | "mixed" | "competition";
   duration: string;
   isCompleted: boolean;
   lastPosition: number;

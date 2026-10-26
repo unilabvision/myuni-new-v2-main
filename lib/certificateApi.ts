@@ -27,6 +27,7 @@ export type EligibilityCheck = {
   existingCertificate?: unknown;
   hasException?: boolean;
   completionPercentage?: number;
+  paymentStatus?: 'none' | 'pending' | 'paid';
 };
 
 async function parseJson(res: Response) {
@@ -69,7 +70,7 @@ export async function getUserEventCertificate(_userId: string, eventId: string) 
   return json.data ?? null;
 }
 
-export async function generateCertificate(data: CertificateData, forceGenerate = false) {
+export async function generateCertificate(data: CertificateData) {
   const res = await fetch('/api/certificates/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,7 +84,6 @@ export async function generateCertificate(data: CertificateData, forceGenerate =
       organizationDescription: data.organizationDescription,
       instructorBio: data.instructorBio,
       userFullName: data.userFullName,
-      forceGenerate,
     }),
   });
   const json = await parseJson(res);
@@ -106,7 +106,7 @@ export async function generateCertificateWithProgress(data: CertificateData) {
     return eligibility.existingCertificate;
   }
 
-  return generateCertificate(data, true);
+  return generateCertificate(data);
 }
 
 export async function getMyCertificates() {

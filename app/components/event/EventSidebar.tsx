@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
 import {
   Play,
   FileText,
@@ -25,8 +24,7 @@ import {
 
 import {
   checkEventCertificateEligibility,
-  getUserEventCertificate,
-  generateCertificateWithProgress
+  getUserEventCertificate
 } from '../../../lib/certificateApi';
 
 import { getUserEventProgress } from '../../../lib/eventService';
@@ -35,7 +33,7 @@ import { getUserEventProgress } from '../../../lib/eventService';
 interface Lesson {
   id: string;
   title: string;
-  type: 'video' | 'notes' | 'quick' | 'mixed';
+  type: 'video' | 'notes' | 'quick' | 'mixed' | 'competition';
   duration: string;
   isCompleted: boolean;
   lastPosition: number;
@@ -70,6 +68,7 @@ interface Event {
 interface Certificate {
   id: string;
   certificate_number: string;
+  certificate_url?: string;
   user_id: string;
   event_id: string; // Updated to event_id for event certificates
   item_type?: string;
@@ -129,56 +128,6 @@ const sanitizeText = (text: string): string => {
   return text.replace(/[<>\"'&]/g, '').trim();
 };
 
-const isValidCertificateNumber = (certNumber: string): boolean => {
-  if (!certNumber || typeof certNumber !== 'string') return false;
-
-  const cleanNumber = certNumber.trim().toUpperCase();
-  const patterns = [
-    /^MUNI\d{4}-\d{6}-\d{4}-[A-Z]{3}-[A-Z0-9]{5}(-\d+)?$/,
-    /^MUNI-\d{4}-\d{6}-\d{4}-[A-Z]{3}-[A-Z0-9]{5}(-\d+)?$/,
-    /^MUNI_\d{9,12}$/,
-    /^CERT-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/,
-    /^[A-Z0-9\-_]{8,50}$/
-  ];
-
-  return patterns.some(pattern => pattern.test(cleanNumber));
-};
-
-const sendCertificateCompletionEmail = async (
-  userEmail: string,
-  userName: string,
-  eventName: string,
-  certificateNumber: string,
-  certificateUrl: string,
-  locale: string = 'tr'
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const response = await fetch('/api/send-certificate-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userEmail: userEmail.trim(),
-        userName: userName.trim(),
-        eventName: eventName.trim(),
-        certificateNumber: certificateNumber.trim(),
-        certificateUrl: certificateUrl,
-        locale: locale,
-        itemType: 'event'
-      }),
-    });
-
-    const result = await response.json();
-    return response.ok && result.success
-      ? { success: true }
-      : { success: false, error: result.error || 'Email gönderim hatası' };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Email gönderilemedi'
-    };
-  }
-};
-
 export default function EventSidebar({
   event,
   selectedLesson,
@@ -195,8 +144,6 @@ export default function EventSidebar({
   onProgressDataUpdate,
   progressUpdateTrigger
 }: EventSidebarProps) {
-  const { user } = useUser();
-
   // Filter states
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -206,16 +153,15 @@ export default function EventSidebar({
   const [certificateEligible, setCertificateEligible] = useState(false);
   const [existingCertificate, setExistingCertificate] = useState<Certificate | null>(null);
   const [certificateLoading, setCertificateLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<'none' | 'pending' | 'paid'>('none');
   const [certificateSectionExpanded, setCertificateSectionExpanded] = useState(false);
   const [certificateChecked, setCertificateChecked] = useState(false);
-  const [lastCheckProgress, setLastCheckProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Progress states - updated to use section_id mapping
   const [sectionProgressMap, setSectionProgressMap] = useState<Map<string, LessonProgress>>(new Map());
-  const [progressLoading, setProgressLoading] = useState(false);
-  const [lastProgressUpdate, setLastProgressUpdate] = useState(0);
+  const progressLoadingRef = useRef(false);
 
   // Mobile states
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -228,16 +174,16 @@ export default function EventSidebar({
 
   // Load user progress - updated for new table structure
   const loadUserProgress = useCallback(async () => {
-    if (!userId || !event?.id || progressLoading) return;
+    if (!userId || !event?.id || progressLoadingRef.current) return;
 
     try {
-      setProgressLoading(true);
+      progressLoadingRef.current = true;
 
       const progressData = await getUserEventProgress(userId, event.id);
       const progressMap = new Map<string, LessonProgress>();
 
       // Map progress data using section_id
-      progressData.forEach(progress => {
+      progressData.forEach((progress: LessonProgress) => {
         progressMap.set(progress.section_id, {
           section_id: progress.section_id,
           is_completed: progress.is_completed,
@@ -248,7 +194,6 @@ export default function EventSidebar({
       });
 
       setSectionProgressMap(progressMap);
-      setLastProgressUpdate(Date.now());
 
       if (onProgressUpdate) {
         onProgressUpdate();
@@ -256,9 +201,9 @@ export default function EventSidebar({
     } catch (error) {
       console.error('❌ Error loading user event progress:', error);
     } finally {
-      setProgressLoading(false);
+      progressLoadingRef.current = false;
     }
-  }, [userId, event?.id, progressLoading, onProgressUpdate]);
+  }, [userId, event?.id, onProgressUpdate]);
 
   // Progress trigger effect
   const prevTriggerRef = useRef(progressUpdateTrigger);
@@ -268,13 +213,6 @@ export default function EventSidebar({
       loadUserProgress();
     }
   }, [progressUpdateTrigger, loadUserProgress]);
-
-  // Initial progress load
-  useEffect(() => {
-    if (userId && event?.id) {
-      loadUserProgress();
-    }
-  }, [userId, event?.id, loadUserProgress]);
 
   // Event with progress - per-lesson tracking using lesson.id
   // Progress is stored in DB with section_id = lesson.id (per-lesson), so we look up by lesson.id
@@ -397,7 +335,9 @@ export default function EventSidebar({
 
   // Certificate status check
   const checkCertificateStatus = useCallback(async () => {
-    if (!userId || !eventWithProgress) return;
+    if (!userId || !eventWithProgress || eventWithProgress.progress < 70 || certificateChecked) {
+      return;
+    }
 
     if (typeof userId !== 'string' || userId.length === 0) {
       console.error('Invalid userId provided');
@@ -409,30 +349,21 @@ export default function EventSidebar({
       return;
     }
 
-    if (certificateChecked && lastCheckProgress === eventWithProgress.progress && !generating) {
-      return;
-    }
-
     try {
       setCertificateLoading(true);
 
       const eligibility = await checkEventCertificateEligibility(userId, eventWithProgress.id);
       setCertificateEligible(Boolean(eligibility?.isEligible));
+      setPaymentStatus(eligibility?.paymentStatus || 'none');
 
       if (eligibility?.isEligible || eligibility?.existingCertificate) {
         const certificate = await getUserEventCertificate(userId, eventWithProgress.id);
         if (certificate?.certificate_number) {
-          if (isValidCertificateNumber(certificate.certificate_number)) {
-            setExistingCertificate(certificate);
-          } else {
-            console.warn('⚠️ Certificate number format unusual but proceeding:', certificate.certificate_number);
-            setExistingCertificate(certificate);
-          }
+          setExistingCertificate(certificate);
         }
       }
 
       setCertificateChecked(true);
-      setLastCheckProgress(eventWithProgress.progress);
 
     } catch (error) {
       console.error('Certificate status check error:', error);
@@ -440,14 +371,14 @@ export default function EventSidebar({
     } finally {
       setCertificateLoading(false);
     }
-  }, [userId, eventWithProgress, certificateChecked, lastCheckProgress, generating]);
+  }, [userId, eventWithProgress, certificateChecked]);
 
   // Check certificate when needed
   useEffect(() => {
-    if (userId && eventWithProgress && !certificateChecked) {
+    if (userId && eventWithProgress?.progress >= 70 && !certificateChecked) {
       checkCertificateStatus();
     }
-  }, [userId, eventWithProgress, certificateChecked, checkCertificateStatus]);
+  }, [userId, eventWithProgress?.progress, certificateChecked, checkCertificateStatus]);
 
   // Auto-expand certificate section
   useEffect(() => {
@@ -462,167 +393,52 @@ export default function EventSidebar({
     // Otomatik scroll özelliğini kaldırdık - sorun çözülmesi için
   }, [existingCertificate, certificateEligible, eventWithProgress?.progress, certificateSectionExpanded, isMobileDevice]);
 
-  // Generate certificate
-  const handleGenerateCertificate = async () => {
-    if (!userId || !eventWithProgress || generating) return;
-
-    if (typeof userId !== 'string' || userId.length === 0) {
-      setError('Geçersiz kullanıcı bilgisi');
-      return;
-    }
-
-    if (!eventWithProgress.id || typeof eventWithProgress.id !== 'string') {
-      setError('Geçersiz etkinlik bilgisi');
-      return;
-    }
+  const handleCertificateCheckout = async () => {
+    if (!eventWithProgress?.id || checkoutLoading) return;
 
     try {
-      setGenerating(true);
+      setCheckoutLoading(true);
       setError(null);
-      setCertificateEligible(false);
+      const response = await fetch(
+        `/api/events/${encodeURIComponent(eventWithProgress.id)}/certificate-checkout`,
+        { method: 'POST' }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Ödeme başlatılamadı');
 
-      const eligibility = await checkEventCertificateEligibility(userId, eventWithProgress.id);
-
-      if (!eligibility?.isEligible) {
-        if (!eligibility?.missingRequirements || !Array.isArray(eligibility.missingRequirements)) {
-          throw new Error('Sertifika gereksinimleri tamamlanmamış');
-        }
-
-        const sanitizedRequirements = eligibility.missingRequirements
-          .map(req => sanitizeText(req))
-          .filter(req => req.length > 0)
-          .slice(0, 10);
-
-        throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış:\n• ' + sanitizedRequirements.join('\n• '));
+      if (data.state === 'paid') {
+        setPaymentStatus('paid');
+        setCertificateEligible(true);
+        return;
       }
-
-      // Get user info
-      let userFullName = 'Değerli Katılımcı';
-      let userEmail = '';
-
-      if (user) {
-        if (user.primaryEmailAddress?.emailAddress) {
-          const email = user.primaryEmailAddress.emailAddress;
-          if (email && typeof email === 'string' && email.includes('@')) {
-            userEmail = sanitizeText(email);
-          }
-        }
-
-        const firstName = user.firstName ? sanitizeText(user.firstName) : '';
-        const lastName = user.lastName ? sanitizeText(user.lastName) : '';
-        const fullName = `${firstName} ${lastName}`.trim();
-
-        if (fullName && fullName.length >= 2 && fullName.length <= 100) {
-          userFullName = fullName;
-        } else if (userEmail) {
-          const nameFromEmail = sanitizeText(userEmail.split('@')[0].replace(/[._-]/g, ' '));
-          if (nameFromEmail.length >= 2 && nameFromEmail.length <= 50) {
-            userFullName = nameFromEmail;
-          }
-        }
+      if (typeof data.checkoutUrl === 'string' && data.checkoutUrl.startsWith('/')) {
+        window.location.assign(data.checkoutUrl);
+        return;
       }
-
-      const eventData = {
-        userId: sanitizeText(userId),
-        itemId: sanitizeText(eventWithProgress.id),
-        itemType: 'event' as const,
-        itemName: sanitizeText(eventWithProgress.title || ''),
-        instructorName: sanitizeText(eventWithProgress.organizer || ''),
-        duration: sanitizeText(eventWithProgress.duration || '2 saat'),
-        organization: 'MyUNI Eğitim Platformu',
-        organizationDescription: 'Dijital eğitim platformu ile kaliteli ve erişilebilir online eğitim hizmetleri sunan öncü eğitim kurumu.',
-        instructorBio: `${sanitizeText(eventWithProgress.organizer || '')} - Alanında uzman organizatör ve sektör profesyoneli.`,
-        userFullName: sanitizeText(userFullName)
-      };
-
-      if (!eventData.userId || !eventData.itemId || !eventData.itemName || !eventData.instructorName) {
-        throw new Error('Gerekli etkinlik bilgileri eksik');
-      }
-
-      const newCertificate = await generateCertificateWithProgress(eventData);
-
-      if (!newCertificate?.certificate_number?.trim()) {
-        throw new Error('Sertifika oluşturuldu ancak sertifika numarası geçersiz');
-      }
-
-      const cleanCertNumber = newCertificate.certificate_number.trim();
-
-      if (!isValidCertificateNumber(cleanCertNumber)) {
-        console.warn('⚠️ Certificate number has unexpected format but proceeding:', cleanCertNumber);
-      }
-
-      const finalCertificate = { ...newCertificate, certificate_number: cleanCertNumber };
-
-      // Send email
-      if (userEmail) {
-        try {
-          const certificateUrl = `https://certificates.myunilab.net/${encodeURIComponent(cleanCertNumber)}`;
-          const emailResult = await sendCertificateCompletionEmail(
-            userEmail, userFullName, eventData.itemName, cleanCertNumber, certificateUrl, 'tr'
-          );
-
-          if (!emailResult.success) {
-            setError(`Sertifika oluşturuldu ancak email gönderilemedi: ${emailResult.error}`);
-          }
-        } catch (emailError) {
-          console.warn('⚠️ Email gönderme hatası:', emailError);
-          setError('Sertifika oluşturuldu ancak email gönderilemedi.');
-        }
-      }
-
-      setExistingCertificate(finalCertificate);
-      setCertificateEligible(false);
-      setCertificateChecked(false);
-
-    } catch (error) {
-      console.error('❌ Sertifika oluşturma hatası:', error);
-
-      const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
-      setCertificateEligible(true);
-
-      if (errorMessage.includes('RLS') || errorMessage.includes('policy')) {
-        setError('Sertifika oluşturmak için yetki hatası.');
-      } else if (errorMessage.includes('gerekli koşullar')) {
-        setError('Sertifika alabilmek için tüm içerikler tamamlanmalıdır.');
-      } else if (errorMessage.includes('Gerekli etkinlik bilgileri eksik')) {
-        setError('Etkinlik bilgileri eksik. Lütfen sayfayı yenileyin.');
-      } else {
-        const sanitizedError = sanitizeText(errorMessage).substring(0, 200);
-        setError('Sertifika oluşturulamadı: ' + sanitizedError);
-      }
+      throw new Error('Ödeme adresi oluşturulamadı');
+    } catch (checkoutError) {
+      setError(checkoutError instanceof Error ? checkoutError.message : 'Ödeme başlatılamadı');
     } finally {
-      setGenerating(false);
+      setCheckoutLoading(false);
     }
   };
 
-  // Auto-generate certificate when progress reaches 70%
-  useEffect(() => {
-    if (eventWithProgress?.progress >= 70 && userId && !existingCertificate && !generating && certificateChecked) {
-      console.log('🎯 Auto-generating certificate for 70% event completion');
-
-      // Small delay to ensure all state is properly updated before generating
-      const timer = setTimeout(() => {
-        handleGenerateCertificate();
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [eventWithProgress?.progress, userId, existingCertificate, generating, certificateChecked]);
-
   // View certificate
-  const handleViewCertificate = (certificateNumber: string) => {
+  const handleViewCertificate = (certificateNumber: string, certificateUrl?: string) => {
     if (!certificateNumber?.trim()) {
       setError('Geçersiz sertifika numarası');
       return;
     }
 
     const cleanNumber = certificateNumber.trim();
-    const certificateUrl = `https://certificates.myunilab.net/${encodeURIComponent(cleanNumber)}`;
+    const resolvedUrl =
+      certificateUrl?.trim() ||
+      `https://certificates.myunilab.net/${encodeURIComponent(cleanNumber)}`;
 
     try {
-      const url = new URL(certificateUrl);
+      const url = new URL(resolvedUrl);
       if (url.protocol === 'https:' && url.hostname === 'certificates.myunilab.net') {
-        window.open(certificateUrl, '_blank', 'noopener,noreferrer');
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
       } else {
         setError('Sertifika URL\'si doğrulanamadı');
       }
@@ -805,24 +621,6 @@ export default function EventSidebar({
       );
     }
 
-    if (generating) {
-      return (
-        <div className="space-y-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="flex-1">
-              <p className="font-medium text-blue-900 dark:text-blue-100 text-sm">
-                Sertifikanız Oluşturuluyor... ⚡
-              </p>
-              <p className="text-xs text-blue-800 dark:text-blue-200 mt-1">
-                Bu işlem birkaç saniye sürebilir
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     if (existingCertificate) {
       return (
         <div className="space-y-3">
@@ -848,7 +646,12 @@ export default function EventSidebar({
                 </p>
               </div>
               <button
-                onClick={() => handleViewCertificate(existingCertificate.certificate_number)}
+                onClick={() =>
+                  handleViewCertificate(
+                    existingCertificate.certificate_number,
+                    existingCertificate.certificate_url
+                  )
+                }
                 className="inline-flex items-center space-x-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs transition-colors"
               >
                 <ExternalLink className="w-3 h-3" />
@@ -860,53 +663,50 @@ export default function EventSidebar({
       );
     }
 
-    if (certificateEligible || eventWithProgress?.progress >= 70) {
-      // Different UI for >=70% progress - will auto-generate
-      if (eventWithProgress?.progress >= 70) {
+    if (eventWithProgress?.progress >= 70) {
+      if (paymentStatus === 'paid' || certificateEligible) {
         return (
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
               <div className="flex-1">
                 <p className="font-medium text-green-900 dark:text-green-100 text-sm">
-                  Sertifikanız Hazırlanıyor! 🎯
+                  Ödemeniz Alındı 🎯
                 </p>
                 <p className="text-xs text-green-800 dark:text-green-200 mt-1">
-                  %{eventWithProgress.progress} tamamlandı - Sertifikanız otomatik olarak oluşturulacak
+                  Sertifikanız hazırlanıp e-posta adresinize gönderilecek
                 </p>
               </div>
             </div>
             <div className="w-full flex items-center justify-center p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
-                <span className="text-xs text-blue-800 dark:text-blue-200">Sertifika oluşturuluyor...</span>
+                <span className="text-xs text-blue-800 dark:text-blue-200">Gönderim sırasına alındı</span>
               </div>
             </div>
           </div>
         );
       }
 
-      // Regular UI for eligible but not at 70% yet
       return (
         <div className="space-y-3">
           <div className="flex items-center space-x-3">
             <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             <div className="flex-1">
               <p className="font-medium text-green-900 dark:text-green-100 text-sm">
-                Sertifika Almaya Hazırsınız! 🎯
+                Sertifika Almaya Hak Kazandınız! 🎯
               </p>
               <p className="text-xs text-green-800 dark:text-green-200 mt-1">
-                {eventWithProgress?.progress >= 70 ? 'Tamamlama oranınız %70\'e ulaştı' : 'Tüm gereksinimleri tamamladınız'}
+                Tamamlama oranınız %70&apos;e ulaştı
               </p>
             </div>
           </div>
           <button
-            onClick={handleGenerateCertificate}
-            disabled={generating}
+            onClick={handleCertificateCheckout}
+            disabled={checkoutLoading}
             className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded transition-colors disabled:cursor-not-allowed text-sm"
           >
             <Award className="w-4 h-4" />
-            <span>Sertifikamı Al</span>
+            <span>{checkoutLoading ? 'Yönlendiriliyor...' : paymentStatus === 'pending' ? 'Ödemeyi Tamamla' : 'Sertifika Satın Al'}</span>
           </button>
         </div>
       );
