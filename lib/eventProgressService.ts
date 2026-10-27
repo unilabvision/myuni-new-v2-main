@@ -234,15 +234,12 @@ export async function updateUserEventProgress(
         .single());
     }
 
-    if (error && error.code !== 'PGRST116') {
-      console.warn('Event progress update notice:', error);
-      return null;
-    }
+    if (error && error.code !== 'PGRST116') throw error;
 
     return data;
   } catch (err) {
     console.error('Exception in updateUserEventProgress:', err);
-    return null;
+    throw err;
   }
 }
 

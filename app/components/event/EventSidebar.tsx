@@ -24,6 +24,7 @@ import {
 
 import {
   checkEventCertificateEligibility,
+  generateCertificateWithProgress,
   getUserEventCertificate
 } from '../../../lib/certificateApi';
 
@@ -157,7 +158,9 @@ export default function EventSidebar({
   const [paymentStatus, setPaymentStatus] = useState<'none' | 'pending' | 'paid'>('none');
   const [certificateSectionExpanded, setCertificateSectionExpanded] = useState(false);
   const [certificateChecked, setCertificateChecked] = useState(false);
+  const [certificatePaymentRequired, setCertificatePaymentRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const automaticCheckoutStartedRef = useRef(false);
 
   // Progress states - updated to use section_id mapping
   const [sectionProgressMap, setSectionProgressMap] = useState<Map<string, LessonProgress>>(new Map());
@@ -355,11 +358,24 @@ export default function EventSidebar({
       const eligibility = await checkEventCertificateEligibility(userId, eventWithProgress.id);
       setCertificateEligible(Boolean(eligibility?.isEligible));
       setPaymentStatus(eligibility?.paymentStatus || 'none');
+      setCertificatePaymentRequired(Boolean(eligibility?.paymentRequired));
 
       if (eligibility?.isEligible || eligibility?.existingCertificate) {
-        const certificate = await getUserEventCertificate(userId, eventWithProgress.id);
+        const certificate = eligibility.existingCertificate
+          ? await getUserEventCertificate(userId, eventWithProgress.id)
+          : await generateCertificateWithProgress({
+              userId,
+              itemId: eventWithProgress.id,
+              itemType: 'event',
+              itemName: eventWithProgress.title,
+              instructorName: eventWithProgress.organizer,
+              duration: eventWithProgress.duration || '',
+              organization: 'MyUNI',
+              organizationDescription: '',
+              instructorBio: '',
+            });
         if (certificate?.certificate_number) {
-          setExistingCertificate(certificate);
+          setExistingCertificate(certificate as Certificate);
         }
       }
 
@@ -393,7 +409,7 @@ export default function EventSidebar({
     // Otomatik scroll özelliğini kaldırdık - sorun çözülmesi için
   }, [existingCertificate, certificateEligible, eventWithProgress?.progress, certificateSectionExpanded, isMobileDevice]);
 
-  const handleCertificateCheckout = async () => {
+  const handleCertificateCheckout = useCallback(async () => {
     if (!eventWithProgress?.id || checkoutLoading) return;
 
     try {
@@ -408,7 +424,9 @@ export default function EventSidebar({
 
       if (data.state === 'paid') {
         setPaymentStatus('paid');
-        setCertificateEligible(true);
+        setCertificateEligible(false);
+        setCertificateChecked(false);
+        automaticCheckoutStartedRef.current = false;
         return;
       }
       if (typeof data.checkoutUrl === 'string' && data.checkoutUrl.startsWith('/')) {
@@ -421,7 +439,32 @@ export default function EventSidebar({
     } finally {
       setCheckoutLoading(false);
     }
-  };
+  }, [eventWithProgress?.id, checkoutLoading]);
+
+  useEffect(() => {
+    if (
+      !certificateChecked ||
+      !certificatePaymentRequired ||
+      certificateEligible ||
+      existingCertificate ||
+      paymentStatus === 'paid' ||
+      (eventWithProgress?.progress || 0) < 70 ||
+      automaticCheckoutStartedRef.current
+    ) {
+      return;
+    }
+
+    automaticCheckoutStartedRef.current = true;
+    void handleCertificateCheckout();
+  }, [
+    certificateChecked,
+    certificatePaymentRequired,
+    certificateEligible,
+    existingCertificate,
+    paymentStatus,
+    eventWithProgress?.progress,
+    handleCertificateCheckout,
+  ]);
 
   // View certificate
   const handleViewCertificate = (certificateNumber: string, certificateUrl?: string) => {

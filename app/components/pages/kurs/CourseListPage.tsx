@@ -424,17 +424,27 @@ export default function CourseListPage({
 
   // Early bird helper functions
   const isEarlyBirdActive = (course: Course) => {
-    if (!course.early_bird_price || !course.early_bird_deadline) return false;
+    if (course.early_bird_price == null || !course.early_bird_deadline) return false;
     const deadline = new Date(course.early_bird_deadline);
     const now = new Date();
-    return now < deadline;
+    return Number.isFinite(deadline.getTime()) && now < deadline;
   };
 
   const getActivePrice = (course: Course) => {
-    if (isEarlyBirdActive(course) && course.early_bird_price) {
+    if (isEarlyBirdActive(course) && course.early_bird_price != null) {
       return course.early_bird_price;
     }
     return course.price;
+  };
+
+  const getReferencePrice = (course: Course) => {
+    const activePrice = getActivePrice(course);
+    if (isEarlyBirdActive(course) && course.price > activePrice) {
+      return course.price;
+    }
+
+    const originalPrice = course.originalPrice || course.original_price;
+    return originalPrice && originalPrice > activePrice ? originalPrice : null;
   };
 
   const getDaysUntilStart = (course: Course) => {
@@ -603,9 +613,9 @@ export default function CourseListPage({
                   {course.price === 0 ? t.free : `${t.currency}${course.price}`}
                 </span>
               )}
-              {(course.originalPrice || course.original_price) && (
+              {getReferencePrice(course) && (
                 <span className="text-lg text-neutral-400 line-through">
-                  {t.currency}{course.originalPrice || course.original_price}
+                  {t.currency}{getReferencePrice(course)}
                 </span>
               )}
             </div>
@@ -851,9 +861,9 @@ export default function CourseListPage({
                                         {course.price === 0 ? t.free : `${t.currency}${course.price}`}
                                       </span>
                                     )}
-                                    {(course.originalPrice || course.original_price) && (
+                                    {getReferencePrice(course) && (
                                       <span className="text-xs lg:text-sm text-neutral-400 line-through">
-                                        {t.currency}{course.originalPrice || course.original_price}
+                                        {t.currency}{getReferencePrice(course)}
                                       </span>
                                     )}
                                   </div>

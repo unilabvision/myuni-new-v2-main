@@ -44,13 +44,27 @@ interface CourseTierSelectorProps {
   checkingEnrollment?: boolean;
 }
 
-function getTierActivePrice(tier: CourseTier): number {
+function isTierEarlyBirdActive(tier: CourseTier): boolean {
   if (tier.early_bird_price != null && tier.early_bird_deadline) {
     const now = new Date();
     const deadline = new Date(tier.early_bird_deadline);
-    if (now < deadline) return Number(tier.early_bird_price);
+    return Number.isFinite(deadline.getTime()) && now < deadline;
   }
+  return false;
+}
+
+function getTierActivePrice(tier: CourseTier): number {
+  if (isTierEarlyBirdActive(tier)) return Number(tier.early_bird_price);
   return Number(tier.price) || 0;
+}
+
+function getTierReferencePrice(tier: CourseTier): number | null {
+  const activePrice = getTierActivePrice(tier);
+  const regularPrice = Number(tier.price) || 0;
+  if (isTierEarlyBirdActive(tier) && regularPrice > activePrice) return regularPrice;
+
+  const originalPrice = Number(tier.original_price) || 0;
+  return originalPrice > activePrice ? originalPrice : null;
 }
 
 function isTierClosed(tier: CourseTier, courseRegistrationOpen?: boolean): boolean {
@@ -95,11 +109,10 @@ export default function CourseTierSelector({
     : coursePricing.activePrice;
 
   const displayOriginal = hasSelection
-    ? selectedTiers.reduce((sum, t) => {
-        const op = t.original_price;
-        const active = getTierActivePrice(t);
-        return sum + (op != null && op > active ? op : active);
-      }, 0)
+    ? selectedTiers.reduce(
+        (sum, tier) => sum + (getTierReferencePrice(tier) ?? getTierActivePrice(tier)),
+        0
+      )
     : coursePricing.displayOriginalPrice;
 
   const showStrikethrough =
@@ -107,10 +120,7 @@ export default function CourseTierSelector({
 
   const selectionHasEarlyBird =
     hasSelection &&
-    selectedTiers.some((t) => {
-      if (t.early_bird_price == null || !t.early_bird_deadline) return false;
-      return new Date() < new Date(t.early_bird_deadline);
-    });
+    selectedTiers.some(isTierEarlyBirdActive);
 
   const showEarlyBirdBanner =
     (!hasSelection && coursePricing.isEarlyBird) || selectionHasEarlyBird;
@@ -515,6 +525,8 @@ export default function CourseTierSelector({
               const isEnrolled = enrolledTierIds.includes(tier.id);
               const isClosed = isTierClosed(tier, course.is_registration_open);
               const tierPrice = getTierActivePrice(tier);
+              const tierReferencePrice = getTierReferencePrice(tier);
+              const hasEarlyBirdPrice = isTierEarlyBirdActive(tier);
               const isFull = isFullCourseTier(tier);
               const sessionCount =
                 tier.sessions?.length ?? tier.session_labels?.length ?? 0;
@@ -569,12 +581,16 @@ export default function CourseTierSelector({
                           <span className="text-sm sm:text-base font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
                             {tierPrice === 0 ? 'Ücretsiz' : `₺${tierPrice.toLocaleString('tr-TR')}`}
                           </span>
-                          {tier.original_price != null &&
-                            tier.original_price > tierPrice && (
-                              <p className="text-xs text-neutral-400 line-through">
-                                ₺{Number(tier.original_price).toLocaleString('tr-TR')}
-                              </p>
-                            )}
+                          {tierReferencePrice != null && (
+                            <p className="text-xs text-neutral-400 line-through">
+                              ₺{tierReferencePrice.toLocaleString('tr-TR')}
+                            </p>
+                          )}
+                          {hasEarlyBirdPrice && (
+                            <p className="text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                              Erken kayıt fiyatı
+                            </p>
+                          )}
                         </div>
                       </div>
 

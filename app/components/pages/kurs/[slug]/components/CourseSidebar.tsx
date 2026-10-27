@@ -117,7 +117,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
 
   // Erken kayıt indirimi kontrolü
   const isEarlyBirdActive = () => {
-    if (!course.early_bird_price || !course.early_bird_deadline) {
+    if (course.early_bird_price == null || !course.early_bird_deadline) {
       return false;
     }
     
@@ -185,9 +185,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({
   console.log('Early bird price type:', typeof course.early_bird_price);
   console.log('Early bird deadline type:', typeof course.early_bird_deadline);
   
-  // Original price belirleme - erken kayıt aktifse original_price, değilse original_price
-  const displayOriginalPrice = isEarlyBird 
-    ? course.original_price 
+  const displayOriginalPrice = isEarlyBird && course.price > activePrice
+    ? course.price
     : (course.original_price && course.original_price > activePrice ? course.original_price : null);
   
   const discountPercentage = displayOriginalPrice && activePrice !== undefined && displayOriginalPrice > activePrice

@@ -28,6 +28,7 @@ export type EligibilityCheck = {
   hasException?: boolean;
   completionPercentage?: number;
   paymentStatus?: 'none' | 'pending' | 'paid';
+  paymentRequired?: boolean;
 };
 
 async function parseJson(res: Response) {

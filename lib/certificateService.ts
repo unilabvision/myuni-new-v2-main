@@ -4,6 +4,7 @@ import 'server-only';
 import { supabaseAdmin as supabase } from './supabaseAdmin';
 import { getSiteApplicationsSupabase } from './supabaseSiteApplications';
 import { siteApplicationsDb } from './siteApplications/config';
+import { getCertificatePrice, parsePackageSettings } from './siteApplications/packages';
 
 export interface CertificateData {
   userId: string;
@@ -68,17 +69,38 @@ export interface EligibilityCheck {
   hasException?: boolean;
   completionPercentage?: number;
   paymentStatus?: 'none' | 'pending' | 'paid';
+  paymentRequired?: boolean;
 }
 
-async function getEventCertificatePaymentStatus(
+async function getEventCertificatePaymentDetails(
   eventId: string,
   userEmail?: string
-): Promise<'none' | 'pending' | 'paid'> {
-  const email = userEmail?.trim().toLowerCase();
-  if (!email) return 'none';
-
+): Promise<{
+  certificateAvailable: boolean;
+  paymentRequired: boolean;
+  paymentStatus: 'none' | 'pending' | 'paid';
+}> {
   const applicationsDb = getSiteApplicationsSupabase();
-  const { data, error } = await applicationsDb
+  const { data: form, error: formError } = await applicationsDb
+    .from(siteApplicationsDb.forms)
+    .select('package_settings')
+    .eq('event_id', eventId)
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (formError) throw formError;
+
+  const packageSettings = parsePackageSettings(form?.package_settings);
+  const certificateAvailable = packageSettings.certificate_enabled === true;
+  const paymentRequired = getCertificatePrice(packageSettings) > 0;
+  const email = userEmail?.trim().toLowerCase();
+
+  if (!certificateAvailable || !paymentRequired || !email) {
+    return { certificateAvailable, paymentRequired, paymentStatus: 'none' };
+  }
+
+  const { data: applications, error } = await applicationsDb
     .from(siteApplicationsDb.applications)
     .select('submission_data')
     .eq('event_id', eventId)
@@ -87,16 +109,22 @@ async function getEventCertificatePaymentStatus(
   if (error) throw error;
 
   let hasPendingPayment = false;
-  for (const application of data || []) {
+  for (const application of applications || []) {
     const submission =
       application.submission_data && typeof application.submission_data === 'object'
         ? (application.submission_data as Record<string, unknown>)
         : {};
     if (submission.registration_tier !== 'certificate') continue;
-    if (submission.payment_status === 'paid') return 'paid';
+    if (submission.payment_status === 'paid') {
+      return { certificateAvailable, paymentRequired, paymentStatus: 'paid' };
+    }
     if (submission.payment_status === 'pending') hasPendingPayment = true;
   }
-  return hasPendingPayment ? 'pending' : 'none';
+  return {
+    certificateAvailable,
+    paymentRequired,
+    paymentStatus: hasPendingPayment ? 'pending' : 'none',
+  };
 }
 
 interface LessonData {
@@ -350,20 +378,23 @@ export async function checkEventCertificateEligibility(
     }
 
     // Event progress'i al
-    const [progress, paymentStatus] = await Promise.all([
+    const [progress, payment] = await Promise.all([
       getEventCertificateProgress(userId, eventId),
-      getEventCertificatePaymentStatus(eventId, userEmail),
+      getEventCertificatePaymentDetails(eventId, userEmail),
     ]);
 
     const hasRequiredProgress = progress.completionPercentage >= 70;
-    const isEligible = hasRequiredProgress && paymentStatus === 'paid';
+    const hasRequiredPayment = !payment.paymentRequired || payment.paymentStatus === 'paid';
+    const isEligible = hasRequiredProgress && payment.certificateAvailable && hasRequiredPayment;
     const missingRequirements: string[] = [];
 
     if (!hasRequiredProgress) {
       const remainingPercentage = 70 - progress.completionPercentage;
       missingRequirements.push(`Etkinlik tamamlama oranı %70'e ulaşmalı (mevcut: %${progress.completionPercentage}, kalan: %${remainingPercentage})`);
     }
-    if (paymentStatus !== 'paid') {
+    if (!payment.certificateAvailable) {
+      missingRequirements.push('Sertifika paketi kullanıma açık değil');
+    } else if (payment.paymentRequired && payment.paymentStatus !== 'paid') {
       missingRequirements.push('Sertifika paketi ödemesi tamamlanmalı');
     }
 
@@ -385,7 +416,8 @@ export async function checkEventCertificateEligibility(
       missingRequirements,
       hasException: false,
       completionPercentage: progress.completionPercentage,
-      paymentStatus,
+      paymentStatus: payment.paymentStatus,
+      paymentRequired: payment.paymentRequired,
     };
 
   } catch (error) {
@@ -623,6 +655,10 @@ export async function generateCertificate(data: CertificateData, verifiedUserEma
 
     if (!eligibility.isEligible) {
       throw new Error('Sertifika almak için gerekli koşullar tamamlanmamış: ' + eligibility.missingRequirements.join(', '));
+    }
+
+    if (eligibility.existingCertificate) {
+      return eligibility.existingCertificate;
     }
 
     // Kullanıcı adını al
@@ -890,6 +926,55 @@ export async function generateCertificate(data: CertificateData, verifiedUserEma
   } catch (error) {
     throw error;
   }
+}
+
+export async function generatePaidEventCertificateForApplication(applicationId: string) {
+  const applicationsDb = getSiteApplicationsSupabase();
+  const { data: application, error: applicationError } = await applicationsDb
+    .from(siteApplicationsDb.applications)
+    .select('email, first_name, last_name, event_id, event_name, submission_data')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+  if (applicationError || !application) {
+    throw applicationError || new Error('Certificate application not found');
+  }
+
+  const submission = (application.submission_data || {}) as Record<string, unknown>;
+  const userId = String(submission.certificate_user_id || '').trim();
+  if (
+    submission.registration_tier !== 'certificate' ||
+    submission.payment_status !== 'paid' ||
+    !userId ||
+    !application.event_id
+  ) {
+    throw new Error('Paid certificate application is incomplete');
+  }
+
+  const { data: event, error: eventError } = await supabase
+    .from('myuni_events')
+    .select('id, title, organizer_name, duration')
+    .eq('id', application.event_id)
+    .maybeSingle();
+  if (eventError || !event) {
+    throw eventError || new Error('Certificate event not found');
+  }
+
+  return generateCertificate(
+    {
+      userId,
+      itemId: event.id,
+      itemType: 'event',
+      itemName: event.title || application.event_name || 'Etkinlik',
+      instructorName: event.organizer_name || 'MyUNI',
+      duration: event.duration || '',
+      organization: 'MyUNI Eğitim Platformu',
+      organizationDescription: '',
+      instructorBio: '',
+      userFullName: `${application.first_name || ''} ${application.last_name || ''}`.trim(),
+    },
+    application.email || undefined
+  );
 }
 
 /**

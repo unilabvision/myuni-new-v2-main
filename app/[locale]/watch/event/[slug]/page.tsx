@@ -810,10 +810,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
     }
   };
 
-  const handleProgress = (progress: number) => {
-    // Handle progress updates
-  };
-
   const handleNoteCreate = (note: string) => {
     // Handle note creation
   };
@@ -1198,7 +1194,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
-            onProgress={handleProgress}
             onComplete={async () => {
               await handleLessonCompletion(selectedLesson.id);
             }}
@@ -1234,7 +1229,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
-            onProgress={handleProgress}
             onComplete={async () => {
               await handleLessonCompletion(selectedLesson.id);
             }}
@@ -1257,7 +1251,6 @@ export default function EventWatchPage({ params }: EventWatchPageProps) {
             contentId={selectedLesson.id}
             userId={user?.id || ''}
             type="event"
-            onProgress={handleProgress}
             onComplete={async () => {
               await handleLessonCompletion(selectedLesson.id);
             }}

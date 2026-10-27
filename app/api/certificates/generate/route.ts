@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
     }
 
     const user = itemType === 'event' ? await currentUser() : null;
+    const verifiedUserEmail = user?.primaryEmailAddress?.emailAddress;
+    const verifiedUserName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
     const data = await generateCertificate(
       {
         userId,
@@ -34,9 +36,9 @@ export async function POST(request: NextRequest) {
         organization: String(body.organization || ''),
         organizationDescription: String(body.organizationDescription || ''),
         instructorBio: String(body.instructorBio || ''),
-        userFullName: body.userFullName ? String(body.userFullName) : undefined,
+        userFullName: verifiedUserName || (body.userFullName ? String(body.userFullName) : undefined),
       },
-      user?.primaryEmailAddress?.emailAddress
+      verifiedUserEmail
     );
 
     return NextResponse.json({ success: true, data });

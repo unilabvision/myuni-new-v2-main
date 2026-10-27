@@ -247,10 +247,9 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   }, [isLoaded, user, courseId, orderIdParam, isCartMode, isEventApplication, router, locale]);
 
   if (isEventApplication) {
-    const eventSegment = locale === 'en' ? 'event' : 'etkinlik';
     const eventHref = eventSlugParam
-      ? `/${locale}/${eventSegment}/${eventSlugParam}`
-      : `/${locale}/${eventSegment}`;
+      ? `/${locale}/watch/event/${eventSlugParam}`
+      : `/${locale}/${locale === 'en' ? 'event' : 'etkinlik'}`;
 
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 py-20">

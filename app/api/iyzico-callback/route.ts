@@ -15,6 +15,7 @@ import {
   deliverOrderAccess,
   orderNeedsDelivery,
 } from '@/lib/orderDelivery';
+import { generatePaidEventCertificateForApplication } from '@/lib/certificateService';
 import { resolvePublicBaseUrl } from '@/lib/publicBaseUrl';
 import Iyzipay from 'iyzipay';
 
@@ -468,6 +469,12 @@ export async function POST(request: Request) {
                             console.error('Event certificate payment update failed:', paymentResult.error);
                             resolve(NextResponse.redirect(new URL(`/${locale}/payment-failed?error=application_update_failed`, baseUrl), 303));
                             return;
+                        }
+
+                        try {
+                          await generatePaidEventCertificateForApplication(siteApplicationId);
+                        } catch (certificateError) {
+                          console.error('Paid event certificate generation failed:', certificateError);
                         }
 
                         await notifyUniboardPaymentConfirm(siteApplicationId, orderId);

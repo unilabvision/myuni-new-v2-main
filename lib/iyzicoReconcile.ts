@@ -17,6 +17,7 @@ import {
   notifyUniboardPaymentConfirm,
 } from './siteApplications/applicationPayments';
 import { syncOrderCourseApplications } from './siteApplications/coursePaymentApplications';
+import { generatePaidEventCertificateForApplication } from './certificateService';
 
 function isEventCertificateOrder(order: any): boolean {
   return order?.custom_data?.itemType === 'event_certificate';
@@ -101,6 +102,12 @@ async function finalizeEventCertificateOrder(
       message: 'Iyzico SUCCESS but application payment update failed',
       errors: [paymentResult.error || 'Application payment update failed'],
     };
+  }
+
+  try {
+    await generatePaidEventCertificateForApplication(siteApplicationId);
+  } catch (certificateError) {
+    console.error('Reconciled event certificate generation failed:', certificateError);
   }
 
   await notifyUniboardPaymentConfirm(siteApplicationId, orderId);
@@ -213,6 +220,11 @@ export async function reconcileOrderWithIyzico(orderId: string): Promise<Reconci
           'iyzico'
         );
         if (paymentResult.success) {
+          try {
+            await generatePaidEventCertificateForApplication(siteApplicationId);
+          } catch (certificateError) {
+            console.error('Completed event certificate generation repair failed:', certificateError);
+          }
           await notifyUniboardPaymentConfirm(siteApplicationId, orderId);
         }
       }
