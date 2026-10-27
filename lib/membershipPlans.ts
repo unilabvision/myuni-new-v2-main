@@ -1,5 +1,8 @@
 import 'server-only';
+import { unstable_cache } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+const MEMBERSHIP_PLAN_CACHE_SECONDS = 60;
 
 export type PublishedMembershipBenefit = {
   id: string;
@@ -28,40 +31,36 @@ export type PublishedMembershipPlan = {
   benefits: PublishedMembershipBenefit[];
 };
 
-export async function getPublishedMembershipPlans(): Promise<PublishedMembershipPlan[]> {
-  const { data: plans, error: plansError } = await supabaseAdmin
+async function loadPublishedMembershipPlans(): Promise<PublishedMembershipPlan[]> {
+  const { data: plans, error } = await supabaseAdmin
     .from('myuni_membership_plans')
     .select(
-      'id, code, version, duration_months, name_tr, name_en, description_tr, description_en, price, currency, published_at'
+      `
+        id, code, version, duration_months, name_tr, name_en,
+        description_tr, description_en, price, currency, published_at,
+        benefits:myuni_membership_plan_benefits(
+          id, plan_id, resource_type, access_scope, resource_id,
+          capability, label_tr, label_en, sort_order
+        )
+      `
     )
     .eq('status', 'published')
     .eq('is_visible', true)
     .order('duration_months', { ascending: true });
 
-  if (plansError) throw plansError;
-  if (!plans?.length) return [];
+  if (error) throw error;
 
-  const planIds = plans.map((plan) => plan.id);
-  const { data: benefits, error: benefitsError } = await supabaseAdmin
-    .from('myuni_membership_plan_benefits')
-    .select(
-      'id, plan_id, resource_type, access_scope, resource_id, capability, label_tr, label_en, sort_order'
-    )
-    .in('plan_id', planIds)
-    .order('sort_order', { ascending: true });
-
-  if (benefitsError) throw benefitsError;
-
-  const benefitsByPlan = new Map<string, PublishedMembershipBenefit[]>();
-  for (const benefit of (benefits ?? []) as PublishedMembershipBenefit[]) {
-    const planBenefits = benefitsByPlan.get(benefit.plan_id) ?? [];
-    planBenefits.push(benefit);
-    benefitsByPlan.set(benefit.plan_id, planBenefits);
-  }
-
-  return plans.map((plan) => ({
+  return (plans ?? []).map((plan) => ({
     ...plan,
     price: Number(plan.price),
-    benefits: benefitsByPlan.get(plan.id) ?? [],
+    benefits: ((plan.benefits ?? []) as PublishedMembershipBenefit[]).sort(
+      (left, right) => left.sort_order - right.sort_order
+    ),
   })) as PublishedMembershipPlan[];
 }
+
+export const getPublishedMembershipPlans = unstable_cache(
+  loadPublishedMembershipPlans,
+  ['published-membership-plans-v1'],
+  { revalidate: MEMBERSHIP_PLAN_CACHE_SECONDS, tags: ['membership-plans'] }
+);

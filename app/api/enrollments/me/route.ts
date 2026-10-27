@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getMembershipEntitlementAccess } from '@/lib/membershipAccess';
 
 /**
  * GET /api/enrollments/me
@@ -36,11 +37,20 @@ export async function GET(request: NextRequest) {
         .map((e) => e.tier_id)
         .filter(Boolean) as string[];
       const primary = fullEnrollment || enrollments[0] || null;
+      const membershipAccess = primary
+        ? null
+        : await getMembershipEntitlementAccess({
+            userId,
+            resourceType: 'course',
+            resourceId: courseId,
+          });
 
       return NextResponse.json({
         success: true,
-        isEnrolled: enrollments.length > 0,
-        hasFullEnrollment: !!fullEnrollment,
+        isEnrolled: enrollments.length > 0 || membershipAccess?.hasAccess === true,
+        hasFullEnrollment: Boolean(fullEnrollment || membershipAccess?.hasAccess),
+        accessSource: membershipAccess?.hasAccess ? 'membership' : primary ? 'purchase' : null,
+        accessEndsAt: membershipAccess?.endsAt ?? null,
         welcomeShown: primary?.welcome_shown || false,
         enrollmentId: primary?.id || null,
         progressPercentage: primary?.progress_percentage ?? 0,

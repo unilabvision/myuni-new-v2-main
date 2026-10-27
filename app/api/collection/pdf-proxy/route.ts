@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
 import { getVerifiedProductAccessEmails } from '../../../../lib/productAccess';
+import { getMembershipEntitlementAccess } from '@/lib/membershipAccess';
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -59,6 +60,13 @@ export async function GET(req: NextRequest) {
 
     if (purchase) {
       isAuthorized = true;
+    } else {
+      const membershipAccess = await getMembershipEntitlementAccess({
+        userId,
+        resourceType: 'product',
+        resourceId: productId,
+      });
+      isAuthorized = membershipAccess.hasAccess;
     }
   }
 

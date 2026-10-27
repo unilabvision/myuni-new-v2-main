@@ -13,6 +13,7 @@
     "media:migrate": "node --env-file-if-exists=.env.local scripts/migrate-supabase-media.mjs",
     "media:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-supabase-media.mjs",
     "gift:product": "node --env-file-if-exists=.env.local scripts/grant-product-gifts.mjs",
+    "test:membership-expiry": "node lib/membershipTime.test.mjs",
     "start": "next start",
     "lint": "next lint"
   },

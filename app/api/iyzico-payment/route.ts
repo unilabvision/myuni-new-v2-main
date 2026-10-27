@@ -14,6 +14,7 @@ import {
   assertLegalConsent,
   buildLegalConsentSnapshot,
 } from '@/lib/legalConsent';
+import { deliverOrderAccess } from '@/lib/orderDelivery';
 import {
   resolveCoursePaymentApplications,
   syncOrderCourseApplications,
@@ -60,7 +61,7 @@ interface PaymentRequestBody {
   clerkUserId?: string;
   userId?: string;
   tierId?: string;
-  itemType?: 'course' | 'product' | 'package' | 'tier' | 'cart' | 'event_certificate';
+  itemType?: 'course' | 'product' | 'package' | 'tier' | 'cart' | 'event_certificate' | 'membership_pass';
   eventSlug?: string;
   // Cart Mode fields
   cartMode?: boolean;
@@ -323,6 +324,7 @@ async function saveOrderToDatabase(orderData: any) {
           orderSnapshot: orderData.orderSnapshot || null,
           listTotal: orderData.listTotal ?? null,
           legalConsent: orderData.legalConsent || null,
+          membershipPlan: orderData.membershipPlan || null,
         },
         discountcode: orderData.discountCodes,
         discountamount: orderData.totalDiscount || 0,
@@ -395,6 +397,7 @@ export async function POST(request: Request) {
     // authenticated Clerk session — never trust body.clerkUserId / body.userId,
     // otherwise a caller could enroll an arbitrary account for free/cheap items.
     const isEventCertificateItemType = !isCartMode && body.itemType === 'event_certificate';
+    const isMembershipItemType = !isCartMode && body.itemType === 'membership_pass';
 
     let clerkUserId: string | undefined;
     if (!isEventCertificateItemType) {
@@ -461,6 +464,7 @@ export async function POST(request: Request) {
     let appliedDiscountCodeId: string | null = null;
     let finalAmount = 0;
     let orderName = '';
+    let membershipPlan: Record<string, unknown> | null = null;
     
     // ---- 1. SEPET MODU MANTIĞI ----
     if (isCartMode) {
@@ -626,6 +630,7 @@ export async function POST(request: Request) {
       const isPackage = body.itemType === 'package';
       const isTier = body.itemType === 'tier';
       const isEventCertificate = body.itemType === 'event_certificate';
+      const isMembership = body.itemType === 'membership_pass';
 
       if (isEventCertificate) {
         const applicationId = body.courseId;
@@ -776,6 +781,50 @@ export async function POST(request: Request) {
           eventId: application.event_id,
         });
         originalTotalAmount = packagePrice;
+      } else if (isMembership) {
+        const { data: plan, error: planError } = await supabase
+          .from('myuni_membership_plans')
+          .select('id, family_code, code, version, duration_months, name_tr, name_en, price, currency')
+          .eq('id', body.courseId)
+          .eq('status', 'published')
+          .eq('is_visible', true)
+          .maybeSingle();
+
+        if (planError) {
+          console.error('Membership plan lookup error:', body.courseId, planError);
+        }
+        if (!plan) {
+          return NextResponse.json(
+            { success: false, message: 'Üyelik paketi bulunamadı veya satışta değil' },
+            { status: 404 }
+          );
+        }
+        if (plan.currency !== 'TRY') {
+          return NextResponse.json(
+            { success: false, message: 'Bu para birimi ödeme altyapısı tarafından desteklenmiyor' },
+            { status: 409 }
+          );
+        }
+
+        membershipPlan = {
+          planId: plan.id,
+          familyCode: plan.family_code,
+          code: plan.code,
+          version: plan.version,
+          durationMonths: plan.duration_months,
+          nameTr: plan.name_tr,
+          nameEn: plan.name_en,
+          price: Number(plan.price),
+          currency: plan.currency,
+        };
+        validatedItems.push({
+          id: plan.id,
+          title: (body.locale === 'en' ? plan.name_en : plan.name_tr) || plan.name_tr,
+          price: Number(plan.price),
+          type: 'membership_pass',
+          slug: plan.code,
+        });
+        originalTotalAmount = Number(plan.price);
       } else if (isProduct) {
         const { data: productData, error: productError } = await supabase
           .from('myuni_products')
@@ -905,35 +954,39 @@ export async function POST(request: Request) {
     }
 
     const paymentLocale = body.locale === 'en' ? 'en' : 'tr';
-    let courseApplicationLinks: CourseApplicationLink[];
+    let courseApplicationLinks: CourseApplicationLink[] = [];
     try {
-      const resolution = await resolveCoursePaymentApplications({
-        items: validatedItems,
-        email: buyerEmail,
-      });
+      if (isMembershipItemType) {
+        courseApplicationLinks = [];
+      } else {
+        const resolution = await resolveCoursePaymentApplications({
+          items: validatedItems,
+          email: buyerEmail,
+        });
 
-      if (resolution.missing) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: 'APPLICATION_REQUIRED',
-            message:
-              paymentLocale === 'en'
-                ? 'Complete the course application before payment.'
-                : 'Ödeme öncesinde kurs başvurusunu tamamlayın.',
-            applicationUrl: buildCourseApplicationUrl({
-              requirement: resolution.missing,
-              locale: paymentLocale,
-              isCartMode,
-              items: validatedItems,
-              tierId: body.tierId,
-            }),
-          },
-          { status: 409 }
-        );
+        if (resolution.missing) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'APPLICATION_REQUIRED',
+              message:
+                paymentLocale === 'en'
+                  ? 'Complete the course application before payment.'
+                  : 'Ödeme öncesinde kurs başvurusunu tamamlayın.',
+              applicationUrl: buildCourseApplicationUrl({
+                requirement: resolution.missing,
+                locale: paymentLocale,
+                isCartMode,
+                items: validatedItems,
+                tierId: body.tierId,
+              }),
+            },
+            { status: 409 }
+          );
+        }
+
+        courseApplicationLinks = resolution.links;
       }
-
-      courseApplicationLinks = resolution.links;
     } catch (error) {
       console.error('Course application payment validation failed:', error);
       return NextResponse.json(
@@ -983,10 +1036,11 @@ export async function POST(request: Request) {
       courseApplicationLinks,
       eventSlug: isEventCertificateOrder ? (body.eventSlug || validatedItems[0]?.slug) : undefined,
       cartMode: isCartMode,
-      cartItems: orderSnapshot.items,
+      cartItems: isCartMode ? orderSnapshot.items : [],
       orderSnapshot,
       listTotal: orderSnapshot.listTotal,
       legalConsent: legalConsentSnapshot,
+      membershipPlan,
     };
 
     const saveResult = await saveOrderToDatabase(orderData);
@@ -1087,8 +1141,23 @@ export async function POST(request: Request) {
 
         const enrolledItemsDetails: string[] = [];
 
+        if (isMembershipItemType) {
+          const delivery = await deliverOrderAccess(saveResult.order);
+          if (!delivery.success) {
+            await supabase
+              .from('orders')
+              .update({ status: 'payment_error', updated_at: new Date().toISOString() })
+              .eq('orderid', orderId);
+            return NextResponse.json(
+              { success: false, message: 'Üyelik erişimi tanımlanamadı.' },
+              { status: 500 }
+            );
+          }
+          enrolledItemsDetails.push(...delivery.deliveredTitles);
+        }
+
         // Her bir ürünü tek tek teslim et (enroll / purchase)
-        for (const item of validatedItems) {
+        for (const item of isMembershipItemType ? [] : validatedItems) {
           if (item.type === 'product') {
             const { data: existingPurchase, error: existingPurchaseError } = await supabase
               .from('myuni_products_purchases')

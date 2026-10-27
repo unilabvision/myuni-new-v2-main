@@ -114,6 +114,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const paymentId = searchParams.get('paymentId');
   const itemType = searchParams.get('type') || 'course';
   const isProduct = itemType === 'product';
+  const isMembership = itemType === 'membership_pass';
   const isEventApplication = itemType === 'event_application';
   const eventSlugParam = searchParams.get('eventSlug') || '';
   const applicationIdParam = searchParams.get('applicationId') || '';
@@ -192,7 +193,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   // Kurs veya Ürün bilgilerini çek (Sepet modunda değilsek)
   useEffect(() => {
     const fetchItemData = async () => {
-      if (isCartMode || !courseId) {
+      if (isCartMode || isMembership || !courseId) {
         setLoadingItem(false);
         return;
       }
@@ -233,7 +234,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
       }
     };
     fetchItemData();
-  }, [courseId, isProduct, isCartMode]);
+  }, [courseId, isProduct, isCartMode, isMembership]);
 
   useEffect(() => {
     if (isEventApplication) return;
@@ -275,6 +276,48 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
             >
               {t.backToEvent}
             </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isMembership) {
+    return (
+      <div className="min-h-screen bg-white py-20 dark:bg-neutral-900">
+        <div className="mx-auto max-w-3xl px-6">
+          <div className="rounded-lg border border-neutral-200 bg-white p-8 shadow-sm dark:border-neutral-700 dark:bg-neutral-800">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50 dark:bg-green-900/20">
+              <CheckCircle size={40} className="text-green-500" />
+            </div>
+            <h1 className="mb-2 text-2xl font-medium text-neutral-800 dark:text-neutral-200">
+              {t.congratulations}
+            </h1>
+            <p className="mb-6 text-neutral-600 dark:text-neutral-400">
+              {locale === 'tr'
+                ? 'Üyeliğiniz hesabınıza tanımlandı. Paket süreniz ödeme anından itibaren işlemeye başladı.'
+                : 'Your membership is now active. The plan term started at the time of payment.'}
+            </p>
+            {orderId && (
+              <p className="mb-6 text-sm text-neutral-500">
+                {locale === 'tr' ? 'Sipariş No' : 'Order ID'}: <span className="font-mono">{orderId}</span>
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={`/${locale}/dashboard`}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#990000] px-6 py-3 text-sm font-medium text-white hover:bg-[#770000]"
+              >
+                {t.goToDashboard}
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                href={`/${locale}/${locale === 'tr' ? 'uyelik' : 'membership'}`}
+                className="rounded-lg border border-neutral-300 px-6 py-3 text-sm font-medium dark:border-neutral-600"
+              >
+                {locale === 'tr' ? 'Üyelik paketleri' : 'Membership plans'}
+              </Link>
+            </div>
           </div>
         </div>
       </div>

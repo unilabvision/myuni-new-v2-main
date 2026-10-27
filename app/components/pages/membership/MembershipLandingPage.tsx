@@ -1,4 +1,5 @@
 import { Award, BookOpen, CalendarDays, Check, Clock3, Library } from 'lucide-react';
+import Link from 'next/link';
 import type {
   PublishedMembershipBenefit,
   PublishedMembershipPlan,
@@ -127,9 +128,12 @@ export default function MembershipLandingPage({
                   ))}
                 </ul>
 
-                <div className="mt-6 rounded-md bg-neutral-100 px-4 py-3 text-center text-sm font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400" aria-disabled="true">
-                  {isTr ? 'Satın alma yakında açılacak' : 'Purchasing will open soon'}
-                </div>
+                <Link
+                  href={`/${locale}/checkout?id=${encodeURIComponent(plan.id)}&type=membership`}
+                  className="mt-6 rounded-md bg-[#990000] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#7f0000] focus:outline-none focus:ring-2 focus:ring-[#990000] focus:ring-offset-2"
+                >
+                  {isTr ? 'Paketi satın al' : 'Buy this plan'}
+                </Link>
               </article>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { unstable_cache } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getMembershipEntitlementAccess } from '@/lib/membershipAccess';
 
 type RouteContext = {
   params: Promise<{ lessonId: string }>;
@@ -162,7 +163,15 @@ export async function GET(_request: Request, context: RouteContext) {
       .limit(1)
       .maybeSingle();
 
-    if (!enrollment) {
+    const membershipAccess = enrollment
+      ? null
+      : await getMembershipEntitlementAccess({
+          userId,
+          resourceType: 'course',
+          resourceId: courseId,
+        });
+
+    if (!enrollment && !membershipAccess?.hasAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

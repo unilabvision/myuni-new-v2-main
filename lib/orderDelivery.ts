@@ -170,6 +170,45 @@ export async function deliverOrderAccess(
     };
   }
 
+  if (order?.custom_data?.itemType === 'membership_pass') {
+    const { error: completionError } = await supabase
+      .from('orders')
+      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .eq('orderid', order.orderid)
+      .in('status', ['pending', 'processing', 'payment_error']);
+
+    if (completionError) {
+      return {
+        success: false,
+        deliveredTitles: [],
+        errors: [`membership order completion: ${completionError.message}`],
+      };
+    }
+
+    const { error } = await supabase.rpc('myuni_membership_deliver_pass', {
+      p_order_id: order.orderid,
+    });
+    if (error) {
+      await supabase
+        .from('orders')
+        .update({ status: 'payment_error', updated_at: new Date().toISOString() })
+        .eq('orderid', order.orderid)
+        .eq('status', 'completed');
+      return {
+        success: false,
+        deliveredTitles: [],
+        errors: [`membership delivery: ${error.message}`],
+      };
+    }
+
+    const title = order.coursename || order.custom_data?.membershipPlan?.nameTr || 'MyUNI üyeliği';
+    return {
+      success: true,
+      deliveredTitles: [title],
+      errors: [],
+    };
+  }
+
   const userId = resolveUserId(order);
   if (!userId) {
     return {
@@ -233,6 +272,16 @@ export async function orderNeedsDelivery(order: any): Promise<boolean> {
   // Guest event certificates have no Clerk enrollment — payment is on the application row.
   if (order?.custom_data?.itemType === 'event_certificate') {
     return false;
+  }
+
+  if (order?.custom_data?.itemType === 'membership_pass') {
+    if (!order?.id) return true;
+    const { data } = await supabase
+      .from('myuni_membership_passes')
+      .select('id')
+      .eq('source_order_id', order.id)
+      .maybeSingle();
+    return !data;
   }
 
   if (order?.enrolled === false || order?.enrolled == null) {

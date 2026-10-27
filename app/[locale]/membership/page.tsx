@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import MembershipLandingPage from '@/app/components/pages/membership/MembershipLandingPage';
 import { getPublishedMembershipPlans } from '@/lib/membershipPlans';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: 'Membership Plans | MyUNI',

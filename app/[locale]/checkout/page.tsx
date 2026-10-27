@@ -267,7 +267,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
 
   const [courseData, setCourseData] = useState<CourseData | null>(null);
   const [productData, setProductData] = useState<{ id: string; title: string; price: number; thumbnail_url?: string | null; slug: string; description: string } | null>(null);
-  const [itemType, setItemType] = useState<'course' | 'product' | 'package' | 'tier'>('course');
+  const [itemType, setItemType] = useState<'course' | 'product' | 'package' | 'tier' | 'membership_pass'>('course');
   const [tierId, setTierId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -519,6 +519,39 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     }
   }, [locale, router, t.error]);
 
+  const fetchMembershipData = useCallback(async (planId: string) => {
+    try {
+      setPageLoading(true);
+      const response = await fetch('/api/membership/plans', { cache: 'force-cache' });
+      const body = await response.json();
+      const plan = Array.isArray(body.plans)
+        ? body.plans.find((item: { id?: string }) => item.id === planId)
+        : null;
+
+      if (!response.ok || !plan) {
+        router.push(`/${locale}/${locale === 'tr' ? 'uyelik' : 'membership'}`);
+        return;
+      }
+
+      setCourseData({
+        id: plan.id,
+        title: (locale === 'tr' ? plan.name_tr : plan.name_en) || plan.name_tr,
+        description:
+          (locale === 'tr' ? plan.description_tr : plan.description_en) ||
+          (locale === 'tr' ? plan.description_en : plan.description_tr) ||
+          '',
+        price: Number(plan.price),
+        slug: plan.code,
+        is_active: true,
+      });
+    } catch (fetchError) {
+      console.error('Membership plan fetch error:', fetchError);
+      setError(t.error);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [locale, router, t.error]);
+
   useEffect(() => {
     if (isLoaded && !user) {
       router.push(`/${locale}/login`);
@@ -615,13 +648,16 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       } else if (type === 'tier' && urlTierId) {
         setItemType('tier');
         fetchTierData(courseId, urlTierId);
+      } else if (type === 'membership') {
+        setItemType('membership_pass');
+        fetchMembershipData(courseId);
       } else {
         setItemType('course');
         fetchCourseData(courseId);
       }
     }
     
-  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchTierData]);
+  }, [searchParams, isLoaded, user, router, locale, fetchCourseData, fetchProductData, fetchPackageData, fetchTierData, fetchMembershipData]);
 
   // Early bird countdown timer
   useEffect(() => {
@@ -1260,6 +1296,10 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const getCoursePath = () => {
     if (isCartMode) return `/${locale}/cart`;
     if (!courseData) return `/${locale}`;
+
+    if (itemType === 'membership_pass') {
+      return `/${locale}/${locale === 'tr' ? 'uyelik' : 'membership'}`;
+    }
     
     if (itemType === 'package') {
       const packagePath = locale === 'tr' ? 'paket' : 'package';
