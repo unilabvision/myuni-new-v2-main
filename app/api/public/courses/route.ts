@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllCourses } from '@/lib/courseService';
 import {
   getPublicCacheHeaders,
-  PUBLIC_CACHE_SECONDS,
   PUBLIC_CACHE_TAGS,
 } from '@/lib/publicCache';
 import { createServerSupabasePublicClient } from '@/lib/supabase-server';
@@ -17,6 +16,8 @@ type RatingSummaryRow = {
 const PUBLIC_PACKAGE_COLUMNS = `
   id, slug, title, description, price, original_price, level, thumbnail_url, banner_url
 `;
+
+const COURSE_CATALOG_CACHE_SECONDS = 6 * 60 * 60;
 
 async function loadRatingMap(courseIds: string[]) {
   if (courseIds.length === 0) return {};
@@ -98,9 +99,9 @@ async function loadPublicCatalog(locale: string, programType: string) {
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v2'],
+  ['public-course-catalog-v3'],
   {
-    revalidate: PUBLIC_CACHE_SECONDS,
+    revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [
       PUBLIC_CACHE_TAGS.courses,
       PUBLIC_CACHE_TAGS.packages,

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
@@ -9,16 +9,27 @@ type RevalidationBody = {
 };
 
 function hasValidWebhookSecret(request: NextRequest): boolean {
-  const expected = process.env.CACHE_REVALIDATION_SECRET;
   const received = request.headers.get('x-cache-revalidation-secret');
-  if (!expected || !received) return false;
+  if (!received) return false;
 
-  const expectedBuffer = Buffer.from(expected);
   const receivedBuffer = Buffer.from(received);
-  return (
-    expectedBuffer.length === receivedBuffer.length &&
-    timingSafeEqual(expectedBuffer, receivedBuffer)
-  );
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const expectedSecrets = [
+    process.env.CACHE_REVALIDATION_SECRET,
+    serviceRoleKey
+      ? createHash('sha256')
+          .update(`myuni-cache-revalidation:${serviceRoleKey}`)
+          .digest('hex')
+      : undefined,
+  ].filter((secret): secret is string => Boolean(secret));
+
+  return expectedSecrets.some((expected) => {
+    const expectedBuffer = Buffer.from(expected);
+    return (
+      expectedBuffer.length === receivedBuffer.length &&
+      timingSafeEqual(expectedBuffer, receivedBuffer)
+    );
+  });
 }
 
 function getValidResources(resources: PublicCacheResource[] | undefined) {

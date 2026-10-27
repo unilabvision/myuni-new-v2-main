@@ -113,7 +113,31 @@ const PUBLIC_COURSE_COLUMNS = `
   current_participants, session_count, session_duration_minutes, registration_deadline,
   is_registration_open, instructor_description, instructor_email,
   instructor_linkedin, instructor_image_url, is_active, created_at, updated_at,
-  early_bird_price, early_bird_deadline, program_type
+  early_bird_price, early_bird_deadline, program_type, is_featured
+`;
+
+const COURSE_DETAIL_COLUMNS = `
+  id, slug, title, description, price, original_price, early_bird_price,
+  early_bird_deadline, duration, level, instructor_name, thumbnail_url,
+  banner_url, course_type, live_start_date, live_end_date, live_timezone,
+  max_participants, current_participants, session_count, session_duration_minutes,
+  registration_deadline, is_registration_open,
+  instructor_description, instructor_email, instructor_linkedin,
+  instructor_image_url, is_active, created_at, updated_at,
+  shopier_product_id, shopier_product_url, is_featured
+`;
+
+const LIVE_COURSE_COLUMNS = `
+  id, slug, title, description, price, original_price, duration, level,
+  instructor_name, thumbnail_url, banner_url, is_featured, course_type,
+  live_start_date, live_end_date, max_participants, current_participants,
+  session_count, session_duration_minutes, registration_deadline,
+  is_registration_open
+`;
+
+const COURSE_CONTENT_SUMMARY_COLUMNS = `
+  id, title, slug, is_active, instructor_name, course_type,
+  live_start_date, live_end_date, live_timezone, duration
 `;
 
 type LessonDurationSection = {
@@ -205,7 +229,7 @@ export async function getAllCourses(
       image: course.thumbnail_url || course.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
       thumbnail_url: course.thumbnail_url,
       banner_url: course.banner_url,
-      featured: false,
+      featured: Boolean(course.is_featured),
       banner: {
         url: course.banner_url || course.thumbnail_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=1200&h=600&fit=crop`
       },
@@ -277,7 +301,7 @@ export async function getCourseBySlug(slug: string, locale: string = 'tr') {
   try {
     const { data, error } = await supabase
       .from('myuni_courses')
-      .select('*')
+      .select(COURSE_DETAIL_COLUMNS)
       .eq('slug', slug)
       .eq('is_active', true)
       .single();
@@ -334,11 +358,7 @@ export async function getCourseBySlug(slug: string, locale: string = 'tr') {
       live_timezone: data.live_timezone,
       max_participants: data.max_participants,
       current_participants: data.current_participants || 0,
-      meeting_url: data.meeting_url,
-      meeting_password: data.meeting_password,
-      prerequisites: data.prerequisites,
-      target_audience: data.target_audience,
-      learning_outcomes: data.learning_outcomes,
+      learning_outcomes: undefined,
       session_count: data.session_count,
       session_duration_minutes: data.session_duration_minutes,
       registration_deadline: data.registration_deadline,
@@ -506,7 +526,7 @@ export async function getLiveCourses() {
   try {
     const { data, error } = await supabase
       .from('myuni_courses')
-      .select('*')
+      .select(LIVE_COURSE_COLUMNS)
       .eq('is_active', true)
       .in('course_type', ['live', 'hybrid'])
       .order('live_start_date', { ascending: true });
@@ -531,7 +551,7 @@ export async function getLiveCourses() {
       image: course.thumbnail_url || course.banner_url || `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000)}?w=400&h=250&fit=crop`,
       thumbnail_url: course.thumbnail_url,
       banner_url: course.banner_url,
-      featured: Boolean(course.featured ?? course.is_featured),
+      featured: Boolean(course.is_featured),
       course_type: course.course_type,
       live_start_date: course.live_start_date,
       live_end_date: course.live_end_date,
@@ -540,10 +560,7 @@ export async function getLiveCourses() {
       session_count: course.session_count,
       session_duration_minutes: course.session_duration_minutes,
       registration_deadline: course.registration_deadline,
-      is_registration_open: course.is_registration_open ?? true,
-      prerequisites: course.prerequisites,
-      target_audience: course.target_audience,
-      learning_outcomes: course.learning_outcomes
+      is_registration_open: course.is_registration_open ?? true
     }));
 
     return transformedCourses || [];
@@ -735,7 +752,7 @@ export async function getCourseWithContent(courseSlug: string) {
     // Now get the active course by slug
     const { data: courses, error: courseError } = await supabase
       .from('myuni_courses')
-      .select('*')
+      .select(COURSE_CONTENT_SUMMARY_COLUMNS)
       .eq('slug', courseSlug)
       .eq('is_active', true);
 
