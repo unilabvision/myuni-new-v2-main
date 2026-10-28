@@ -14,18 +14,6 @@ type RatingSummaryRow = {
   rating_count: number | string;
 };
 
-type EarlyBirdTierRow = {
-  course_id: string;
-  title: string;
-  slug: string;
-  price: number | string;
-  original_price: number | string | null;
-  early_bird_price: number | string;
-  early_bird_deadline: string;
-  is_full_course: boolean | null;
-  order_index: number | null;
-};
-
 type PublicPackageCourse = {
   package_id: string;
   myuni_courses: Array<{
@@ -101,58 +89,13 @@ async function loadRatingMapFallback(courseIds: string[]) {
   );
 }
 
-async function loadEarlyBirdTierMap(courseIds: string[]) {
-  if (courseIds.length === 0) return {};
-
-  const supabase = createServerSupabasePublicClient();
-  const { data, error } = await supabase
-    .from('myuni_course_tiers')
-    .select(
-      'course_id, title, slug, price, original_price, early_bird_price, early_bird_deadline, is_full_course, order_index'
-    )
-    .in('course_id', courseIds)
-    .eq('is_active', true)
-    .or('is_registration_open.is.null,is_registration_open.eq.true')
-    .not('early_bird_price', 'is', null)
-    .gt('early_bird_deadline', new Date().toISOString())
-    .order('order_index', { ascending: true });
-
-  if (error) {
-    console.error('[api/public/courses] Early-bird tier query failed:', error.message);
-    return {};
-  }
-
-  return ((data || []) as EarlyBirdTierRow[]).reduce<Record<string, EarlyBirdTierRow>>(
-    (tierMap, tier) => {
-      const current = tierMap[tier.course_id];
-      const isFullCourse =
-        tier.is_full_course === true ||
-        tier.slug === 'tam-egitim' ||
-        tier.title.toLocaleLowerCase('tr-TR').includes('tam eğitim');
-      const currentIsFullCourse = current && (
-        current.is_full_course === true ||
-        current.slug === 'tam-egitim' ||
-        current.title.toLocaleLowerCase('tr-TR').includes('tam eğitim')
-      );
-
-      if (!current || (isFullCourse && !currentIsFullCourse)) {
-        tierMap[tier.course_id] = tier;
-      }
-      return tierMap;
-    },
-    {}
-  );
-}
-
 async function loadPublicCatalog(locale: string, programType: string) {
   const supabase = createServerSupabasePublicClient();
   const courses = await getAllCourses(
     locale,
     programType ? { programType } : { excludeProgramTypes: ['mentorship'] }
   );
-  const courseIds = courses.map((course) => String(course.id));
-
-  const [{ data: packages, error: packagesError }, { data: packageCourses }, ratingMap, earlyBirdTierMap] = await Promise.all([
+  const [{ data: packages, error: packagesError }, { data: packageCourses }, ratingMap] = await Promise.all([
     supabase
       .from('myuni_packages')
       .select(PUBLIC_PACKAGE_COLUMNS)
@@ -161,8 +104,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
       .from('myuni_package_courses')
       .select(PUBLIC_PACKAGE_COURSES_COLUMNS)
       .order('order_index', { ascending: true }),
-    loadRatingMap(courseIds),
-    loadEarlyBirdTierMap(courseIds),
+    loadRatingMap(courses.map((course) => String(course.id))),
   ]);
 
   if (packagesError) {
@@ -170,19 +112,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
   }
 
   return {
-    courses: courses.map((course) => {
-      const tier = earlyBirdTierMap[String(course.id)];
-      if (!tier) return course;
-
-      return {
-        ...course,
-        price: Number(tier.price) || course.price,
-        originalPrice: tier.original_price == null ? null : Number(tier.original_price),
-        original_price: tier.original_price == null ? null : Number(tier.original_price),
-        early_bird_price: Number(tier.early_bird_price),
-        early_bird_deadline: tier.early_bird_deadline,
-      };
-    }),
+    courses,
     packages: (packages || []).map((pkg) => ({
       ...pkg,
       price: getPackageDisplayPrice(pkg),
@@ -196,7 +126,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v5'],
+  ['public-course-catalog-v6'],
   {
     revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [
