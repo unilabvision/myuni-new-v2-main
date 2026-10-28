@@ -6,6 +6,7 @@ import {
   PUBLIC_CACHE_TAGS,
 } from '@/lib/publicCache';
 import { createServerSupabasePublicClient } from '@/lib/supabase-server';
+import { getPackageDisplayPrice } from '@/lib/packagePresentation';
 
 type RatingSummaryRow = {
   course_id: string;
@@ -25,8 +26,25 @@ type EarlyBirdTierRow = {
   order_index: number | null;
 };
 
+type PublicPackageCourse = {
+  package_id: string;
+  myuni_courses: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    thumbnail_url?: string | null;
+    level?: string | null;
+  }>;
+};
+
 const PUBLIC_PACKAGE_COLUMNS = `
   id, slug, title, description, price, original_price, level, thumbnail_url, banner_url
+`;
+
+const PUBLIC_PACKAGE_COURSES_COLUMNS = `
+  package_id,
+  order_index,
+  myuni_courses (id, title, slug, thumbnail_url, level)
 `;
 
 const COURSE_CATALOG_CACHE_SECONDS = 6 * 60 * 60;
@@ -134,11 +152,15 @@ async function loadPublicCatalog(locale: string, programType: string) {
   );
   const courseIds = courses.map((course) => String(course.id));
 
-  const [{ data: packages, error: packagesError }, ratingMap, earlyBirdTierMap] = await Promise.all([
+  const [{ data: packages, error: packagesError }, { data: packageCourses }, ratingMap, earlyBirdTierMap] = await Promise.all([
     supabase
       .from('myuni_packages')
       .select(PUBLIC_PACKAGE_COLUMNS)
       .eq('is_active', true),
+    supabase
+      .from('myuni_package_courses')
+      .select(PUBLIC_PACKAGE_COURSES_COLUMNS)
+      .order('order_index', { ascending: true }),
     loadRatingMap(courseIds),
     loadEarlyBirdTierMap(courseIds),
   ]);
@@ -161,14 +183,20 @@ async function loadPublicCatalog(locale: string, programType: string) {
         early_bird_deadline: tier.early_bird_deadline,
       };
     }),
-    packages: packages || [],
+    packages: (packages || []).map((pkg) => ({
+      ...pkg,
+      price: getPackageDisplayPrice(pkg),
+      included_courses: (packageCourses || [])
+        .filter((relation: PublicPackageCourse) => relation.package_id === pkg.id)
+        .flatMap((relation: PublicPackageCourse) => relation.myuni_courses),
+    })),
     ratingMap,
   };
 }
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v4'],
+  ['public-course-catalog-v5'],
   {
     revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [

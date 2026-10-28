@@ -7,6 +7,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 import { formatDurationMinutes, resolveLessonDurationMinutes } from './durationFormat';
+import { getPackageDisplayPrice } from './packagePresentation';
 import {
   getUserCourseProgress as apiGetUserCourseProgress,
   getUserLessonProgress as apiGetUserLessonProgress,
@@ -446,7 +447,7 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
       name: data.title,
       title: data.title,
       description: data.description || '',
-      price: data.price || 0,
+      price: getPackageDisplayPrice(data),
       originalPrice: data.original_price || null,
       original_price: data.original_price || null,
       duration: data.duration || '',

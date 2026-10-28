@@ -35,6 +35,12 @@ interface PackageItem {
   level?: string;
   thumbnail_url?: string;
   banner_url?: string;
+  included_courses?: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    level?: string;
+  }>;
 }
 
 const texts = {
@@ -59,6 +65,7 @@ const texts = {
     tryDifferent: 'Arama ifadenizi veya seviye filtresini değiştirin.',
     reset: 'Filtreleri temizle',
     packageBadge: 'Eğitim paketi',
+    courseCount: 'eğitim içerir',
     free: 'Ücretsiz',
     allLevels: 'Tüm seviyeler',
     levelLabel: 'Seviye',
@@ -86,6 +93,7 @@ const texts = {
     tryDifferent: 'Try changing your search or level filter.',
     reset: 'Clear filters',
     packageBadge: 'Training package',
+    courseCount: 'courses included',
     free: 'Free',
     allLevels: 'All levels',
     levelLabel: 'Level',
@@ -338,6 +346,17 @@ function PackageCard({
           <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
             {description}
           </p>
+        ) : null}
+
+        {item.included_courses?.length ? (
+          <div className="mt-4 rounded-lg bg-neutral-50 px-3 py-3 dark:bg-neutral-800/70">
+            <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+              {item.included_courses.length} {t.courseCount}
+            </p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+              {item.included_courses.map((course) => course.title).join(' · ')}
+            </p>
+          </div>
         ) : null}
 
         <div className="mt-auto flex items-end justify-between gap-4 border-t border-neutral-100 pt-5 dark:border-neutral-800">
