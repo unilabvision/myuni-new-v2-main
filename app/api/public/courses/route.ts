@@ -14,6 +14,19 @@ type RatingSummaryRow = {
   rating_count: number | string;
 };
 
+type CourseTierEarlyBirdRow = {
+  course_id: string;
+  early_bird_price: number | string;
+  early_bird_deadline: string;
+  order_index: number | null;
+};
+
+type CourseTierEarlyBird = {
+  price: number;
+  deadline: string;
+  orderIndex: number;
+};
+
 type PublicPackageCourse = {
   package_id: string;
   myuni_courses: Array<{
@@ -89,13 +102,79 @@ async function loadRatingMapFallback(courseIds: string[]) {
   );
 }
 
+async function loadCourseTierEarlyBirdMap(
+  courses: Array<{ id: string | number; price: number }>
+) {
+  if (courses.length === 0) return {};
+
+  const supabase = createServerSupabasePublicClient();
+  const { data, error } = await supabase
+    .from('myuni_course_tiers')
+    .select('course_id, early_bird_price, early_bird_deadline, order_index')
+    .in('course_id', courses.map((course) => String(course.id)))
+    .eq('is_active', true)
+    .or('is_registration_open.is.null,is_registration_open.eq.true')
+    .or('is_full_course.is.null,is_full_course.eq.false')
+    .not('early_bird_price', 'is', null)
+    .gt('early_bird_deadline', new Date().toISOString());
+
+  if (error) {
+    console.error('[api/public/courses] Tier early-bird query failed:', error.message);
+    return {};
+  }
+
+  const coursePriceMap = Object.fromEntries(
+    courses.map((course) => [String(course.id), Number(course.price) || 0])
+  );
+
+  return ((data || []) as CourseTierEarlyBirdRow[]).reduce<
+    Record<string, CourseTierEarlyBird>
+  >((earlyBirdMap, tier) => {
+    const courseId = String(tier.course_id);
+    const candidate = {
+      price: Number(tier.early_bird_price),
+      deadline: tier.early_bird_deadline,
+      orderIndex: tier.order_index ?? Number.MAX_SAFE_INTEGER,
+    };
+    const current = earlyBirdMap[courseId];
+    const coursePrice = coursePriceMap[courseId] ?? 0;
+    const candidateDifference = Math.abs(candidate.price - coursePrice);
+    const currentDifference = current
+      ? Math.abs(current.price - coursePrice)
+      : Number.POSITIVE_INFINITY;
+
+    if (
+      !current ||
+      candidateDifference < currentDifference ||
+      (candidateDifference === currentDifference && candidate.orderIndex < current.orderIndex)
+    ) {
+      earlyBirdMap[courseId] = candidate;
+    }
+    return earlyBirdMap;
+  }, {});
+}
+
+function hasActiveCourseEarlyBird(course: {
+  early_bird_price?: number | null;
+  early_bird_deadline?: string | null;
+}) {
+  if (course.early_bird_price == null || !course.early_bird_deadline) return false;
+  const deadline = new Date(course.early_bird_deadline);
+  return Number.isFinite(deadline.getTime()) && deadline > new Date();
+}
+
 async function loadPublicCatalog(locale: string, programType: string) {
   const supabase = createServerSupabasePublicClient();
   const courses = await getAllCourses(
     locale,
     programType ? { programType } : { excludeProgramTypes: ['mentorship'] }
   );
-  const [{ data: packages, error: packagesError }, { data: packageCourses }, ratingMap] = await Promise.all([
+  const [
+    { data: packages, error: packagesError },
+    { data: packageCourses },
+    ratingMap,
+    tierEarlyBirdMap,
+  ] = await Promise.all([
     supabase
       .from('myuni_packages')
       .select(PUBLIC_PACKAGE_COLUMNS)
@@ -105,6 +184,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
       .select(PUBLIC_PACKAGE_COURSES_COLUMNS)
       .order('order_index', { ascending: true }),
     loadRatingMap(courses.map((course) => String(course.id))),
+    loadCourseTierEarlyBirdMap(courses),
   ]);
 
   if (packagesError) {
@@ -112,7 +192,16 @@ async function loadPublicCatalog(locale: string, programType: string) {
   }
 
   return {
-    courses,
+    courses: courses.map((course) => {
+      const tierEarlyBird = tierEarlyBirdMap[String(course.id)];
+      if (!tierEarlyBird || hasActiveCourseEarlyBird(course)) return course;
+
+      return {
+        ...course,
+        early_bird_price: tierEarlyBird.price,
+        early_bird_deadline: tierEarlyBird.deadline,
+      };
+    }),
     packages: (packages || []).map((pkg) => ({
       ...pkg,
       price: getPackageDisplayPrice(pkg),
@@ -126,7 +215,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v6'],
+  ['public-course-catalog-v7'],
   {
     revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [
