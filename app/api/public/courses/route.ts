@@ -235,7 +235,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v8-multidb'],
+  ['public-course-catalog-v10-course-images'],
   {
     revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [

@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Play } from 'lucide-react';
-import supabase from '../../../../../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getLearningSupabaseClient();
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 

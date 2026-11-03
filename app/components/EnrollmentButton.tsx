@@ -6,7 +6,9 @@ import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingCart, Play, Check, Shield } from 'lucide-react';
-import supabase from '../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getLearningSupabaseClient();
 
 interface EnrollmentButtonProps {
   courseId: string;

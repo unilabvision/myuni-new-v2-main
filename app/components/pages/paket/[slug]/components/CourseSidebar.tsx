@@ -5,7 +5,9 @@ import { Clock, Play, Info, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
-import supabase from '../../../../../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getLearningSupabaseClient();
 import AddToCartButton from '../../../../cart/AddToCartButton';
 
 interface Course {

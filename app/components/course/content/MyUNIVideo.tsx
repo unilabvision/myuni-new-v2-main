@@ -3,7 +3,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, RotateCcw, CheckCircle, AlertCircle, ArrowRight, Repeat } from 'lucide-react';
-import supabase from '../../../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getLearningSupabaseClient();
 import { getUserLessonProgress, updateUserProgress } from '@/lib/progressApi';
 
 // Tip tanımlamaları

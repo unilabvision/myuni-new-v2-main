@@ -13,14 +13,19 @@ function hasValidWebhookSecret(request: NextRequest): boolean {
   if (!received) return false;
 
   const receivedBuffer = Buffer.from(received);
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKeys = [
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_IDENTITY_SECRET_KEY,
+    process.env.SUPABASE_LEARNING_SECRET_KEY,
+    process.env.SUPABASE_FORMS_SECRET_KEY,
+  ].filter((key): key is string => Boolean(key));
   const expectedSecrets = [
     process.env.CACHE_REVALIDATION_SECRET,
-    serviceRoleKey
-      ? createHash('sha256')
-          .update(`myuni-cache-revalidation:${serviceRoleKey}`)
-          .digest('hex')
-      : undefined,
+    ...serviceRoleKeys.map((serviceRoleKey) =>
+      createHash('sha256')
+        .update(`myuni-cache-revalidation:${serviceRoleKey}`)
+        .digest('hex'),
+    ),
   ].filter((secret): secret is string => Boolean(secret));
 
   return expectedSecrets.some((expected) => {

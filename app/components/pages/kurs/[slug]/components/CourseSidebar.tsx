@@ -5,11 +5,13 @@ import { Clock, Play, Info, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
-import supabase from '../../../../../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
 import AddToCartButton from '../../../../cart/AddToCartButton';
 import CourseTierSelector from './CourseTierSelector';
 import { getCourseTiers } from '@/lib/courseService';
 import type { CourseTier } from '@/lib/types/tier';
+
+const supabase = getLearningSupabaseClient();
 
 interface Course {
   id: string;

@@ -9,7 +9,10 @@ import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, ExternalLink, X, Shield, ShoppingBag } from 'lucide-react';
-import supabase from '../../_services/supabaseClient.js';
+import {
+  getIdentitySupabaseClient,
+  getLearningSupabaseClient,
+} from '@/lib/supabase/databases';
 import { useCart, getActivePrice as getCartItemActivePrice } from '../../context/CartContext';
 import { itemMatchesApplicableCourses } from '@/lib/discountRestrictions';
 import LegalConsentFields, {
@@ -17,6 +20,9 @@ import LegalConsentFields, {
   type LegalConsentValues,
   type LegalConsentErrors,
 } from '@/app/components/forms/LegalConsentFields';
+
+const identitySupabase = getIdentitySupabaseClient();
+const learningSupabase = getLearningSupabaseClient();
 
 interface CheckoutPageProps {
   params: Promise<{
@@ -356,7 +362,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     try {
       setPageLoading(true);
       
-      const { data, error: supabaseError } = await supabase
+      const { data, error: supabaseError } = await learningSupabase
         .from('myuni_courses')
         .select('*')
         .eq('id', courseId)
@@ -373,7 +379,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
       setCourseData(data as CourseData);
 
       // Tier'lı kurslarda doğrudan full-course checkout'u engelle
-      const { count } = await supabase
+      const { count } = await learningSupabase
         .from('myuni_course_tiers')
         .select('id', { count: 'exact', head: true })
         .eq('course_id', courseId)
@@ -398,7 +404,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
     try {
       setPageLoading(true);
 
-      const { data: tier, error: tierError } = await supabase
+      const { data: tier, error: tierError } = await learningSupabase
         .from('myuni_course_tiers')
         .select('*')
         .eq('id', selectedTierId)
@@ -413,7 +419,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
         return;
       }
 
-      const { data: course, error: courseError } = await supabase
+      const { data: course, error: courseError } = await learningSupabase
         .from('myuni_courses')
         .select('id, title, thumbnail_url, slug, is_active')
         .eq('id', courseId)
@@ -453,7 +459,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const fetchProductData = useCallback(async (productId: string) => {
     try {
       setPageLoading(true);
-      const { data, error: supabaseError } = await supabase
+      const { data, error: supabaseError } = await identitySupabase
         .from('myuni_products')
         .select('id, title, price, original_price, thumbnail_url, slug, description, short_description')
         .eq('id', productId)
@@ -488,7 +494,7 @@ function CheckoutContent({ params }: CheckoutPageProps) {
   const fetchPackageData = useCallback(async (packageId: string) => {
     try {
       setPageLoading(true);
-      const { data, error: supabaseError } = await supabase
+      const { data, error: supabaseError } = await learningSupabase
         .from('myuni_packages')
         .select('id, title, price, original_price, thumbnail_url, slug, description')
         .eq('id', packageId)

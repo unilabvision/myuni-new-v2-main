@@ -14,8 +14,10 @@
     "media:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-supabase-media.mjs",
     "storage:upload": "node --env-file-if-exists=.env.local scripts/upload-supabase-bucket.mjs",
     "storage:rewrite-urls": "node --env-file-if-exists=.env.local scripts/rewrite-supabase-storage-urls.mjs",
+    "healthcheck:production": "node scripts/production-healthcheck.mjs",
     "gift:product": "node --env-file-if-exists=.env.local scripts/grant-product-gifts.mjs",
     "test:membership-expiry": "node lib/membershipTime.test.mjs",
+    "test:supabase-routing": "node --test lib/supabase/tableDatabase.test.mjs",
     "start": "next start",
     "lint": "next lint"
   },

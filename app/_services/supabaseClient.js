@@ -1,27 +1,10 @@
 // app/_services/supabaseClient.js
-import { createClient } from '@supabase/supabase-js';
+// Legacy imports still use this module. Keep them multi-database safe instead
+// of silently sending every table to the identity project.
+import { getPublicSupabaseClient } from '../../lib/supabase/databases';
+import { createRoutedSupabaseClient } from '../../lib/supabase/routedClient';
 
-// Supabase bağlantısı için gerekli bilgiler
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env.local file.');
-}
-
-// Supabase istemcisi
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  }
-});
+const supabase = createRoutedSupabaseClient(getPublicSupabaseClient);
 
 // Database helper functions
 export const dbHelpers = {

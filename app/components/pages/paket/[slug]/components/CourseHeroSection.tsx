@@ -3,7 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, RotateCcw, CheckCircle, RotateCcw as Replay } from 'lucide-react';
-import supabase from '../../../../../_services/supabaseClient';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getLearningSupabaseClient();
 
 // Use the existing global types from your global.d.ts file
 type VimeoPlayer = import('../../../../../types/global').VimeoPlayer;
