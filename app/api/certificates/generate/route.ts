@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
+import { buildTrustedCertificateData } from '@/lib/certificatePolicy';
 import { generateCertificate } from '@/lib/certificateService';
 
 /**
@@ -22,22 +23,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'itemId is required' }, { status: 400 });
     }
 
-    const user = itemType === 'event' ? await currentUser() : null;
+    const user = await currentUser();
     const verifiedUserEmail = user?.primaryEmailAddress?.emailAddress;
     const verifiedUserName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
+    const table = itemType === 'event' ? 'myuni_events' : 'myuni_courses';
+    const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
+    const { data: item, error: itemError } = await supabaseAdmin
+      .from(table)
+      .select(
+        itemType === 'event'
+          ? 'id, title, organizer_name, duration'
+          : 'id, title, instructor_name, instructor_description, duration',
+      )
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (itemError || !item) {
+      return NextResponse.json({ success: false, error: 'Certificate item not found' }, { status: 404 });
+    }
+
+    const itemRecord = item as unknown as Record<string, unknown>;
     const data = await generateCertificate(
-      {
+      buildTrustedCertificateData({
         userId,
         itemId,
         itemType,
-        itemName: String(body.itemName || ''),
-        instructorName: String(body.instructorName || ''),
-        duration: String(body.duration || ''),
-        organization: String(body.organization || ''),
-        organizationDescription: String(body.organizationDescription || ''),
-        instructorBio: String(body.instructorBio || ''),
-        userFullName: verifiedUserName || (body.userFullName ? String(body.userFullName) : undefined),
-      },
+        item: itemRecord,
+        verifiedUserName,
+      }),
       verifiedUserEmail
     );
 

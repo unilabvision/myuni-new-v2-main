@@ -5,6 +5,7 @@ import { supabaseAdmin as supabase } from './supabaseAdmin';
 import { getSiteApplicationsSupabase } from './supabaseSiteApplications';
 import { siteApplicationsDb } from './siteApplications/config';
 import { getCertificatePrice, parsePackageSettings } from './siteApplications/packages';
+import { hasUserCourseAccess } from './courseAccess';
 
 export interface CertificateData {
   userId: string;
@@ -512,6 +513,25 @@ async function checkItemCertificateEligibility(userId: string, itemId: string, i
       }
     } catch {
       // Ignore certificate check errors
+    }
+
+    const hasCourseAccess = await hasUserCourseAccess({
+      userId,
+      courseId: itemId,
+      capability: 'certificate',
+    });
+    if (!hasCourseAccess) {
+      return {
+        isEligible: false,
+        completedLessons: 0,
+        totalLessons: 0,
+        completedQuizzes: 0,
+        totalQuizzes: 0,
+        averageQuizScore: 0,
+        missingRequirements: ['Aktif kurs erişimi veya sertifika yetkisi gerekli'],
+        hasException: false,
+        completionPercentage: 0,
+      };
     }
 
     // Kurs derslerini ve kullanıcı ilerlemesini al

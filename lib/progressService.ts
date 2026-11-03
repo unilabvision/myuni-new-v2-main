@@ -247,6 +247,9 @@ export async function saveQuizResult(
     .single();
 
   if (quickError) throw quickError;
+  if (!quickData || String(quickData.lesson_id) !== lessonId) {
+    throw new Error('Quiz does not belong to the requested lesson');
+  }
 
   const configData = (quickData?.config as Record<string, unknown>) || {};
   const passingScore = (configData.passing_score as number) || 70;
