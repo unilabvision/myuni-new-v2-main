@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState, Suspense, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { CheckCircle, ArrowRight, Play, BookOpen, ShoppingBag, Folder } from 'lucide-react';
 import supabase from '../../_services/supabaseClient';
@@ -97,7 +96,6 @@ function decodeUrlString(str: string): string {
 function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, isLoaded } = useUser();
   const { clearCart } = useCart();
 
   // Ödeme başarılı olduğu için sepeti temizle
@@ -117,7 +115,6 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
   const isMembership = itemType === 'membership_pass';
   const isEventApplication = itemType === 'event_application';
   const eventSlugParam = searchParams.get('eventSlug') || '';
-  const applicationIdParam = searchParams.get('applicationId') || '';
   
   // Cart Mode fields
   const isCartMode = searchParams.get('cartMode') === 'true';
@@ -238,13 +235,13 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
 
   useEffect(() => {
     if (isEventApplication) return;
-    if (isLoaded && !user) {
-      router.push(`/${locale}/login`);
-    }
+    // Keep the result page visible even if Clerk briefly restores the session
+    // after the cross-site Iyzico return. Protected destination links already
+    // preserve their own URL through middleware when sign-in is actually needed.
     if (!isCartMode && !courseId && !orderIdParam) {
       router.push(`/${locale}/${locale === 'tr' ? 'kurs' : 'course'}`);
     }
-  }, [isLoaded, user, courseId, orderIdParam, isCartMode, isEventApplication, router, locale]);
+  }, [courseId, orderIdParam, isCartMode, isEventApplication, router, locale]);
 
   if (isEventApplication) {
     const eventHref = eventSlugParam
@@ -323,7 +320,7 @@ function PaymentSuccessContent({ params }: PaymentSuccessPageProps) {
     );
   }
 
-  if (!isLoaded || (loadingItem && !isCartMode) || resolvingOrder || (!isCartMode && !courseId && !orderIdParam)) {
+  if ((loadingItem && !isCartMode) || resolvingOrder || (!isCartMode && !courseId && !orderIdParam)) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-900 flex items-center justify-center">
         <div className="p-8 max-w-md w-full mx-auto">
