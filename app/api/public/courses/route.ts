@@ -29,13 +29,19 @@ type CourseTierEarlyBird = {
 
 type PublicPackageCourse = {
   package_id: string;
-  myuni_courses: Array<{
+  myuni_courses: {
     id: string;
     title: string;
     slug: string;
     thumbnail_url?: string | null;
     level?: string | null;
-  }>;
+  } | Array<{
+    id: string;
+    title: string;
+    slug: string;
+    thumbnail_url?: string | null;
+    level?: string | null;
+  }> | null;
 };
 
 const PUBLIC_PACKAGE_COLUMNS = `
@@ -191,12 +197,18 @@ async function loadPublicCatalog(locale: string, programType: string) {
     console.error('[api/public/courses] Package query failed:', packagesError.message);
   }
 
+  type IncludedCourse = Exclude<PublicPackageCourse['myuni_courses'], null | unknown[]>;
   const coursesByPackageId = ((packageCourses || []) as PublicPackageCourse[]).reduce<
-    Record<string, PublicPackageCourse['myuni_courses']>
+    Record<string, IncludedCourse[]>
   >((groupedCourses, relation) => {
+    const relatedCourses = Array.isArray(relation.myuni_courses)
+      ? relation.myuni_courses
+      : relation.myuni_courses
+        ? [relation.myuni_courses]
+        : [];
     groupedCourses[relation.package_id] = [
       ...(groupedCourses[relation.package_id] || []),
-      ...relation.myuni_courses,
+      ...relatedCourses,
     ];
     return groupedCourses;
   }, {});

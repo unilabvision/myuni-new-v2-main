@@ -140,7 +140,7 @@ const COURSE_CONTENT_SUMMARY_COLUMNS = `
 
 type LessonDurationSection = {
   course_id?: string | number;
-  myuni_lessons?: Array<{ duration?: string | number | null }> | null;
+  myuni_course_lessons?: Array<{ duration_minutes?: string | number | null }> | null;
 };
 
 type PackageCourse = Record<string, unknown> & {
@@ -164,8 +164,8 @@ function parseLessonDuration(value: string | number | null | undefined): number 
 
 function calculateLessonMinutes(sections: LessonDurationSection[]): number {
   return sections
-    .flatMap((section) => section.myuni_lessons || [])
-    .reduce((total, lesson) => total + parseLessonDuration(lesson.duration), 0);
+    .flatMap((section) => section.myuni_course_lessons || [])
+    .reduce((total, lesson) => total + parseLessonDuration(lesson.duration_minutes), 0);
 }
 
 function formatCalculatedDuration(totalMinutes: number): string {
@@ -184,8 +184,8 @@ async function loadPackageCourseDurations(courses: PackageCourse[]) {
   if (missingDuration.length === 0) return durationByCourseId;
 
   const { data: sections, error } = await supabase
-    .from('myuni_sections')
-    .select('course_id, myuni_lessons(duration)')
+    .from('myuni_course_sections')
+    .select('course_id, myuni_course_lessons(duration_minutes)')
     .in('course_id', missingDuration.map((course) => course.id));
 
   if (error) throw error;

@@ -270,10 +270,7 @@ export async function getUserEnrollments(userId: string): Promise<UserEnrollment
 
     const { data, error } = await supabase
       .from('myuni_enrollments')
-      .select(`
-        *,
-        course:myuni_courses(*)
-      `)
+      .select('*')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('enrolled_at', { ascending: false });
@@ -283,7 +280,23 @@ export async function getUserEnrollments(userId: string): Promise<UserEnrollment
       return [];
     }
 
-    return (data as UserEnrollmentWithCourse[]) || [];
+    const courseIds = [...new Set((data || []).map((row) => row.course_id as string))];
+    const { data: courses, error: coursesError } = courseIds.length
+      ? await supabase.from('myuni_courses').select('*').in('id', courseIds)
+      : { data: [], error: null };
+
+    if (coursesError) {
+      console.error('Error fetching enrollment courses:', coursesError);
+      return [];
+    }
+
+    const coursesById = new Map((courses || []).map((course) => [course.id as string, course]));
+    return (data || [])
+      .map((enrollment) => ({
+        ...enrollment,
+        course: coursesById.get(enrollment.course_id as string),
+      }))
+      .filter((row) => row.course) as UserEnrollmentWithCourse[];
   } catch (error) {
     console.error('Unexpected error fetching enrollments:', error);
     return [];

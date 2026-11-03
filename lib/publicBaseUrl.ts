@@ -23,6 +23,15 @@ function isLocalUrl(value: string): boolean {
   }
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function isProductionRuntime(): boolean {
   return (
     process.env.NODE_ENV === 'production' ||
@@ -63,10 +72,15 @@ export function resolvePublicBaseUrl(request?: Request): string {
 
   // ---- Production: never return a local origin ----
   if (isProductionRuntime()) {
-    if (envBase && !isLocalUrl(envBase)) {
+    if (envBase && isHttpUrl(envBase) && !isLocalUrl(envBase)) {
       return envBase;
     }
-    if (envBase && isLocalUrl(envBase)) {
+    if (envBase && !isHttpUrl(envBase)) {
+      console.error(
+        '[publicBaseUrl] CRITICAL: NEXT_PUBLIC_BASE_URL is not a valid HTTP(S) URL — using',
+        PRODUCTION_FALLBACK
+      );
+    } else if (envBase && isLocalUrl(envBase)) {
       console.error(
         '[publicBaseUrl] CRITICAL: NEXT_PUBLIC_BASE_URL points at a local host in production — using',
         PRODUCTION_FALLBACK
@@ -90,8 +104,16 @@ export function resolvePublicBaseUrl(request?: Request): string {
   }
 
   // Then .env.local (may be local or a tunnel URL).
-  if (envBase) {
+  if (envBase && isHttpUrl(envBase)) {
     return envBase;
+  }
+
+  if (envBase) {
+    console.error(
+      '[publicBaseUrl] NEXT_PUBLIC_BASE_URL is not a valid HTTP(S) URL outside production; using',
+      PRODUCTION_FALLBACK
+    );
+    return PRODUCTION_FALLBACK;
   }
 
   // No env and no request host — refuse to invent a local default that could

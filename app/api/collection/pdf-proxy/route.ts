@@ -74,18 +74,32 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  // 3. İçeriği (PDF) getir ve stream et
+  // 3. İçeriği private Storage'dan getir ve stream et. Eski public URL biçimi de
+  // geçiş süresince desteklenir; istemciye doğrudan Storage URL'si verilmez.
   try {
-    const response = await fetch(product.product_content);
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch from original source');
+    let bucket = '';
+    let objectPath = '';
+    if (product.product_content.includes('::')) {
+      [bucket, objectPath] = product.product_content.split(/::(.+)/);
+    } else {
+      const storageUrl = new URL(product.product_content);
+      const match = storageUrl.pathname.match(
+        /^\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/,
+      );
+      if (!match) throw new Error('Unsupported product storage reference');
+      bucket = decodeURIComponent(match[1]);
+      objectPath = decodeURIComponent(match[2]);
     }
 
+    const { data: pdf, error: downloadError } = await supabaseAdmin.storage
+      .from(bucket)
+      .download(objectPath);
+    if (downloadError || !pdf) throw downloadError || new Error('Product file missing');
+
     // PDF içeriğini doğrudan stream olarak döndürüyoruz
-    return new NextResponse(response.body, {
+    return new NextResponse(pdf.stream(), {
       headers: {
-        'Content-Type': response.headers.get('Content-Type') || 'application/pdf',
+        'Content-Type': pdf.type || 'application/pdf',
         // İndirmeyi zorlamak yerine tarayıcıda göstermek için inline, 
         // ayrıca gerçek dosya adını gizleyerek sahte bir isim veriyoruz.
         'Content-Disposition': 'inline; filename="document.pdf"',

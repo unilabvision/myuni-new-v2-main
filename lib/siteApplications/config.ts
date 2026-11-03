@@ -17,7 +17,7 @@ export const SITE_APPLICATION_FILE_RETENTION_DAYS = 30;
 export const SITE_APPLICATION_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_SITE_APPLICATIONS_BUCKET ||
   process.env.NEXT_PUBLIC_INTERNSHIP_CV_BUCKET ||
-  'myunilab';
+  'site-application-attachments';
 
 export const SITE_APPLICATION_STORAGE_FOLDER = 'site-applications';
 

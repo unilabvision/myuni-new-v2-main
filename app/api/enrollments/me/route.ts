@@ -62,12 +62,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from('myuni_enrollments')
-      .select(
-        `
-        *,
-        course:myuni_courses(*)
-      `
-      )
+      .select('*')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('enrolled_at', { ascending: false });
@@ -77,7 +72,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data: data || [] });
+    const courseIds = [...new Set((data || []).map((row) => row.course_id as string))];
+    const { data: courses, error: courseError } = courseIds.length
+      ? await supabaseAdmin.from('myuni_courses').select('*').in('id', courseIds)
+      : { data: [], error: null };
+
+    if (courseError) {
+      console.error('Enrollment course list error:', courseError);
+      return NextResponse.json({ success: false, error: courseError.message }, { status: 500 });
+    }
+
+    const coursesById = new Map((courses || []).map((course) => [course.id as string, course]));
+    const enrollments = (data || []).map((enrollment) => ({
+      ...enrollment,
+      course: coursesById.get(enrollment.course_id as string) || null,
+    }));
+
+    return NextResponse.json({ success: true, data: enrollments });
   } catch (error) {
     console.error('GET /api/enrollments/me error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });

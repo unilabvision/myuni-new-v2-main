@@ -1,11 +1,11 @@
 import 'server-only';
-import { getIdentityAdminClient } from './supabase/adminDatabases';
+import { getAdminSupabaseClient } from './supabase/adminDatabases';
+import { createRoutedSupabaseClient } from './supabase/routedClient';
 
 /**
- * Server-side Supabase client.
- *
- * Uses the IDENTITY secret key so server-only routes can reliably operate
- * behind RLS. Legacy primary/service-role variables remain a migration fallback.
+ * Server-side compatibility client that routes table and RPC calls to the
+ * Identity, Learning, or Forms project. Explicit storage clients are used by
+ * routes whose bucket name exists in more than one project.
  */
-export const supabaseAdmin = getIdentityAdminClient();
+export const supabaseAdmin = createRoutedSupabaseClient(getAdminSupabaseClient);
 

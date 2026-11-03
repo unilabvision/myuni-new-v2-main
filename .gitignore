@@ -38,12 +38,10 @@ scripts/.media-migrations/
 storage-migration-reports/
 storage-backups/
 
-# Local migration notes and helper scripts
+# Local migration notes
 /docs/clerk-r2-vercel-setup.md
 /docs/db1-identity-optimization.sql
 /docs/db2-learning-optimization.sql
 /docs/db3-forms-optimization.sql
 /docs/supabase-multi-database.md
 /docs/supabase-storage-migration.md
-/scripts/rewrite-supabase-storage-urls.mjs
-/scripts/upload-supabase-bucket.mjs

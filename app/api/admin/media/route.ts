@@ -7,11 +7,12 @@ import {
   RESPONSIVE_IMAGE_WIDTHS,
   validateImageUpload,
 } from '@/lib/media/imageOptimization';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 
 export const runtime = 'nodejs';
 
 const MEDIA_BUCKET = process.env.MEDIA_STORAGE_BUCKET || 'myunilab';
+const supabaseAdmin = getLearningAdminClient();
 
 class StorageUploadError extends Error {}
 

@@ -1,10 +1,8 @@
 // lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
+import { getPublicSupabaseClient } from './supabase/databases'
+import { createRoutedSupabaseClient } from './supabase/routedClient'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createRoutedSupabaseClient(getPublicSupabaseClient)
 
 // Database types
 export interface Course {

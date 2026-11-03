@@ -3,14 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { User, Linkedin, Mail, Lock, Edit2, Trash2, X, Check } from 'lucide-react';
 import Image from 'next/image';
-import { createClient } from '@supabase/supabase-js';
 import { useUser } from '@clerk/nextjs';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
 
-// Supabase client'ı oluşturun
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = getLearningSupabaseClient();
 
 interface CourseObjective {
   id: string;

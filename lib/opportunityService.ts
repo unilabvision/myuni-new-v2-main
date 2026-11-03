@@ -22,12 +22,12 @@ async function getUserCompletedCourses(
   const [enrollmentsRes, certificatesRes, courseTagsRes] = await Promise.all([
     supabaseAdmin
       .from('myuni_enrollments')
-      .select('course_id, progress_percentage, course:myuni_courses(id, title)')
+      .select('course_id, progress_percentage')
       .eq('user_id', userId)
       .eq('is_active', true),
     supabaseAdmin
       .from('myuni_certificates')
-      .select('course_id, course:myuni_courses(id, title)')
+      .select('course_id')
       .eq('user_id', userId)
       .eq('is_active', true),
     supabaseAdmin.from('myuni_course_career_tags').select('course_id, tag_id'),
@@ -35,6 +35,16 @@ async function getUserCompletedCourses(
 
   const certifiedIds = new Set(
     (certificatesRes.data || []).map((r) => r.course_id as string)
+  );
+  const allCourseIds = [...new Set([
+    ...(enrollmentsRes.data || []).map((row) => row.course_id as string),
+    ...certifiedIds,
+  ])];
+  const { data: courses } = allCourseIds.length
+    ? await supabaseAdmin.from('myuni_courses').select('id, title').in('id', allCourseIds)
+    : { data: [] };
+  const coursesById = new Map(
+    (courses || []).map((course) => [course.id as string, course.title as string])
   );
 
   const completedCourseIds = new Set<string>();
@@ -62,10 +72,9 @@ async function getUserCompletedCourses(
     const courseId = row.course_id as string;
     if (!completedCourseIds.has(courseId) || seen.has(courseId)) continue;
     seen.add(courseId);
-    const course = row.course as { id: string; title: string } | null;
     result.push({
       course_id: courseId,
-      course_title: course?.title || '',
+      course_title: coursesById.get(courseId) || '',
       tag_ids: tagsByCourse.get(courseId) || [],
     });
   }
@@ -74,10 +83,9 @@ async function getUserCompletedCourses(
     const courseId = row.course_id as string;
     if (!completedCourseIds.has(courseId) || seen.has(courseId)) continue;
     seen.add(courseId);
-    const course = row.course as { id: string; title: string } | null;
     result.push({
       course_id: courseId,
-      course_title: course?.title || '',
+      course_title: coursesById.get(courseId) || '',
       tag_ids: tagsByCourse.get(courseId) || [],
     });
   }

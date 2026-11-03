@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { unstable_cache } from 'next/cache';
 import { NextResponse } from 'next/server';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getMembershipEntitlementAccess } from '@/lib/membershipAccess';
 
@@ -21,11 +22,12 @@ type NoteRow = {
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_CACHE_SECONDS = 55 * 60;
+const learningSupabase = getLearningAdminClient();
 
 const getCachedSignedStorageUrl = unstable_cache(
   async (bucket: string, path: string, downloadName: string) => {
     const options = downloadName ? { download: downloadName } : undefined;
-    const { data, error } = await supabaseAdmin.storage
+    const { data, error } = await learningSupabase.storage
       .from(bucket)
       .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, options);
 
