@@ -1,5 +1,7 @@
 import 'server-only';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getFormsAdminClient } from '@/lib/supabase/adminDatabases';
+
+const supabaseAdmin = getFormsAdminClient();
 
 export type MentorshipMode = 'online' | 'hybrid' | 'onsite';
 export type MentorshipType =

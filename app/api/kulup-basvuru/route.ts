@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
+import { getFormsAdminClient } from '@/lib/supabase/adminDatabases';
 import { sendClubApplicationConfirmationEmail, sendNewClubApplicationNotificationEmail } from '@/app/email_enrolment_services/kulupApplicationEmailService.js';
 import {
   assertLegalConsent,
   buildLegalConsentSnapshot,
 } from '@/lib/legalConsent';
+
+const supabase = getFormsAdminClient();
 
 export async function POST(request: NextRequest) {
   try {

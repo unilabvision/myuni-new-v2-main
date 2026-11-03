@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const CONFIGURED_SUPABASE_HOSTS = [
+  process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL,
+].flatMap((url) => {
+  if (!url) return [];
+  try {
+    return [new URL(url).hostname];
+  } catch {
+    return [];
+  }
+});
+
 const ALLOWED_HOSTS = new Set([
   'emfvwpztyuykqtepnsfp.supabase.co',
   'ghuellgktqqzpryuyiky.supabase.co',
+  ...CONFIGURED_SUPABASE_HOSTS,
 ]);
 
 const CACHE_CONTROL =

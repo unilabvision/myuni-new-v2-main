@@ -1,10 +1,12 @@
 // app/api/course-comments/route.ts
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { sendCommentNotifications } from '@/app/_services/commentNotificationService';
 import { PUBLIC_CACHE_TAGS } from '@/lib/publicCache';
+
+const supabase = getLearningAdminClient();
 
 // Helper: anonymize full name -> initials like "Y.P."
 function toInitials(firstName?: string | null, lastName?: string | null): string {

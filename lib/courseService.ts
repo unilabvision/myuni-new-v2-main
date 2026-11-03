@@ -1,11 +1,8 @@
 // lib/courseService.ts - Complete Fixed Version
 
-import { createClient } from '@supabase/supabase-js';
+import { getLearningSupabaseClient } from './supabase/databases';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = getLearningSupabaseClient();
 import { formatDurationMinutes, resolveLessonDurationMinutes } from './durationFormat';
 import { getPackageDisplayPrice } from './packagePresentation';
 import {
@@ -142,7 +139,18 @@ const COURSE_CONTENT_SUMMARY_COLUMNS = `
 `;
 
 type LessonDurationSection = {
+  course_id?: string | number;
   myuni_lessons?: Array<{ duration?: string | number | null }> | null;
+};
+
+type PackageCourse = Record<string, unknown> & {
+  id: string | number;
+  duration?: string | null;
+  course_type?: string | null;
+};
+
+type PackageCourseRelation = {
+  myuni_courses: PackageCourse | null;
 };
 
 function parseLessonDuration(value: string | number | null | undefined): number {
@@ -165,6 +173,41 @@ function formatCalculatedDuration(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}sa${minutes > 0 ? ` ${minutes}dk` : ''}`;
+}
+
+async function loadPackageCourseDurations(courses: PackageCourse[]) {
+  const missingDuration = courses.filter(
+    (course) =>
+      (!course.duration || course.duration.trim() === '') && course.course_type === 'online'
+  );
+  const durationByCourseId = new Map<string, string>();
+  if (missingDuration.length === 0) return durationByCourseId;
+
+  const { data: sections, error } = await supabase
+    .from('myuni_sections')
+    .select('course_id, myuni_lessons(duration)')
+    .in('course_id', missingDuration.map((course) => course.id));
+
+  if (error) throw error;
+
+  const sectionsByCourse = new Map<string, LessonDurationSection[]>();
+  for (const section of sections || []) {
+    const courseId = String(section.course_id);
+    const groupedSections = sectionsByCourse.get(courseId) || [];
+    groupedSections.push(section as LessonDurationSection);
+    sectionsByCourse.set(courseId, groupedSections);
+  }
+
+  for (const course of missingDuration) {
+    const totalMinutes = calculateLessonMinutes(
+      sectionsByCourse.get(String(course.id)) || []
+    );
+    if (totalMinutes > 0) {
+      durationByCourseId.set(String(course.id), formatCalculatedDuration(totalMinutes));
+    }
+  }
+
+  return durationByCourseId;
 }
 
 // ========================================
@@ -310,17 +353,6 @@ export async function getCourseBySlug(slug: string, locale: string = 'tr') {
     if (error) throw error;
     if (!data) return null;
 
-    // Debug veritabanından gelen veriyi konsola yazdır - Her zaman göster
-    console.log('=== DATABASE COURSE DATA ===');
-    console.log('Raw course data from database:', data);
-    console.log('Course duration from DB:', data.duration);
-    console.log('Course type from DB:', data.course_type);
-    console.log('Course ID from DB:', data.id);
-    console.log('Course title from DB:', data.title);
-    console.log('Early bird price from DB:', data.early_bird_price);
-    console.log('Early bird deadline from DB:', data.early_bird_deadline);
-    console.log('All keys in data:', Object.keys(data));
-
     const sections = await getCourseSections(data.id);
 
     return {
@@ -414,30 +446,17 @@ export async function getPackageBySlug(slug: string, locale: string = 'tr') {
       .eq('package_id', data.id)
       .order('order_index', { ascending: true });
       
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const coursesList: any[] = [];
+    const coursesList: PackageCourse[] = [];
     if (!pcError && packageCourses) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawCourses = packageCourses.map((pc: any) => pc.myuni_courses).filter(Boolean);
+      const rawCourses = (packageCourses as unknown as PackageCourseRelation[])
+        .map((relation) => relation.myuni_courses)
+        .filter((course): course is PackageCourse => Boolean(course));
       
-      // Her kurs için sections/lessons çekip süre hesapla
+      const durationByCourseId = await loadPackageCourseDurations(rawCourses);
+
       for (const course of rawCourses) {
-        let calculatedDuration = course.duration || '';
-        
-        // Eğer kurs online ise ve duration boşsa, sections/lessons'dan hesapla
-        if ((!calculatedDuration || calculatedDuration.trim() === '') && course.course_type === 'online') {
-          const { data: sections } = await supabase
-            .from('myuni_sections')
-            .select('id, myuni_lessons(duration)')
-            .eq('course_id', course.id);
-          
-          const totalMinutes = calculateLessonMinutes(
-            (sections || []) as LessonDurationSection[]
-          );
-          if (totalMinutes > 0) calculatedDuration = formatCalculatedDuration(totalMinutes);
-        }
-        
-        coursesList.push({ ...course, duration: calculatedDuration || course.duration || '' });
+        const calculatedDuration = durationByCourseId.get(String(course.id)) || course.duration;
+        coursesList.push({ ...course, duration: calculatedDuration || '' });
       }
     }
 

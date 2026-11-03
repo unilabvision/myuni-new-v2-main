@@ -1,8 +1,13 @@
 // app/api/search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-// Import Supabase with proper ES modules syntax
-import { supabase as supabaseClient } from '@/lib/supabase';
+import {
+  getFormsSupabaseClient,
+  getLearningSupabaseClient,
+} from '@/lib/supabase/databases';
+
+const blogSupabase = getFormsSupabaseClient();
+const learningSupabase = getLearningSupabaseClient();
 
 // Define proper types for database entities
 interface BlogPostDb {
@@ -106,6 +111,135 @@ const formatDateEnglish = (dateStr: string): string => {
   }
 };
 
+
+function formatSearchDate(date: string, locale: string): string {
+  return locale === 'tr' ? formatDateTurkish(date) : formatDateEnglish(date);
+}
+
+function getPlainTextFromRichText(richText: string | null, locale: string): string {
+  const fallback =
+    locale === 'tr' ? 'Eğitim açıklaması mevcut değil.' : 'Course description not available.';
+  if (!richText) return fallback;
+
+  const plainText = richText
+    .replace(/<style[^>]*>.*?<\/style>/gi, '')
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&hellip;/g, '...')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!plainText) return fallback;
+  return plainText.length > 200 ? `${plainText.slice(0, 200)}...` : plainText;
+}
+
+function mapBlogResult(post: BlogPostDb, locale: string): SearchResultItem {
+  return {
+    id: post.post_id,
+    title: post.title,
+    excerpt: post.excerpt || '',
+    url: `/${locale}/blog/${post.slug}`,
+    type: 'blog',
+    image: post.image ? getFullStorageUrl(post.image) : undefined,
+    category: post.category,
+    date: formatSearchDate(post.date, locale),
+  };
+}
+
+function getCourseCategory(courseType: CourseDb['course_type'], locale: string): string {
+  const labels = {
+    live: locale === 'tr' ? 'Canlı Eğitim' : 'Live Training',
+    hybrid: locale === 'tr' ? 'Hibrit Eğitim' : 'Hybrid Training',
+    online: locale === 'tr' ? 'Online Eğitim' : 'Online Course',
+  };
+  return labels[courseType] || labels.online;
+}
+
+function getCourseTags(course: CourseDb, locale: string): string[] {
+  const tags: string[] = [];
+  if (course.level) tags.push(locale === 'tr' ? `Seviye: ${course.level}` : `Level: ${course.level}`);
+  if (course.duration) tags.push(locale === 'tr' ? `Süre: ${course.duration}` : `Duration: ${course.duration}`);
+  if (course.instructor_name) {
+    tags.push(
+      locale === 'tr'
+        ? `Eğitmen: ${course.instructor_name}`
+        : `Instructor: ${course.instructor_name}`
+    );
+  }
+  return tags;
+}
+
+function mapCourseResult(course: CourseDb, locale: string): SearchResultItem {
+  const displayDate = course.live_start_date || course.created_at;
+  return {
+    id: course.id,
+    title: course.title,
+    excerpt: getPlainTextFromRichText(course.description, locale),
+    url: `/${locale}/${locale === 'tr' ? 'kurs' : 'course'}/${course.slug}`,
+    type: 'course',
+    image: course.thumbnail_url ? getFullStorageUrl(course.thumbnail_url) : undefined,
+    category: getCourseCategory(course.course_type, locale),
+    date: displayDate ? formatSearchDate(displayDate, locale) : '',
+    tags: getCourseTags(course, locale),
+    courseData: {
+      price: course.price ?? undefined,
+      originalPrice: course.original_price ?? undefined,
+      instructor: course.instructor_name ?? undefined,
+      level: course.level ?? undefined,
+      duration: course.duration ?? undefined,
+      courseType: course.course_type,
+      liveStartDate: course.live_start_date ?? undefined,
+      liveEndDate: course.live_end_date ?? undefined,
+      maxParticipants: course.max_participants ?? undefined,
+      currentParticipants: course.current_participants ?? undefined,
+      isRegistrationOpen: course.is_registration_open ?? true,
+    },
+  };
+}
+
+async function searchBlogPosts(query: string, locale: string): Promise<SearchResultItem[]> {
+  const { data, error } = await blogSupabase
+    .from('unilab_vision_blog_posts')
+    .select('id, post_id, title, slug, excerpt, category, date, image')
+    .eq('locale', locale)
+    .eq('site', 'myuni_platform')
+    .or(`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`)
+    .order('date', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error('[search] Blog query failed:', error.message);
+    return [];
+  }
+  return (data || []).map((post) => mapBlogResult(post as BlogPostDb, locale));
+}
+
+async function searchCourses(query: string, locale: string): Promise<SearchResultItem[]> {
+  const { data, error } = await learningSupabase
+    .from('myuni_courses')
+    .select(
+      'id, slug, title, description, instructor_name, duration, level, price, original_price, thumbnail_url, course_type, live_start_date, live_end_date, max_participants, current_participants, is_active, is_registration_open, created_at'
+    )
+    .eq('is_active', true)
+    .or(`title.ilike.%${query}%,description.ilike.%${query}%,instructor_name.ilike.%${query}%`)
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  if (error) {
+    console.error('[search] Course query failed:', error.message);
+    return [];
+  }
+  return (data || []).map((course) => mapCourseResult(course as CourseDb, locale));
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -129,198 +263,11 @@ export async function GET(request: NextRequest) {
     // Create an array to store all search results
     const allResults: SearchResultItem[] = [];
     
-    // Check if we have a valid supabase instance
-    try {
-      // Search blog posts - Try catch this entire block
-      try {
-        const { data: blogPosts, error: blogError } = await supabaseClient
-          .from('unilab_vision_blog_posts')
-          .select(`
-            id,
-            post_id,
-            title,
-            slug,
-            excerpt,
-            category,
-            date,
-            image
-          `)
-          .eq('locale', locale)
-          .eq('site', 'myuni_platform')
-          .or(`title.ilike.%${sanitizedQuery}%,excerpt.ilike.%${sanitizedQuery}%,content.ilike.%${sanitizedQuery}%`)
-          .order('date', { ascending: false })
-          .limit(20);
-
-        if (blogError) {
-          console.error('Error searching blog posts:', blogError);
-        } else if (blogPosts && blogPosts.length > 0) {
-          // Process blog posts results
-          const blogResults = blogPosts.map((post: BlogPostDb) => {
-            let formattedDate = post.date;
-            if (post.date) {
-              formattedDate = locale === 'tr' 
-                ? formatDateTurkish(post.date)
-                : formatDateEnglish(post.date);
-            }
-            
-            return {
-              id: post.post_id,
-              title: post.title,
-              excerpt: post.excerpt || '',
-              url: `/${locale}/blog/${post.slug}`,
-              type: 'blog' as const,
-              image: post.image ? getFullStorageUrl(post.image) : undefined,
-              category: post.category,
-              date: formattedDate
-            };
-          });
-          
-          // Add to all results
-          allResults.push(...blogResults);
-        }
-      } catch (dbError) {
-        console.error('Database query error:', dbError);
-        // Continue with other searches
-      }
-
-      // Search courses - NEW ADDITION
-      try {
-        const { data: courses, error: coursesError } = await supabaseClient
-          .from('myuni_courses')
-          .select(`
-            id,
-            slug,
-            title,
-            description,
-            instructor_name,
-            duration,
-            level,
-            price,
-            original_price,
-            thumbnail_url,
-            course_type,
-            live_start_date,
-            live_end_date,
-            max_participants,
-            current_participants,
-            is_active,
-            is_registration_open,
-            created_at
-          `)
-          .eq('is_active', true)
-          .or(`title.ilike.%${sanitizedQuery}%,description.ilike.%${sanitizedQuery}%,instructor_name.ilike.%${sanitizedQuery}%`)
-          .order('created_at', { ascending: false })
-          .limit(15);
-
-        if (coursesError) {
-          console.error('Error searching courses:', coursesError);
-        } else if (courses && courses.length > 0) {
-          // Process course results
-          const courseResults = courses.map((course: CourseDb) => {
-            // Format display date (use live start date or created date)
-            const displayDate = course.live_start_date || course.created_at;
-            let formattedDate = '';
-            if (displayDate) {
-              formattedDate = locale === 'tr' 
-                ? formatDateTurkish(displayDate)
-                : formatDateEnglish(displayDate);
-            }
-
-            // Create course category based on type
-            let courseCategory = '';
-            switch (course.course_type) {
-              case 'live':
-                courseCategory = locale === 'tr' ? 'Canlı Eğitim' : 'Live Training';
-                break;
-              case 'hybrid':
-                courseCategory = locale === 'tr' ? 'Hibrit Eğitim' : 'Hybrid Training';
-                break;
-              case 'online':
-              default:
-                courseCategory = locale === 'tr' ? 'Online Eğitim' : 'Online Course';
-                break;
-            }
-
-            // Create tags from course data
-            const courseTags: string[] = [];
-            if (course.level) {
-              courseTags.push(locale === 'tr' ? `Seviye: ${course.level}` : `Level: ${course.level}`);
-            }
-            if (course.duration) {
-              courseTags.push(locale === 'tr' ? `Süre: ${course.duration}` : `Duration: ${course.duration}`);
-            }
-            if (course.instructor_name) {
-              courseTags.push(locale === 'tr' ? `Eğitmen: ${course.instructor_name}` : `Instructor: ${course.instructor_name}`);
-            }
-
-            // Rich text açıklamasından plain text çıkar
-            const getPlainTextFromRichText = (richText: string | null): string => {
-              if (!richText) return locale === 'tr' ? 'Eğitim açıklaması mevcut değil.' : 'Course description not available.';
-              
-              // HTML taglerini kaldır ve içeriği temizle
-              const plainText = richText
-                .replace(/<style[^>]*>.*?<\/style>/gi, '') // Style taglerini kaldır
-                .replace(/<script[^>]*>.*?<\/script>/gi, '') // Script taglerini kaldır
-                .replace(/<[^>]*>/g, ' ') // Tüm HTML taglerini boşlukla değiştir
-                .replace(/&nbsp;/g, ' ') // Non-breaking space
-                .replace(/&amp;/g, '&') // HTML entities
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/&hellip;/g, '...')
-                .replace(/&mdash;/g, '—')
-                .replace(/&ndash;/g, '–')
-                .replace(/\s+/g, ' ') // Birden fazla boşluğu tek boşluğa çevir
-                .replace(/^\s+|\s+$/g, '') // Başlangıç ve bitiş boşluklarını kaldır
-                .trim();
-              
-              // Boş string kontrolü
-              if (!plainText || plainText.length === 0) {
-                return locale === 'tr' ? 'Eğitim açıklaması mevcut değil.' : 'Course description not available.';
-              }
-              
-              return plainText.length > 200 ? plainText.substring(0, 200) + '...' : plainText;
-            };
-
-            return {
-              id: course.id,
-              title: course.title,
-              excerpt: getPlainTextFromRichText(course.description),
-              url: `/${locale}/${locale === 'tr' ? 'kurs' : 'course'}/${course.slug}`,
-              type: 'course' as const,
-              image: course.thumbnail_url ? getFullStorageUrl(course.thumbnail_url) : undefined,
-              category: courseCategory,
-              date: formattedDate,
-              tags: courseTags,
-              courseData: {
-                price: course.price ?? undefined,
-                originalPrice: course.original_price ?? undefined,
-                instructor: course.instructor_name ?? undefined,
-                level: course.level ?? undefined,
-                duration: course.duration ?? undefined,
-                courseType: course.course_type,
-                liveStartDate: course.live_start_date ?? undefined,
-                liveEndDate: course.live_end_date ?? undefined,
-                maxParticipants: course.max_participants ?? undefined,
-                currentParticipants: course.current_participants ?? undefined,
-                isRegistrationOpen: course.is_registration_open ?? true
-              }
-            };
-          });
-          
-          // Add course results to all results
-          allResults.push(...courseResults);
-        }
-      } catch (coursesError) {
-        console.error('Error searching courses:', coursesError);
-        // Continue with other searches
-      }
-
-    } catch (supabaseError) {
-      console.error('Supabase client error:', supabaseError);
-      // Continue with static pages
-    }
+    const [blogResults, courseResults] = await Promise.all([
+      searchBlogPosts(sanitizedQuery, locale),
+      searchCourses(sanitizedQuery, locale),
+    ]);
+    allResults.push(...blogResults, ...courseResults);
 
     // Add static pages (this doesn't require database)
     try {
@@ -454,7 +401,7 @@ function getFullStorageUrl(path: string | null): string {
   
   // Supabase storage URL - you might need to adjust this for course images
   // If you have a separate bucket for course images, update accordingly
-  const baseUrl = "https://ghuellgktqqzpryuyiky.supabase.co/storage/v1/object/public/blog-images";
+  const baseUrl = `${process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL}/storage/v1/object/public/blog-images`;
   
   return baseUrl + normalizedPath;
 }

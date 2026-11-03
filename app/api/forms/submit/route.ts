@@ -1,7 +1,9 @@
 // app/api/forms/submit/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
+import { getFormsAdminClient } from '@/lib/supabase/adminDatabases';
 import { sendFormSubmissionEmails } from '@/lib/email';
+
+const supabase = getFormsAdminClient();
 
 // Define file upload interface
 interface FileUpload {
@@ -212,6 +214,85 @@ function sanitizeFormDataForEmail(
   return sanitized;
 }
 
+function resolveApplicantName(formData: FormSubmissionData['form_data']): string {
+  const fullName =
+    formData.name ||
+    formData.ad ||
+    formData.isim ||
+    formData.ad_soyad ||
+    formData.full_name ||
+    (formData.firstName && formData.lastName
+      ? `${formData.firstName} ${formData.lastName}`
+      : formData.firstName || formData.lastName);
+
+  return typeof fullName === 'string' ? fullName : 'Başvuru Sahibi';
+}
+
+async function sendSubmissionEmail(
+  formData: FormSubmissionData['form_data'],
+  submissionResult: SubmissionResult
+) {
+  const applicantEmail = formData.email || formData.e_posta || formData.eposta;
+  const formTitle = submissionResult.formTitle || 'Başvuru Formu';
+  const submissionId =
+    submissionResult.submissionId ||
+    `SUB-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+  if (typeof applicantEmail !== 'string' || !applicantEmail.trim()) {
+    return NextResponse.json({
+      success: true,
+      submissionId,
+      formTitle,
+      emailSent: false,
+      emailError: 'E-posta adresi bulunamadı',
+      message: 'Form başarıyla gönderildi ancak e-posta adresi bulunamadığı için e-posta gönderilemedi',
+    });
+  }
+
+  try {
+    const emailData: EmailData = {
+      applicantName: resolveApplicantName(formData),
+      applicantEmail: applicantEmail.trim(),
+      formTitle,
+      submissionId,
+      submissionDate: new Date().toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      formData: sanitizeFormDataForEmail(formData),
+    };
+    const emailResult: EmailResult = await sendFormSubmissionEmails(emailData);
+
+    return NextResponse.json({
+      success: true,
+      submissionId,
+      formTitle,
+      emailSent: emailResult.success,
+      emailError: emailResult.success ? undefined : 'E-posta gönderilirken hata oluştu',
+      emailErrors: emailResult.errors,
+      message: emailResult.success
+        ? 'Form başarıyla gönderildi ve e-posta gönderildi'
+        : 'Form başarıyla gönderildi ancak e-posta gönderilemedi',
+    });
+  } catch (error) {
+    console.error(
+      '[forms/submit] Email failed:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    return NextResponse.json({
+      success: true,
+      submissionId,
+      formTitle,
+      emailSent: false,
+      emailError: 'E-posta gönderilirken hata oluştu',
+      message: 'Form başarıyla gönderildi ancak e-posta gönderilemedi',
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as FormSubmissionData;
@@ -240,92 +321,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract email and name from form_data for email sending
-    const applicantEmail = form_data.email || form_data.e_posta || form_data.eposta;
-    const applicantName =
-      form_data.name ||
-      form_data.ad ||
-      form_data.isim ||
-      form_data.ad_soyad ||
-      form_data.full_name ||
-      (form_data.firstName && form_data.lastName
-        ? `${form_data.firstName} ${form_data.lastName}`
-        : form_data.firstName || form_data.lastName) ||
-      'Başvuru Sahibi';
-
-    // Get form title and submission ID from submissionResult
-    const formTitle = submissionResult.formTitle || 'Başvuru Formu';
-    const submissionId =
-      submissionResult.submissionId ||
-      `SUB-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Only send emails if we have an email address
-    if (applicantEmail && typeof applicantEmail === 'string' && applicantEmail.trim()) {
-      try {
-        const emailData: EmailData = {
-          applicantName: typeof applicantName === 'string' ? applicantName : 'Başvuru Sahibi',
-          applicantEmail: applicantEmail.trim(),
-          formTitle,
-          submissionId,
-          submissionDate: new Date().toLocaleDateString('tr-TR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          formData: sanitizeFormDataForEmail(form_data), // Use sanitized data
-        };
-
-        const emailResult: EmailResult = await sendFormSubmissionEmails(emailData);
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Email sending completed:', emailResult.success ? 'Success' : 'Failed');
-        }
-
-        return NextResponse.json({
-          success: true,
-          submissionId,
-          formTitle,
-          emailSent: emailResult.success,
-          emailError: emailResult.success ? undefined : 'E-posta gönderilirken hata oluştu',
-          emailErrors: emailResult.errors,
-          message: emailResult.success 
-            ? 'Form başarıyla gönderildi ve e-posta gönderildi' 
-            : 'Form başarıyla gönderildi ancak e-posta gönderilemedi'
-        });
-      } catch (emailError) {
-        const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error';
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Email sending error:', errorMessage);
-        }
-        
-        // Return success for form submission even if email fails
-        return NextResponse.json({
-          success: true,
-          submissionId,
-          formTitle,
-          emailSent: false,
-          emailError: 'E-posta gönderilirken hata oluştu',
-          message: 'Form başarıyla gönderildi ancak e-posta gönderilemedi'
-        });
-      }
-    } else {
-      // No email provided, just return form submission success
-      if (process.env.NODE_ENV === 'development') {
-        console.log('No email address provided, skipping email sending');
-      }
-      
-      return NextResponse.json({
-        success: true,
-        submissionId,
-        formTitle,
-        emailSent: false,
-        emailError: 'E-posta adresi bulunamadı',
-        message: 'Form başarıyla gönderildi ancak e-posta adresi bulunamadığı için e-posta gönderilemedi'
-      });
-    }
+    return sendSubmissionEmail(form_data, submissionResult);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     

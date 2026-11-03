@@ -5,7 +5,7 @@ import {
   getPublicCacheHeaders,
   PUBLIC_CACHE_TAGS,
 } from '@/lib/publicCache';
-import { createServerSupabasePublicClient } from '@/lib/supabase-server';
+import { getLearningSupabaseClient } from '@/lib/supabase/databases';
 import { getPackageDisplayPrice } from '@/lib/packagePresentation';
 
 type RatingSummaryRow = {
@@ -53,7 +53,7 @@ const COURSE_CATALOG_CACHE_SECONDS = 6 * 60 * 60;
 async function loadRatingMap(courseIds: string[]) {
   if (courseIds.length === 0) return {};
 
-  const supabase = createServerSupabasePublicClient();
+  const supabase = getLearningSupabaseClient();
   const { data, error } = await supabase.rpc('get_course_rating_summary', {
     p_course_ids: courseIds,
   });
@@ -72,7 +72,7 @@ async function loadRatingMap(courseIds: string[]) {
 }
 
 async function loadRatingMapFallback(courseIds: string[]) {
-  const supabase = createServerSupabasePublicClient();
+  const supabase = getLearningSupabaseClient();
   const { data, error } = await supabase
     .from('myuni_comments')
     .select('course_id, rating')
@@ -107,7 +107,7 @@ async function loadCourseTierEarlyBirdMap(
 ) {
   if (courses.length === 0) return {};
 
-  const supabase = createServerSupabasePublicClient();
+  const supabase = getLearningSupabaseClient();
   const { data, error } = await supabase
     .from('myuni_course_tiers')
     .select('course_id, early_bird_price, early_bird_deadline, order_index')
@@ -164,7 +164,7 @@ function hasActiveCourseEarlyBird(course: {
 }
 
 async function loadPublicCatalog(locale: string, programType: string) {
-  const supabase = createServerSupabasePublicClient();
+  const supabase = getLearningSupabaseClient();
   const courses = await getAllCourses(
     locale,
     programType ? { programType } : { excludeProgramTypes: ['mentorship'] }
@@ -191,6 +191,16 @@ async function loadPublicCatalog(locale: string, programType: string) {
     console.error('[api/public/courses] Package query failed:', packagesError.message);
   }
 
+  const coursesByPackageId = ((packageCourses || []) as PublicPackageCourse[]).reduce<
+    Record<string, PublicPackageCourse['myuni_courses']>
+  >((groupedCourses, relation) => {
+    groupedCourses[relation.package_id] = [
+      ...(groupedCourses[relation.package_id] || []),
+      ...relation.myuni_courses,
+    ];
+    return groupedCourses;
+  }, {});
+
   return {
     courses: courses.map((course) => {
       const tierEarlyBird = tierEarlyBirdMap[String(course.id)];
@@ -205,9 +215,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
     packages: (packages || []).map((pkg) => ({
       ...pkg,
       price: getPackageDisplayPrice(pkg),
-      included_courses: (packageCourses || [])
-        .filter((relation: PublicPackageCourse) => relation.package_id === pkg.id)
-        .flatMap((relation: PublicPackageCourse) => relation.myuni_courses),
+      included_courses: coursesByPackageId[pkg.id] || [],
     })),
     ratingMap,
   };
@@ -215,7 +223,7 @@ async function loadPublicCatalog(locale: string, programType: string) {
 
 const getCachedPublicCatalog = unstable_cache(
   loadPublicCatalog,
-  ['public-course-catalog-v7'],
+  ['public-course-catalog-v8-multidb'],
   {
     revalidate: COURSE_CATALOG_CACHE_SECONDS,
     tags: [
@@ -228,7 +236,10 @@ const getCachedPublicCatalog = unstable_cache(
 
 export async function GET(request: NextRequest) {
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL &&
+      !process.env.NEXT_PUBLIC_SUPABASE_URL
+    ) {
       return NextResponse.json(
         { success: false, error: 'Configuration error' },
         { status: 500 }

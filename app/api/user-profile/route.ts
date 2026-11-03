@@ -1,143 +1,101 @@
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getIdentityAdminClient } from '@/lib/supabase/adminDatabases';
 
-interface UserProfileData {
-  clerk_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
+interface UserProfileInput {
+  first_name?: string;
+  last_name?: string;
   school?: string | null;
   grade?: string | null;
   bio?: string | null;
   phone_number?: string | null;
 }
 
+const PROFILE_COLUMNS =
+  'id, clerk_id, first_name, last_name, email, school, grade, bio, phone_number, created_at, updated_at';
+
 export async function POST(request: NextRequest) {
-  try {
-    const body: UserProfileData = await request.json();
-    
-    const { clerk_id, first_name, last_name, email, school, grade, bio, phone_number } = body;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!clerk_id || !first_name || !last_name || !email) {
+  try {
+    const [body, user] = await Promise.all([
+      request.json() as Promise<UserProfileInput>,
+      currentUser(),
+    ]);
+    const firstName = body.first_name?.trim();
+    const lastName = body.last_name?.trim();
+    const email = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase();
+
+    if (!firstName || !lastName || !email) {
       return NextResponse.json(
-        { error: 'Missing required fields: clerk_id, first_name, last_name, email' },
+        { error: 'First name, last name and verified Clerk email are required' },
         { status: 400 }
       );
     }
 
-    // Check if profile exists
-    const { data: existingProfile, error: checkError } = await supabaseAdmin
+    const supabase = getIdentityAdminClient();
+    const { data, error } = await supabase
       .from('user_profiles')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned, which is expected for new users
-      console.error('Error checking existing profile:', checkError);
-    }
-
-    let result;
-
-    if (existingProfile) {
-      // Update existing profile
-      result = await supabaseAdmin
-        .from('user_profiles')
-        .update({
-          first_name,
-          last_name,
+      .upsert(
+        {
+          clerk_id: userId,
+          first_name: firstName,
+          last_name: lastName,
           email,
-          school: school || null,
-          grade: grade || null,
-          bio: bio || null,
-          phone_number: phone_number || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('clerk_id', clerk_id)
-        .select()
-        .single();
-    } else {
-      // Insert new profile
-      result = await supabaseAdmin
-        .from('user_profiles')
-        .insert({
-          clerk_id,
-          first_name,
-          last_name,
-          email,
-          school: school || null,
-          grade: grade || null,
-          bio: bio || null,
-          phone_number: phone_number || null
-        })
-        .select()
-        .single();
-    }
-
-    if (result.error) {
-      console.error('Error saving user profile:', result.error);
-      return NextResponse.json(
-        { error: 'Failed to save user profile', details: result.error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      profile: result.data
-    });
-
-  } catch (error) {
-    console.error('User profile API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const clerk_id = searchParams.get('clerk_id');
-
-    if (!clerk_id) {
-      return NextResponse.json(
-        { error: 'Missing clerk_id parameter' },
-        { status: 400 }
-      );
-    }
-
-    const { data: profile, error } = await supabaseAdmin
-      .from('user_profiles')
-      .select('*')
-      .eq('clerk_id', clerk_id)
+          school: body.school?.trim() || null,
+          grade: body.grade?.trim() || null,
+          bio: body.bio?.trim() || null,
+          phone_number: body.phone_number?.trim() || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'clerk_id' }
+      )
+      .select(PROFILE_COLUMNS)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'Profile not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error fetching user profile:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch user profile' },
-        { status: 500 }
-      );
+      console.error('[user-profile] Save failed:', error.message);
+      return NextResponse.json({ error: 'Failed to save user profile' }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      profile
-    });
-
+    return NextResponse.json({ success: true, profile: data });
   } catch (error) {
-    console.error('User profile GET API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    console.error(
+      '[user-profile] Request failed:',
+      error instanceof Error ? error.message : 'Unknown error'
     );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  try {
+    const supabase = getIdentityAdminClient();
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select(PROFILE_COLUMNS)
+      .eq('clerk_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[user-profile] Read failed:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch user profile' }, { status: 500 });
+    }
+    if (!data) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+
+    return NextResponse.json(
+      { success: true, profile: data },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
+  } catch (error) {
+    console.error(
+      '[user-profile] Request failed:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

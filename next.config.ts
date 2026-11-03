@@ -15,6 +15,26 @@ function loadLocalDevConfig(): { allowedDevOrigins?: string[] } {
 
 const localDev = loadLocalDevConfig();
 
+function getSupabaseImagePatterns() {
+  const urls = [
+    process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL,
+  ];
+  return urls.flatMap((url) => {
+    if (!url) return [];
+    try {
+      const hostname = new URL(url).hostname;
+      return [
+        { protocol: 'https' as const, hostname, port: '', pathname: '/storage/v1/object/public/**' },
+        { protocol: 'https' as const, hostname, port: '', pathname: '/storage/v1/object/sign/**' },
+      ];
+    } catch {
+      return [];
+    }
+  });
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...(localDev.allowedDevOrigins ? { allowedDevOrigins: localDev.allowedDevOrigins } : {}),
@@ -56,6 +76,7 @@ const nextConfig = {
     loader: 'custom',
     loaderFile: './lib/imageLoader.ts',
     remotePatterns: [
+      ...getSupabaseImagePatterns(),
       {
         protocol: 'https',
         hostname: 'img.clerk.com',

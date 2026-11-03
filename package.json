@@ -12,6 +12,8 @@
     "media:audit": "node --env-file-if-exists=.env.local scripts/audit-supabase-media.mjs",
     "media:migrate": "node --env-file-if-exists=.env.local scripts/migrate-supabase-media.mjs",
     "media:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-supabase-media.mjs",
+    "storage:upload": "node --env-file-if-exists=.env.local scripts/upload-supabase-bucket.mjs",
+    "storage:rewrite-urls": "node --env-file-if-exists=.env.local scripts/rewrite-supabase-storage-urls.mjs",
     "gift:product": "node --env-file-if-exists=.env.local scripts/grant-product-gifts.mjs",
     "test:membership-expiry": "node lib/membershipTime.test.mjs",
     "start": "next start",

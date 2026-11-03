@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
+import { NextResponse } from 'next/server';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { currentUser } from '@clerk/nextjs/server';
+
+const supabase = getLearningAdminClient();
 
 /**
  * API Endpoint: Email eşleştirmesi yaparak case result'ı user_id ile ilişkilendir
@@ -8,7 +10,7 @@ import { currentUser } from '@clerk/nextjs/server';
  * Bu endpoint kullanıcı giriş yaptığında veya dashboard'a girdiğinde çağrılır
  * Clerk'daki email ile form'dan gönderilen contact_email veya backup_email eşleştirilir
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Clerk user bilgisini al
     const user = await currentUser();
@@ -32,10 +34,6 @@ export async function POST(request: NextRequest) {
 
     const clerkUserId = user.id;
     const normalizedEmail = clerkEmail.toLowerCase().trim();
-
-    console.log('=== EMAIL MATCHING DEBUG ===');
-    console.log('Clerk User ID:', clerkUserId);
-    console.log('Clerk Email:', normalizedEmail);
 
     // SQL function kullanarak email eşleştirmesi yap
     // Supabase'de match_case_result_with_user fonksiyonunu çağır
@@ -92,7 +90,7 @@ export async function POST(request: NextRequest) {
 /**
  * GET: Kullanıcının case result'ını email ile kontrol et (eşleşme var mı?)
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const user = await currentUser();
     

@@ -1,28 +1,11 @@
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
+import { getIdentityAdminClient } from './supabase/adminDatabases';
 
 /**
  * Server-side Supabase client.
  *
- * Requires SUPABASE_SERVICE_ROLE_KEY so server-only routes can reliably operate
- * behind RLS. Never silently downgrade an administrative client to anon.
+ * Uses the IDENTITY secret key so server-only routes can reliably operate
+ * behind RLS. Legacy primary/service-role variables remain a migration fallback.
  */
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl) {
-  throw new Error('Missing env: NEXT_PUBLIC_SUPABASE_URL');
-}
-
-if (!serviceRoleKey) {
-  throw new Error('Missing env: SUPABASE_SERVICE_ROLE_KEY');
-}
-
-export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
-  }
-});
+export const supabaseAdmin = getIdentityAdminClient();
 

@@ -35,3 +35,5 @@ next.config.local.json
 
 certificates
 scripts/.media-migrations/
+storage-migration-reports/
+storage-backups/

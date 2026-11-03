@@ -2,11 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getIdentityAdminClient } from '@/lib/supabase/adminDatabases';
 import { isEventRegistrationOpen } from '@/lib/events/eventRegistration';
 import {
   assertLegalConsent,
   buildLegalConsentSnapshot,
 } from '@/lib/legalConsent';
+
+const identitySupabase = getIdentityAdminClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -94,14 +97,16 @@ export async function POST(request: NextRequest) {
     };
 
     if (!userProfile.email) {
-      const { data: profileData } = await supabaseAdmin
+      const { data: profileData } = await identitySupabase
         .from('user_profiles')
-        .select('full_name, email')
-        .eq('id', userId)
+        .select('first_name, last_name, email')
+        .eq('clerk_id', userId)
         .maybeSingle();
       if (profileData?.email) {
         userProfile = {
-          full_name: profileData.full_name || userProfile.full_name,
+          full_name:
+            [profileData.first_name, profileData.last_name].filter(Boolean).join(' ') ||
+            userProfile.full_name,
           email: profileData.email,
         };
       }

@@ -7,7 +7,7 @@ import {
   FileUp, X, CheckCircle, Calendar, MessageSquare, AlertCircle,
   ChevronDown, Check
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getFormsSupabaseClient } from '@/lib/supabase/databases';
 import LegalConsentFields, {
   validateLegalConsentClient,
   type LegalConsentValues,
@@ -20,6 +20,8 @@ interface DynamicFormProps {
   opportunitySlug?: string;
   formConfigId?: string;
 }
+
+const supabase = getFormsSupabaseClient();
 
 interface FieldValidationRules {
   minLength?: number;

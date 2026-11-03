@@ -1,5 +1,7 @@
 // app/services/unilabBlogService.ts - Updated for MyUNI with site support
-import { supabase } from '@/lib/supabase';
+import { getFormsSupabaseClient } from '@/lib/supabase/databases';
+
+const supabase = getFormsSupabaseClient();
 
 // Site type definition
 export type SiteType = 'unilab_vision' | 'myuni_platform';
@@ -65,7 +67,7 @@ const getFullStorageUrl = (path: string | null): string => {
   }
   
   const normalizedPath = path.startsWith('/') ? path : '/' + path;
-  const baseUrl = "https://ghuellgktqqzpryuyiky.supabase.co/storage/v1/object/public/unilab-vision-uploads";
+  const baseUrl = `${process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL}/storage/v1/object/public/unilab-vision-uploads`;
   
   return baseUrl + normalizedPath;
 };
