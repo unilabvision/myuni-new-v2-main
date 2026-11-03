@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getEventCertificateProgress } from '@/lib/certificateService';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import {
   getCertificatePrice,
@@ -46,7 +47,7 @@ export async function POST(
     }
 
     const supabase = getSiteApplicationsSupabase();
-    const { data: event } = await supabase
+    const { data: event } = await getLearningAdminClient()
       .from('myuni_events')
       .select('id, slug, title, is_active')
       .eq('id', eventId)

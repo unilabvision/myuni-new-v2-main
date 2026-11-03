@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import {
   buildAttachmentStoragePath,
   siteApplicationsDb,
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     let storageSlug = formSlug;
 
     if (eventSlug) {
-      const { data: event } = await supabase
+      const { data: event } = await getLearningAdminClient()
         .from('myuni_events')
         .select('id, slug')
         .eq('slug', eventSlug)

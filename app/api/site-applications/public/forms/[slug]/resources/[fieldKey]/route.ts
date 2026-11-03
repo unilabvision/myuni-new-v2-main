@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import { parseAttachmentStorageRef, parseResourceOptions } from '@/lib/siteApplications/files';
 
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     let formId: string | null = null;
 
     if (eventSlug) {
-      const { data: event } = await supabase
+      const { data: event } = await getLearningAdminClient()
         .from('myuni_events')
         .select('id')
         .eq('slug', eventSlug)

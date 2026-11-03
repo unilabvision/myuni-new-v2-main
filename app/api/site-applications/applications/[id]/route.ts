@@ -3,6 +3,7 @@ import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import { markSiteApplicationPaid } from '@/lib/siteApplications/applicationPayments';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 
 function isPaidOrderStatus(status: string | null | undefined) {
   const s = String(status || '').toLowerCase();
@@ -44,9 +45,7 @@ export async function GET(
     const supabase = getSiteApplicationsSupabase();
     const { data: application, error } = await supabase
       .from(siteApplicationsDb.applications)
-      .select(
-        'id, email, first_name, last_name, event_name, event_id, submission_data, myuni_events ( slug, title, is_active )'
-      )
+      .select('id, email, first_name, last_name, event_name, event_id, submission_data')
       .eq('id', id)
       .maybeSingle();
 
@@ -54,17 +53,19 @@ export async function GET(
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
 
-    const eventInfo = application.myuni_events as
-      | { slug: string; title: string; is_active: boolean }
-      | { slug: string; title: string; is_active: boolean }[]
-      | null;
-    const event = Array.isArray(eventInfo) ? eventInfo[0] : eventInfo;
+    const { data: event } = application.event_id
+      ? await getLearningAdminClient()
+          .from('myuni_events')
+          .select('slug, title, is_active')
+          .eq('id', application.event_id)
+          .maybeSingle()
+      : { data: null };
 
     if (eventSlug && event?.slug && event.slug !== eventSlug) {
       return NextResponse.json({ error: 'Event mismatch' }, { status: 400 });
     }
 
-    let submission = (application.submission_data || {}) as Record<string, unknown>;
+    const submission = (application.submission_data || {}) as Record<string, unknown>;
     let paymentStatus = String(submission.payment_status || 'none');
     const registrationTier = submission.registration_tier;
     const packagePrice = Number(submission.package_price) || 0;

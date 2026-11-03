@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin as supabase } from '../../../lib/supabaseAdmin';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import { siteApplicationsDb } from '@/lib/siteApplications/config';
 import { resolveDiscountRestrictions, itemMatchesApplicableCourses } from '@/lib/discountRestrictions';
 import {
@@ -641,7 +642,7 @@ export async function POST(request: Request) {
         const siteAppsSupabase = getSiteApplicationsSupabase();
         const { data: application, error: appError } = await siteAppsSupabase
           .from(siteApplicationsDb.applications)
-          .select('id, email, first_name, last_name, event_name, event_id, submission_data, myuni_events ( slug, title, is_active )')
+          .select('id, email, first_name, last_name, event_name, event_id, submission_data')
           .eq('id', applicationId)
           .maybeSingle();
 
@@ -761,11 +762,13 @@ export async function POST(request: Request) {
           return NextResponse.json({ success: false, message: 'Invalid certificate price' }, { status: 400 });
         }
 
-        const eventInfoRaw = application.myuni_events as
-          | { slug: string; title: string; is_active: boolean }
-          | { slug: string; title: string; is_active: boolean }[]
-          | null;
-        const eventInfo = Array.isArray(eventInfoRaw) ? eventInfoRaw[0] : eventInfoRaw;
+        const { data: eventInfo } = application.event_id
+          ? await getLearningAdminClient()
+              .from('myuni_events')
+              .select('slug, title, is_active')
+              .eq('id', application.event_id)
+              .maybeSingle()
+          : { data: null };
         const eventTitle = eventInfo?.title || application.event_name || 'Etkinlik';
 
         if (body.eventSlug && eventInfo?.slug && body.eventSlug !== eventInfo.slug) {

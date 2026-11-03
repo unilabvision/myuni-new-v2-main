@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import {
   computeAttachmentExpiresAt,
   extractContactFromSubmission,
@@ -28,8 +29,9 @@ async function resolveForm(
   eventSlug?: string,
   courseSlug?: string
 ) {
+  const learning = getLearningAdminClient();
   if (courseSlug) {
-    const { data: course } = await supabase
+    const { data: course } = await learning
       .from('myuni_courses')
       .select('id, slug, title, is_active, is_registration_open, price')
       .eq('slug', courseSlug)
@@ -68,7 +70,7 @@ async function resolveForm(
   }
 
   if (eventSlug) {
-    const { data: event } = await supabase
+    const { data: event } = await learning
       .from('myuni_events')
       .select('id, slug, title, is_active, is_registration_open, registration_deadline')
       .eq('slug', eventSlug)
@@ -322,6 +324,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Site application insert error:', error);
+      return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
+    }
+    if (!data) {
+      console.error('Site application insert returned no row');
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 

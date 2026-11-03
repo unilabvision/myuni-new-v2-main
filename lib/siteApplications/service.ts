@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getSiteApplicationsSupabase } from '@/lib/supabaseSiteApplications';
+import { getLearningAdminClient } from '@/lib/supabase/adminDatabases';
 import type {
   PublicSiteApplicationNavForm,
   SiteApplicationForm,
@@ -27,8 +28,9 @@ export async function getVisibleSiteApplicationForms(
 
 export async function getPublicFormByEventSlug(eventSlug: string, locale: string) {
   const supabase = getSiteApplicationsSupabase();
+  const learning = getLearningAdminClient();
 
-  const { data: event, error: eventError } = await supabase
+  const { data: event, error: eventError } = await learning
     .from('myuni_events')
     .select('id, slug, title, is_active, is_registration_open, registration_deadline')
     .eq('slug', eventSlug)
@@ -171,8 +173,9 @@ async function loadFormFields(formId: unknown) {
 /** Kurs başvuru formu — Uniboard LMS “Başvuru Formu” sekmesinden yayınlanır */
 export async function getPublicFormByCourseSlug(courseSlug: string, locale: string) {
   const supabase = getSiteApplicationsSupabase();
+  const learning = getLearningAdminClient();
 
-  const { data: course, error: courseError } = await supabase
+  const { data: course, error: courseError } = await learning
     .from('myuni_courses')
     .select('id, slug, title, is_active, is_registration_open, price')
     .eq('slug', courseSlug)
@@ -261,9 +264,10 @@ export async function getPublicFormByCourseSlug(courseSlug: string, locale: stri
 
 export async function getEventApplicationSummary(eventSlug: string, locale: string) {
   const supabase = getSiteApplicationsSupabase();
+  const learning = getLearningAdminClient();
   const isEn = locale === 'en';
 
-  const { data: event, error: eventError } = await supabase
+  const { data: event, error: eventError } = await learning
     .from('myuni_events')
     .select('id, slug, title')
     .eq('slug', eventSlug)
