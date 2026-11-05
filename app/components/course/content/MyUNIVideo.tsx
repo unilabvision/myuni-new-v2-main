@@ -3,9 +3,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, RotateCcw, CheckCircle, AlertCircle, ArrowRight, Repeat } from 'lucide-react';
-import { getLearningSupabaseClient } from '@/lib/supabase/databases';
-
-const supabase = getLearningSupabaseClient();
 import { getUserLessonProgress, updateUserProgress } from '@/lib/progressApi';
 
 // Tip tanımlamaları
@@ -132,17 +129,22 @@ export function MyUNIVideo({
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('myuni_videos')
-        .select('id, lesson_id, title, description, vimeo_id, video_url, thumbnail_url, duration_seconds, order_index, vimeo_hash, vimeo_embed_url')
-        .eq('lesson_id', lessonId)
-        .order('order_index', { ascending: true })
-        .limit(1);
+      const response = await fetch(
+        `/api/courses/lessons/${encodeURIComponent(lessonId)}/content`,
+        {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        }
+      );
+      const payload = await response.json();
 
-      if (error) throw new Error(error.message);
+      if (!response.ok) {
+        throw new Error(payload?.error || `Video content request failed (${response.status})`);
+      }
 
-      if (data && data.length > 0) {
-        setCurrentVideo(data[0]);
+      const videos = Array.isArray(payload?.videos) ? payload.videos as VimeoVideo[] : [];
+      if (videos.length > 0) {
+        setCurrentVideo(videos[0]);
       } else {
         setError('No video content found for this lesson');
       }
