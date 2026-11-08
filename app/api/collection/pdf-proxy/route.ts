@@ -74,8 +74,10 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  // 3. İçeriği private Storage'dan getir ve stream et. Eski public URL biçimi de
-  // geçiş süresince desteklenir; istemciye doğrudan Storage URL'si verilmez.
+  // 3. Yetki kontrolünden sonra kısa ömürlü bir Storage URL'sine yönlendir.
+  // PDF'yi Function üzerinden stream etmek dosyanın tamamını Fast Origin
+  // Transfer olarak tekrar ücretlendirir. İmzalı URL dosyayı doğrudan Storage
+  // üzerinden teslim ederken private bucket erişimini korur.
   try {
     let bucket = '';
     let objectPath = '';
@@ -91,24 +93,16 @@ export async function GET(req: NextRequest) {
       objectPath = decodeURIComponent(match[2]);
     }
 
-    const { data: pdf, error: downloadError } = await supabaseAdmin.storage
+    const { data: signed, error: signedUrlError } = await supabaseAdmin.storage
       .from(bucket)
-      .download(objectPath);
-    if (downloadError || !pdf) throw downloadError || new Error('Product file missing');
+      .createSignedUrl(objectPath, 300);
+    if (signedUrlError || !signed?.signedUrl) {
+      throw signedUrlError || new Error('Product file missing');
+    }
 
-    // PDF içeriğini doğrudan stream olarak döndürüyoruz
-    return new NextResponse(pdf.stream(), {
-      headers: {
-        'Content-Type': pdf.type || 'application/pdf',
-        // İndirmeyi zorlamak yerine tarayıcıda göstermek için inline, 
-        // ayrıca gerçek dosya adını gizleyerek sahte bir isim veriyoruz.
-        'Content-Disposition': 'inline; filename="document.pdf"',
-        // Önbelleğe alınmasın, URL her zaman buradan geçsin
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    });
+    const response = NextResponse.redirect(signed.signedUrl, 307);
+    response.headers.set('Cache-Control', 'private, no-store');
+    return response;
   } catch (error) {
     console.error('PDF proxy fetch error:', error);
     return new NextResponse('Error fetching document', { status: 500 });

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import MentorshipDetailPage from '@/app/components/pages/mentorluk/MentorshipDetailPage';
 import { getPublicMentorshipBySlug } from '@/lib/mentorshipService';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 interface PageProps {
   params: Promise<{ locale: string; slug: string }>;

@@ -75,6 +75,8 @@ interface UserProgress {
   last_video_watch_at?: string;
 }
 
+const PROGRESS_SAVE_INTERVAL_SECONDS = 60;
+
 export function MyUNIVideo({
   lessonId,
   userId,
@@ -336,9 +338,13 @@ export function MyUNIVideo({
           onProgress(progress);
         }
 
-        // Save progress every 10 seconds
-        if (Math.abs(currentSeconds - lastSaved) >= 10 && currentSeconds > 0) {
-          console.log('⏰ Auto-saving progress every 10 seconds at:', currentSeconds);
+        // Periodic persistence is deliberately coarse to keep Function usage low.
+        // Pause and completion events still save immediately.
+        if (
+          Math.abs(currentSeconds - lastSaved) >= PROGRESS_SAVE_INTERVAL_SECONDS &&
+          currentSeconds > 0
+        ) {
+          console.log('⏰ Auto-saving progress at:', currentSeconds);
           if (userId && lessonId) {
             saveProgressToDb(currentSeconds, false); // Don't override completion status on auto-save
             lastSaved = currentSeconds;

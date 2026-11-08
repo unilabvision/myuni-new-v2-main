@@ -439,10 +439,11 @@ export const config = {
     // Match all request paths except for the ones starting with:
     // - _next/static (static files)
     // - _next/image (image optimization files)
+    // - api/media (public, cacheable media; Clerk would duplicate origin transfer)
     // - api/iyzico-callback (webhook that fails on cross-origin POST with Clerk)
     // - public folder files
-    '/((?!_next|api/iyzico-callback|api/shopier-|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/((?!_next|api/media(?:/|$)|api/iyzico-callback|api/shopier-|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     // Always run for API routes EXCEPT webhooks / disabled shopier stubs
-    '/(api(?!/iyzico-callback|/shopier-)|trpc)(.*)',
+    '/(api(?!/media(?:/|$)|/iyzico-callback|/shopier-)|trpc)(.*)',
   ],
 };

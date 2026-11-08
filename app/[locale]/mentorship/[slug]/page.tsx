@@ -1,1 +1,1 @@
-export { default, generateMetadata, dynamic } from '../../mentorluk/[slug]/page';
+export { default, generateMetadata, revalidate } from '../../mentorluk/[slug]/page';
