@@ -25,6 +25,23 @@ export default function imageLoader({
     const variantSrc = managedMediaPattern.test(src)
       ? src.replace(managedMediaPattern, `/$1/w-${selectedWidth}.webp`)
       : src;
+
+    // Serve public Learning Storage assets through a cached external-origin
+    // rewrite. This uses Vercel's CDN without invoking a Vercel Function, so
+    // cache misses reach Supabase but do not add Function Origin Transfer.
+    try {
+      const url = new URL(variantSrc);
+      const learningPublicPrefix = '/storage/v1/object/public/myunilab/';
+      if (
+        url.hostname === 'fibexawaayvejcqoofqu.supabase.co' &&
+        url.pathname.startsWith(learningPublicPrefix)
+      ) {
+        return `/media/learning/${url.pathname.slice(learningPublicPrefix.length)}${url.search}`;
+      }
+    } catch {
+      // Keep the original URL when it cannot be parsed.
+    }
+
     return variantSrc;
   }
 

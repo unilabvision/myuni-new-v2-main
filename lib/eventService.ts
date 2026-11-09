@@ -12,6 +12,7 @@ import {
   saveEventQuizResult as apiSaveEventQuizResult,
   getEventAnalytics as apiGetEventAnalytics,
 } from './eventProgressApi';
+import { fetchEventEnrollmentCounts } from './publicApiClient';
 
 /**
  * Enrollment counts for event lists.
@@ -47,10 +48,7 @@ async function fetchEventEnrollmentCountMap(eventIds: string[]): Promise<Map<str
       return map;
     }
 
-    const res = await fetch(
-      `/api/event-enrollments/counts?eventIds=${encodeURIComponent(eventIds.join(','))}`
-    );
-    const json = await res.json();
+    const json = await fetchEventEnrollmentCounts(eventIds);
     if (json.success && json.counts) {
       Object.entries(json.counts as Record<string, number>).forEach(([id, count]) => {
         map.set(id, Number(count) || 0);
@@ -195,6 +193,8 @@ export async function getEventSectionsForAPI(eventId: string): Promise<{
 // ========================================
 
 export async function getEventSections(eventId: string): Promise<EventSection[]> {
+  if (!eventId?.trim()) return [];
+
   try {
     console.log('Fetching event sections for eventId:', eventId);
 
@@ -210,7 +210,7 @@ export async function getEventSections(eventId: string): Promise<EventSection[]>
       throw error;
     }
 
-    if (!sections) {
+    if (!sections?.length) {
       console.log('No sections found for event:', eventId);
       return [];
     }

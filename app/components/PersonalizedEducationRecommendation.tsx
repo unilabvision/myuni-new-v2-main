@@ -3,12 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowRight, Check, Clock } from 'lucide-react';
 import Image from 'next/image';
-import { createClient } from '@supabase/supabase-js';
-
-// Supabase client initialization
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { fetchPublicCatalog } from '@/lib/publicApiClient';
 
 interface PersonalizedEducationRecommendationProps {
   locale: string;
@@ -174,47 +169,21 @@ export default function PersonalizedEducationRecommendation({
   const t = texts[safeLocale];
   const steps = Object.keys(t.questions);
 
-  // Supabase'den kursları çek
+  // Merkezi katalog API'si istemci ve CDN önbelleğini paylaşır.
   const fetchCourses = useCallback(async () => {
     setLoadingCourses(true);
     setCoursesError(null);
     
     try {
-      const { data, error } = await supabase
-        .from('myuni_courses')
-        .select(`
-          id,
-          slug,
-          title,
-          description,
-          instructor_name,
-          duration,
-          level,
-          price,
-          original_price,
-          thumbnail_url,
-          course_type,
-          is_active
-        `)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase error:', error);
-        setCoursesError(t.errorLoadingCourses);
-        return;
-      }
-
-      if (data) {
-        setCourses(data);
-      }
+      const payload = await fetchPublicCatalog(safeLocale);
+      setCourses((payload.courses || []) as SupabaseCourse[]);
     } catch (error) {
       console.error('Error fetching courses:', error);
       setCoursesError(t.errorLoadingCourses);
     } finally {
       setLoadingCourses(false);
     }
-  }, [t.errorLoadingCourses]);
+  }, [safeLocale, t.errorLoadingCourses]);
 
   // Animation sequence
   useEffect(() => {

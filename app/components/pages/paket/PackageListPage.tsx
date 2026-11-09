@@ -14,6 +14,7 @@ import {
   catalogCardClass,
   catalogFilterClass,
 } from '@/app/components/pages/catalog/LearningCatalogUI';
+import { fetchPublicCatalog } from '@/lib/publicApiClient';
 
 interface PackageFaq {
   question: string;
@@ -132,13 +133,10 @@ export default function PackageListPage({
     const loadPackages = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `/api/public/courses?locale=${encodeURIComponent(locale)}`
-        );
-        const payload = await response.json();
+        const payload = await fetchPublicCatalog(locale);
         setPackages(
-          response.ok && payload.success && Array.isArray(payload.packages)
-            ? payload.packages
+          payload.success && Array.isArray(payload.packages)
+            ? payload.packages as PackageItem[]
             : []
         );
       } catch (error) {

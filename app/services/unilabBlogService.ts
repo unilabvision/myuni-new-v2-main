@@ -583,7 +583,7 @@ export async function searchUnilabBlogPosts(
     const { data: posts, error } = await queryBuilder.order('date', { ascending: false });
 
     if (error) throw error;
-    if (!posts) return [];
+    if (!posts?.length) return [];
 
     // Get tags for all posts
     const postIds = posts.map(post => post.post_id);

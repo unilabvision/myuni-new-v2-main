@@ -7,6 +7,7 @@ import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
+import { fetchEnrollmentCounts, fetchPublicCatalog } from '@/lib/publicApiClient';
 
 interface Course {
   id: string;
@@ -71,13 +72,7 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(
-          `/api/public/courses?locale=${encodeURIComponent(locale)}`
-        );
-        const payload = await response.json();
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.error || 'Courses could not be loaded');
-        }
+        const payload = await fetchPublicCatalog(locale);
 
         const fetched = ((payload.courses || []) as Course[]).slice(0, limit);
         setCourses(fetched);
@@ -86,9 +81,8 @@ function FeaturedList({ locale = 'tr', limit = 3 }: FeaturedListProps) {
         const courseIds = fetched.map(c => c.id);
         if (courseIds.length === 0) return;
 
-        const enrollmentsJson = await fetch(
-          `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
-        ).then((result) => result.json()).catch(() => ({ success: false, counts: {} }));
+        const enrollmentsJson = await fetchEnrollmentCounts(courseIds, 30)
+          .catch(() => ({ success: false, counts: {} }));
         if (!enrollmentsJson.success || !enrollmentsJson.counts) return;
 
         const counts = enrollmentsJson.counts as Record<string, number>;

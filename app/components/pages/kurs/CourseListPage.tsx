@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Clock, Users, Calendar, Filter, Search, BookOpen } from 'lucide-react';
 import { mapLevelToLocale } from '../../../../lib/courseService';
+import { fetchEnrollmentCounts, fetchPublicCatalog } from '@/lib/publicApiClient';
 
 // Define a type for the course object to avoid using 'any'
 interface Course {
@@ -291,17 +292,10 @@ export default function CourseListPage({
       setLoading(true);
       setError(null);
 
-      const programTypeQuery = isMentorship
-        ? '&program_type=mentorship'
-        : '';
-      const response = await fetch(
-        `/api/public/courses?locale=${encodeURIComponent(locale)}${programTypeQuery}`
+      const payload = await fetchPublicCatalog(
+        locale,
+        isMentorship ? 'mentorship' : ''
       );
-      const payload = await response.json();
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || 'Failed to load courses');
-      }
 
       const coursesData = payload.courses as RawCourse[];
       const mappedCourses: Course[] = coursesData.map((course: RawCourse) => {
@@ -318,15 +312,16 @@ export default function CourseListPage({
       });
 
       setCourses(mappedCourses);
-      setPackages(isMentorship ? [] : (Array.isArray(payload.packages) ? payload.packages : []));
+      setPackages(
+        isMentorship
+          ? []
+          : (Array.isArray(payload.packages) ? payload.packages as CoursePackage[] : [])
+      );
       setRatingMap(payload.ratingMap || {});
 
       const courseIds = mappedCourses.map((c) => String(c.id));
       if (courseIds.length > 0) {
-        const enrollmentsJson = await fetch(
-          `/api/enrollments/counts?courseIds=${encodeURIComponent(courseIds.join(','))}&sinceDays=30`
-        )
-          .then((r) => r.json())
+        const enrollmentsJson = await fetchEnrollmentCounts(courseIds, 30)
           .catch(() => ({ success: false, counts: {} }));
 
         if (enrollmentsJson.success && enrollmentsJson.counts) {

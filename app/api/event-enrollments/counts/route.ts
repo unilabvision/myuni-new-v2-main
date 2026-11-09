@@ -1,5 +1,34 @@
+import { unstable_cache } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+const COUNT_CACHE_SECONDS = 60;
+const COUNT_CACHE_HEADERS = {
+  'Cache-Control': `public, s-maxage=${COUNT_CACHE_SECONDS}, stale-while-revalidate=300`,
+};
+
+const loadEventEnrollmentCounts = unstable_cache(
+  async (eventIdsKey: string) => {
+    const eventIds = eventIdsKey.split(',');
+    const { data, error } = await supabaseAdmin
+      .from('myuni_event_enrollments')
+      .select('event_id')
+      .in('event_id', eventIds);
+
+    if (error) throw error;
+
+    const counts: Record<string, number> = Object.fromEntries(
+      eventIds.map((id) => [id, 0])
+    );
+    for (const row of data || []) {
+      const eventId = String(row.event_id);
+      if (eventId in counts) counts[eventId] += 1;
+    }
+    return counts;
+  },
+  ['public-event-enrollment-counts-v2'],
+  { revalidate: COUNT_CACHE_SECONDS }
+);
 
 /**
  * GET /api/event-enrollments/counts?eventIds=id1,id2
@@ -8,34 +37,25 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 export async function GET(request: NextRequest) {
   try {
     const eventIdsParam = request.nextUrl.searchParams.get('eventIds') || '';
-    const eventIds = eventIdsParam
+    const eventIds = Array.from(new Set(eventIdsParam
       .split(',')
       .map((id) => id.trim())
-      .filter(Boolean)
+      .filter(Boolean)))
+      .sort()
       .slice(0, 200);
 
     if (eventIds.length === 0) {
-      return NextResponse.json({ success: false, error: 'eventIds is required' }, { status: 400 });
+      return NextResponse.json(
+        { success: true, counts: {} },
+        { headers: COUNT_CACHE_HEADERS }
+      );
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('myuni_event_enrollments')
-      .select('event_id')
-      .in('event_id', eventIds);
-
-    if (error) {
-      console.error('Event enrollment counts error:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-    }
-
-    const counts: Record<string, number> = {};
-    for (const id of eventIds) counts[id] = 0;
-    for (const row of data || []) {
-      const eid = row.event_id as string;
-      counts[eid] = (counts[eid] || 0) + 1;
-    }
-
-    return NextResponse.json({ success: true, counts });
+    const counts = await loadEventEnrollmentCounts(eventIds.join(','));
+    return NextResponse.json(
+      { success: true, counts },
+      { headers: COUNT_CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('GET /api/event-enrollments/counts error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
