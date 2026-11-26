@@ -1,21 +1,66 @@
-<h1 align="center">Hi 👋, I'm Hayrunnisa Büşra Erdem</h1>
-<h3 align="center">💻 Computer Engineering student — git -commit -m "learning in progress"</h3>
+# Supabase migration'ları
 
-- 📱 Android Mobile Applications with Kotlin [Astromoon](https://github.com/H-ERDEM/Astromoon)
+MyUNI üç ayrı Supabase veritabanı kullanır. Her klasör yalnızca kendi veritabanını hedefler:
 
-- 🌱 I’m currently learning **Jetpack Compose Firebase Authentication & Firestore Machine Learning Basics OpenCV Image Processing**
+| Klasör | Veritabanı | İçerik |
+| --- | --- | --- |
+| `identity/` | Identity | kullanıcılar, siparişler, sertifikalar, organizasyonlar |
+| `learning/` | Learning | kurslar, dersler, etkinlikler, ilerleme, Unicom |
+| `forms/` | Forms | formlar, başvurular, blog, partnerler |
 
-- 🤖 Computer Vision & AI Projects (OpenCV, ML) [maas_arastirma_1](https://github.com/H-ERDEM/maas_arastirma_1)
+## Kurallar
+1. Dosya adı: `YYYYMMDDHHMM_aciklama.sql` (tarih + saat, sıralı).
+2. Her dosya tek bir veritabanını hedefler; ilk satırda hangisi olduğu yazar.
+3. Yeni migration'lar tekrar çalıştırılabilir olmalıdır (`if exists` / `if not exists`).
+4. Yeni migration'ların yanında `_rollback.sql` ile biten bir geri alma dosyası bulunur.
+   Canlıda daha önce uygulanmış `20261103...` dosyaları tarihsel kayıttır; değiştirilmez.
+5. Politika değiştiren her migration'dan önce o veritabanında `_policy_snapshot.sql`
+   çalıştırılır ve sonucu saklanır (politikaların birebir eski hali).
+6. Önce yerel/staging ortamında çalıştırılır; production öncesinde tablo, kolon, RLS ve yetkiler kontrol edilir.
+7. Canlıda uygulanan her migration, plan dokümanındaki "Değişiklik kaydı" tablosuna yazılır.
 
-- 📫 How to reach me **hbusraerdemmmm@gmail.com**
+Not: Supabase CLI alt klasörleri otomatik okumaz. Bu dosyalar SQL Editor'den,
+ilgili veritabanında, elle ve sırayla çalıştırılır.
 
-<h3 align="left">Connect with me:</h3>
-<p align="left">
-<a href="https://linkedin.com/in/hayrunnisa büşra erdem" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/linked-in-alt.svg" alt="hayrunnisa büşra erdem" height="30" width="40" /></a>
-<a href="https://kaggle.com/hayrunnisabüşraerdem" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/kaggle.svg" alt="hayrunnisabüşraerdem" height="30" width="40" /></a>
-<a href="https://www.topcoder.com/members/44920" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/topcoder.svg" alt="44920" height="30" width="40" /></a>
-</p>
+## Doğru proje kontrolü
 
-<h3 align="left">Languages and Tools:</h3>
-<p align="left"> <a href="https://developer.android.com" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/android/android-original-wordmark.svg" alt="android" width="40" height="40"/> </a> <a href="https://www.w3schools.com/css/" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/css3/css3-original-wordmark.svg" alt="css3" width="40" height="40"/> </a> <a href="https://firebase.google.com/" target="_blank" rel="noreferrer"> <img src="https://www.vectorlogo.zone/logos/firebase/firebase-icon.svg" alt="firebase" width="40" height="40"/> </a> <a href="https://git-scm.com/" target="_blank" rel="noreferrer"> <img src="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" alt="git" width="40" height="40"/> </a> <a href="https://www.w3.org/html/" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/html5/html5-original-wordmark.svg" alt="html5" width="40" height="40"/> </a> <a href="https://www.java.com" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/java/java-original.svg" alt="java" width="40" height="40"/> </a> <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/javascript/javascript-original.svg" alt="javascript" width="40" height="40"/> </a> <a href="https://kotlinlang.org" target="_blank" rel="noreferrer"> <img src="https://www.vectorlogo.zone/logos/kotlinlang/kotlinlang-icon.svg" alt="kotlin" width="40" height="40"/> </a> <a href="https://www.postgresql.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original-wordmark.svg" alt="postgresql" width="40" height="40"/> </a> <a href="https://www.python.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="python" width="40" height="40"/> </a> </p>
+- Hedef proje uygulamanın `NEXT_PUBLIC_SUPABASE_IDENTITY_URL`,
+  `NEXT_PUBLIC_SUPABASE_LEARNING_URL` ve `NEXT_PUBLIC_SUPABASE_FORMS_URL`
+  değerleriyle aynı olmalıdır.
+- Identity migration'ları ayrı/eski bir Certificate veritabanında çalıştırılmaz.
+  Doğru Identity projesinde `user_profiles`, `organizations`, `certificate_templates`
+  ve `user_module_access` tabloları birlikte bulunur. Hassas migration bu imzayı kontrol eder.
+- SQL Editor'de dosyayı çalıştırmadan önce proje adı ve URL iki kez kontrol edilir.
 
+## Dosyalar ve durumları
+
+**HEMEN** = kod değişikliği gerekmez. **ÖNKOŞULLU** = dosyanın başında yazan kod değişiklikleri
+yayına alınmadan uygulanmaz (aksi halde site veya admin paneli bozulur).
+
+| Veritabanı | Dosya | Durum | Samet maddesi |
+| --- | --- | --- | --- |
+| Identity | `202611030001_create_user_profiles` | Canlıda (3 Kasım) | 1 |
+| Identity | `202611030002_identity_public_catalog_policies` | Canlıda (3 Kasım), 202611261450 ile daraltılacak | 3 |
+| Identity | `202611251000_user_profiles_hardening` | Canlıda (26 Kasım) | 1 |
+| Identity | `202611261450_identity_remove_public_org_template_access` | ÖNKOŞULLU (admin paneli) | 3 |
+| Learning | `202611030003_learning_public_catalog_policies` | Canlıda (3 Kasım) | 4 |
+| Learning | `202611050001_learning_public_event_policy` | Canlıda (5 Kasım) | etkinlik kataloğu |
+| Learning | `202611240001_myuni_events_duration_temporary` | Canlıda (24 Kasım), geçici | 5 |
+| Learning | `202611250900_close_compat_temp_all` | ÖNKOŞULLU (lms-2 sunucu API) | güvenlik |
+| Learning | `202611250910_unicom_close_public_write_and_pii` | Uygulanmayacak (Samet kararı) | güvenlik |
+| Learning | `202611261410_learning_comments_require_active_course` | Canlıda (26 Kasım) | 4 |
+| Learning | `202611261420_learning_lessons_add_is_preview` | Canlıda (26 Kasım) | 4 |
+| Learning | `202611261430_learning_lessons_preview_only_public` | ÖNKOŞULLU (site + panel) | 4 |
+| Learning | `202611261440_learning_public_catalog_columns` | ÖNKOŞULLU (site + panel) | 4 |
+| Forms | `202611030004_forms_public_content_policies` | Canlıda (3 Kasım) | 2 |
+| Forms | `202611261400_forms_blog_partner_visibility` | Canlıda (26 Kasım) | 2 |
+| Forms | `202611261500_forms_close_broad_policies_and_admin_fields` | ÖNKOŞULLU (admin paneli) | 2 |
+
+## Projeler
+Identity = `myuni-db1`, Learning = `myunilabnet`, Forms = `myuni-db3`.
+
+## Önerilen uygulama sırası
+1. Her veritabanında `_policy_snapshot.sql` → sonucu sakla.
+2. HEMEN dosyaları, tablo sırasıyla.
+3. Kod değişiklikleri yayına alındıkça ÖNKOŞULLU dosyalar.
+4. Etkinlik sertifikası kodu `duration_minutes`'a geçince `202611240001_..._rollback.sql`.
