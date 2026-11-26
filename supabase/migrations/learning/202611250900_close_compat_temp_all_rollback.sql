@@ -4,6 +4,12 @@ begin;
 
 drop policy if exists compat_read_only on public.myuni_kurum_course_lessons_user;
 
+grant all privileges on public.myuni_edge_content to anon, authenticated;
+grant all privileges on public.myuni_edge_data to anon, authenticated;
+grant all privileges on public.myuni_edge_sections to anon, authenticated;
+grant all privileges on public.myuni_videos_backup to anon, authenticated;
+grant all privileges on public.myuni_kurum_course_lessons_user to anon, authenticated;
+
 drop policy if exists compat_temp_all on public.myuni_edge_content;
 create policy compat_temp_all on public.myuni_edge_content
   for all to anon, authenticated using (true) with check (true);

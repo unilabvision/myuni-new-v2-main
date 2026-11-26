@@ -45,15 +45,27 @@ alter table public.myuni_site_application_forms enable row level security;
 alter table public.myuni_site_application_form_fields enable row level security;
 alter table public.mentorships enable row level security;
 
+-- TRUNCATE RLS'i atlar. Tarayıcı rollerinin bu yönetim/başvuru tablolarını
+-- topluca silebilmesini grant seviyesinde de engelle.
+revoke truncate on public.internship_applications from public, anon, authenticated;
+revoke truncate on public.internship_reviewers from public, anon, authenticated;
+revoke truncate on public.internship_status_history from public, anon, authenticated;
+revoke truncate on public.internship_votes from public, anon, authenticated;
+revoke truncate on public.myuni_site_applications from public, anon, authenticated;
+revoke truncate on public.myuni_site_application_status_history from public, anon, authenticated;
+revoke truncate on public.myuni_site_application_forms from public, anon, authenticated;
+revoke truncate on public.myuni_site_application_form_fields from public, anon, authenticated;
+revoke truncate on public.mentorships from public, anon, authenticated;
+
 -- Yönetimsel alanları gizle
-revoke select on public.myuni_site_application_forms from anon, authenticated;
+revoke select on public.myuni_site_application_forms from public, anon, authenticated;
 grant select (
   id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en,
   success_message_tr, success_message_en, is_active, show_on_website, allows_attachment,
   event_id, course_id, form_type, package_settings, created_at, updated_at
 ) on public.myuni_site_application_forms to anon, authenticated;
 
-revoke select on public.mentorships from anon, authenticated;
+revoke select on public.mentorships from public, anon, authenticated;
 grant select (
   id, slug, title, description, summary, mentor_name, mentor_title, mentor_bio,
   mentor_image_url, mentor_linkedin, mentorship_type, mode, location_name,

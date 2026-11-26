@@ -11,8 +11,9 @@ MyUNI üç ayrı Supabase veritabanı kullanır. Her klasör yalnızca kendi ver
 ## Kurallar
 1. Dosya adı: `YYYYMMDDHHMM_aciklama.sql` (tarih + saat, sıralı).
 2. Her dosya tek bir veritabanını hedefler; ilk satırda hangisi olduğu yazar.
-3. Her migration tekrar çalıştırılabilir olmalıdır (`if exists` / `if not exists`).
-4. Her migration'ın yanında `_rollback.sql` ile biten bir geri alma dosyası bulunur.
+3. Yeni migration'lar tekrar çalıştırılabilir olmalıdır (`if exists` / `if not exists`).
+4. Yeni migration'ların yanında `_rollback.sql` ile biten bir geri alma dosyası bulunur.
+   Canlıda daha önce uygulanmış `20261103...` dosyaları tarihsel kayıttır; değiştirilmez.
 5. Politika değiştiren her migration'dan önce o veritabanında `_policy_snapshot.sql`
    çalıştırılır ve sonucu saklanır (politikaların birebir eski hali).
 6. Önce yerel/staging ortamında çalıştırılır; production öncesinde tablo, kolon, RLS ve yetkiler kontrol edilir.
@@ -20,6 +21,16 @@ MyUNI üç ayrı Supabase veritabanı kullanır. Her klasör yalnızca kendi ver
 
 Not: Supabase CLI alt klasörleri otomatik okumaz. Bu dosyalar SQL Editor'den,
 ilgili veritabanında, elle ve sırayla çalıştırılır.
+
+## Doğru proje kontrolü
+
+- Hedef proje uygulamanın `NEXT_PUBLIC_SUPABASE_IDENTITY_URL`,
+  `NEXT_PUBLIC_SUPABASE_LEARNING_URL` ve `NEXT_PUBLIC_SUPABASE_FORMS_URL`
+  değerleriyle aynı olmalıdır.
+- Identity migration'ları ayrı/eski bir Certificate veritabanında çalıştırılmaz.
+  Doğru Identity projesinde `user_profiles`, `organizations`, `certificate_templates`
+  ve `user_module_access` tabloları birlikte bulunur. Hassas migration bu imzayı kontrol eder.
+- SQL Editor'de dosyayı çalıştırmadan önce proje adı ve URL iki kez kontrol edilir.
 
 ## Dosyalar ve durumları
 
@@ -33,8 +44,9 @@ yayına alınmadan uygulanmaz (aksi halde site veya admin paneli bozulur).
 | Identity | `202611251000_user_profiles_hardening` | HEMEN (önce e-posta tekrar kontrolü) | 1 |
 | Identity | `202611261450_identity_remove_public_org_template_access` | ÖNKOŞULLU (admin paneli) | 3 |
 | Learning | `202611030003_learning_public_catalog_policies` | Canlıda (3 Kasım) | 4 |
+| Learning | `202611050001_learning_public_event_policy` | Canlıda (5 Kasım) | etkinlik kataloğu |
 | Learning | `202611240001_myuni_events_duration_temporary` | Canlıda (24 Kasım), geçici | 5 |
-| Learning | `202611250900_close_compat_temp_all` | HEMEN | güvenlik |
+| Learning | `202611250900_close_compat_temp_all` | ÖNKOŞULLU (lms-2 sunucu API) | güvenlik |
 | Learning | `202611250910_unicom_close_public_write_and_pii` | HEMEN (Samet kararı) | güvenlik |
 | Learning | `202611261410_learning_comments_require_active_course` | HEMEN | 4 |
 | Learning | `202611261420_learning_lessons_add_is_preview` | HEMEN | 4 |

@@ -3,6 +3,23 @@
 -- Not: unicom_user_data ve unicom_event_enrollments kurallarının eski koşulları "true" idi.
 begin;
 
+grant select, update, delete, truncate on public.unicom_user_data
+  to anon, authenticated;
+grant insert, update, delete, truncate on public.unicom_sponsors
+  to anon, authenticated;
+grant select, update, delete, truncate on public.unicom_event_enrollments
+  to anon, authenticated;
+grant all privileges on public.unicom_event_enrollments_attendance
+  to anon, authenticated;
+grant all privileges on public.unicom_event_sessions_attendance
+  to anon, authenticated;
+grant insert, update, delete, truncate on public.unicom_events
+  to anon, authenticated;
+grant insert, update, delete, truncate on public.unicom_home
+  to anon, authenticated;
+grant insert, update, delete, truncate on public.unicom_event_sessions
+  to anon, authenticated;
+
 drop policy if exists "public can select user data" on public.unicom_user_data;
 create policy "public can select user data" on public.unicom_user_data
   for select to public using (true);

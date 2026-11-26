@@ -19,7 +19,9 @@
 -- Önce: _policy_snapshot.sql  |  Tekrar çalıştırılabilir  |  Geri alma: _rollback dosyası
 begin;
 
-revoke select on public.myuni_courses from anon, authenticated;
+revoke select on public.myuni_courses from public, anon, authenticated;
+revoke insert, update, delete, truncate on public.myuni_courses
+  from public, anon, authenticated;
 grant select (
   id, slug, title, description, instructor_name, duration, level, price, original_price,
   thumbnail_url, banner_url, is_active, created_at, updated_at, instructor_description,
@@ -29,21 +31,27 @@ grant select (
   early_bird_price, early_bird_deadline, program_type, is_featured
 ) on public.myuni_courses to anon, authenticated;
 
-revoke select on public.myuni_course_tiers from anon, authenticated;
+revoke select on public.myuni_course_tiers from public, anon, authenticated;
+revoke insert, update, delete, truncate on public.myuni_course_tiers
+  from public, anon, authenticated;
 grant select (
   id, course_id, title, slug, description, price, original_price, early_bird_price,
   early_bird_deadline, is_registration_open, is_active, order_index, includes_qa,
   session_labels, created_at, updated_at, is_full_course
 ) on public.myuni_course_tiers to anon, authenticated;
 
-revoke select on public.myuni_packages from anon, authenticated;
+revoke select on public.myuni_packages from public, anon, authenticated;
+revoke insert, update, delete, truncate on public.myuni_packages
+  from public, anon, authenticated;
 grant select (
   id, slug, title, description, instructor_name, instructor_description,
   instructor_linkedin, instructor_image_url, duration, level, price, original_price,
   thumbnail_url, banner_url, is_active, created_at, updated_at, objectives, requirements
 ) on public.myuni_packages to anon, authenticated;
 
-revoke select on public.myuni_opportunities from anon, authenticated;
+revoke select on public.myuni_opportunities from public, anon, authenticated;
+revoke insert, update, delete, truncate on public.myuni_opportunities
+  from public, anon, authenticated;
 grant select (
   id, slug, title, description, company_name, location, work_mode, application_deadline,
   form_config_id, site_form_id, is_active, is_featured, order_index, opportunity_type,
